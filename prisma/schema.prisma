@@ -1,0 +1,507 @@
+// ================================================
+// WDI ERP - Prisma Schema
+// Version: 20251221-071500
+// Changes: 
+//   - IndividualReview now standalone (not dependent on VendorReview)
+//   - Removed VendorReview model
+//   - IndividualReview unique: [reviewerId, contactId, projectId]
+//   - Removed commitmentAdherence from IndividualReview (12 criteria)
+// ================================================
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ AUTH & USERS ============
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  image         String?
+  role          Role      @relation(fields: [roleId], references: [id])
+  roleId        String
+  employeeId    String?   @unique
+  employee      Employee? @relation(fields: [employeeId], references: [id])
+  isActive      Boolean   @default(true)
+  lastLogin     DateTime?
+  createdEvents ProjectEvent[]
+  updatedProjects Project[] @relation("ProjectUpdatedBy")
+  updatedOrganizations Organization[] @relation("OrganizationUpdatedBy")
+  updatedContacts Contact[] @relation("ContactUpdatedBy")
+  updatedContactProjects ContactProject[] @relation("ContactProjectUpdatedBy")
+  importLogs    ImportLog[] @relation("UserImportLogs")
+  individualReviews IndividualReview[] @relation("IndividualReviewReviewer")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  activityLogs  ActivityLog[] @relation("UserActivityLogs")
+}
+
+model Role {
+  id          String           @id @default(cuid())
+  name        String           @unique
+  displayName String
+  description String?
+  permissions RolePermission[]
+  users       User[]
+  createdAt   DateTime         @default(now())
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  module      String
+  action      String
+  description String?
+  roles       RolePermission[]
+  createdAt   DateTime         @default(now())
+
+  @@unique([module, action])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  roleId       String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  permissionId String
+  createdAt    DateTime   @default(now())
+
+  @@unique([roleId, permissionId])
+}
+
+model AllowedDomain {
+  id        String   @id @default(cuid())
+  domain    String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// ============ HR MODULE ============
+
+model Employee {
+  id                    String    @id @default(cuid())
+  firstName             String
+  lastName              String
+  idNumber              String    @unique
+  birthDate             DateTime?
+  phone                 String?
+  email                 String?
+  personalEmail         String?
+  address               String?
+  spouseFirstName       String?
+  spouseLastName        String?
+  spouseIdNumber        String?
+  spouseBirthDate       DateTime?
+  spousePhone           String?
+  spouseEmail           String?
+  marriageDate          DateTime?
+  children              String?   @db.Text
+  education             String?   @db.Text
+  certifications        String?   @db.Text
+  role                  String
+  department            String?
+  employmentType        String    @default("אורגני")
+  employeeCategory      String?
+  employmentPercent     Float?
+  startDate             DateTime?
+  endDate               DateTime?
+  grossSalary           Float?
+  status                String    @default("פעיל")
+  securityClearance     Int?
+  linkedinUrl           String?
+  photoUrl              String?
+  idCardFileUrl         String?
+  idCardSpouseFileUrl   String?
+  driversLicenseFileUrl String?
+  contractFileUrl       String?
+  user                  User?
+  ledProjects           Project[] @relation("ProjectLead")
+  managedProjects       ProjectManager[]
+  coordinatedProjects   ProjectCoordinator[]
+  assignedEquipment     Equipment[]
+  assignedVehicles      Vehicle[]
+  vehicleAccidents      VehicleAccident[]
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+}
+
+// ============ PROJECTS MODULE ============
+
+model Project {
+  id              String    @id @default(cuid())
+  projectNumber   String    @unique
+  name            String
+  address         String?
+  category        String?
+  client          String?
+  phase           String?
+  state           String    @default("פעיל")
+  area            Float?
+  estimatedCost   Float?
+  startDate       DateTime?
+  endDate         DateTime?
+  description     String?   @db.Text
+  services        String[]  @default([])
+  buildingTypes   String[]  @default([])
+  deliveryMethods String[]  @default([])
+  projectType     String    @default("single")
+  level           String    @default("project")
+  parentId        String?
+  parent          Project?  @relation("ProjectHierarchy", fields: [parentId], references: [id])
+  children        Project[] @relation("ProjectHierarchy")
+  leadId          String?
+  lead            Employee? @relation("ProjectLead", fields: [leadId], references: [id])
+  managers        ProjectManager[]
+  coordinators    ProjectCoordinator[]
+  events          ProjectEvent[]
+  contacts        ProjectContact[]
+  contactProjects ContactProject[]
+  individualReviews IndividualReview[]
+  updatedById     String?
+  updatedBy       User?     @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model ProjectCoordinator {
+  id         String   @id @default(cuid())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId String
+  createdAt  DateTime @default(now())
+  @@unique([projectId, employeeId])
+}
+
+model ProjectContact {
+  id        String   @id @default(cuid())
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId String
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  company   String?
+  notes     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ============ CONTACTS MODULE ============
+
+model Organization {
+  id            String    @id @default(cuid())
+  name          String
+  type          String?
+  phone         String?
+  email         String?
+  website       String?
+  address       String?
+  businessId    String?
+  logoUrl       String?
+  isVendor      Boolean   @default(false)
+  contactTypes  String[]  @default([])
+  disciplines   String[]  @default([])
+  averageRating Float?
+  reviewCount   Int       @default(0)
+  notes         String?   @db.Text
+  contacts      Contact[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  updatedById   String?
+  updatedBy     User?     @relation("OrganizationUpdatedBy", fields: [updatedById], references: [id])
+}
+
+model Contact {
+  id              String    @id @default(cuid())
+  firstName       String
+  lastName        String
+  nickname        String?
+  birthDate       DateTime?
+  isVendor        Boolean   @default(false)
+  phone           String
+  phoneAlt        String?
+  email           String?
+  emailAlt        String?
+  linkedinUrl     String?
+  photoUrl        String?
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  role            String?
+  department      String?
+  contactTypes    String[]  @default([])
+  disciplines     String[]  @default([])
+  averageRating   Float?
+  reviewCount     Int       @default(0)
+  specialization  String?
+  status          String    @default("פעיל")
+  notes           String?   @db.Text
+  vendorId        String?
+  vendor          Vendor?   @relation(fields: [vendorId], references: [id])
+  projects        ContactProject[]
+  individualReviews IndividualReview[]
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  updatedById     String?
+  updatedBy       User?     @relation("ContactUpdatedBy", fields: [updatedById], references: [id])
+}
+
+model ContactProject {
+  id              String    @id @default(cuid())
+  contact         Contact   @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  contactId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId       String
+  roleInProject   String?
+  startDate       DateTime?
+  endDate         DateTime?
+  status          String    @default("פעיל")
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  updatedById     String?
+  updatedBy       User?     @relation("ContactProjectUpdatedBy", fields: [updatedById], references: [id])
+  @@unique([contactId, projectId])
+}
+
+// ============ EVENTS MODULE ============
+
+model ProjectEvent {
+  id          String      @id @default(cuid())
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId   String
+  eventType   String
+  eventDate   DateTime
+  description String      @db.Text
+  createdById String?
+  createdBy   User?       @relation(fields: [createdById], references: [id])
+  files       EventFile[]
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+model EventFile {
+  id        String       @id @default(cuid())
+  event     ProjectEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  eventId   String
+  fileUrl   String
+  fileName  String
+  fileType  String
+  fileSize  Int?
+  createdAt DateTime     @default(now())
+}
+
+// ============ EQUIPMENT MODULE ============
+
+model Equipment {
+  id            String    @id @default(cuid())
+  type          String
+  manufacturer  String?
+  model         String?
+  serialNumber  String?   @unique
+  specs         String?   @db.Text
+  purchaseDate  DateTime?
+  warrantyEnd   DateTime?
+  location      String?
+  status        String    @default("פעיל")
+  assignedTo    Employee? @relation(fields: [assignedToId], references: [id])
+  assignedToId  String?
+  notes         String?   @db.Text
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+}
+
+// ============ VEHICLES MODULE ============
+
+model Vehicle {
+  id                String            @id @default(cuid())
+  licensePlate      String            @unique
+  manufacturer      String
+  model             String
+  year              Int?
+  color             String?
+  status            String            @default("ליסינג")
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+  lastServiceDate   DateTime?
+  lastServiceKm     Int?
+  currentKm         Int?
+  nextServiceDate   DateTime?
+  nextServiceKm     Int?
+  assignedTo        Employee?         @relation(fields: [assignedToId], references: [id])
+  assignedToId      String?
+  accidents         VehicleAccident[]
+  notes             String?           @db.Text
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+}
+
+model VehicleAccident {
+  id          String   @id @default(cuid())
+  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  date        DateTime
+  driver      Employee? @relation(fields: [driverId], references: [id])
+  driverId    String?
+  description String?  @db.Text
+  cost        Float?
+  status      String   @default("פתוח")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// ============ VENDORS MODULE (Legacy) ============
+
+model Vendor {
+  id             String          @id @default(cuid())
+  name           String
+  discipline     String
+  phone          String?
+  email          String?
+  address        String?
+  website        String?
+  notes          String?         @db.Text
+  vendorContacts VendorContact[]
+  ratings        VendorRating[]
+  contacts       Contact[]
+  avgRating      Float?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+}
+
+model VendorContact {
+  id        String   @id @default(cuid())
+  vendor    Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId  String
+  name      String
+  role      String?
+  phone     String?
+  email     String?
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model VendorRating {
+  id             String   @id @default(cuid())
+  vendor         Vendor   @relation(fields: [vendorId], references: [id], onDelete: Cascade)
+  vendorId       String
+  projectId      String?
+  ratedById      String?
+  planningQuality Int?
+  timeliness     Int?
+  communication  Int?
+  pricing        Int?
+  recommendation Int?
+  comments       String?  @db.Text
+  createdAt      DateTime @default(now())
+}
+
+model ProjectManager {
+  id         String   @id @default(cuid())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId  String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  employeeId String
+  createdAt  DateTime @default(now())
+  @@unique([projectId, employeeId])
+}
+
+model ActivityLog {
+  id          String   @id @default(cuid())
+  userId      String?
+  user        User?    @relation("UserActivityLogs", fields: [userId], references: [id])
+  userEmail   String
+  userRole    String?
+  action      String
+  category    String
+  module      String?
+  path        String?
+  targetType  String?
+  targetId    String?
+  targetName  String?
+  details     Json?
+  ip          String?
+  userAgent   String?
+  duration    Int?
+  success     Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  @@index([userId])
+  @@index([action])
+  @@index([module])
+  @@index([category])
+  @@index([createdAt])
+  @@index([userEmail])
+}
+
+// ============ IMPORT MODULE ============
+
+model ImportLog {
+  id              String   @id @default(cuid())
+  importedById    String
+  importedBy      User     @relation("UserImportLogs", fields: [importedById], references: [id])
+  importType      String
+  sourceContext   String?
+  rawInput        String?  @db.Text
+  totalRecords    Int      @default(0)
+  newRecords      Int      @default(0)
+  mergedRecords   Int      @default(0)
+  skippedRecords  Int      @default(0)
+  details         Json?
+  status          String   @default("completed")
+  createdAt       DateTime @default(now())
+}
+
+// ============================================
+// INDIVIDUAL REVIEW MODULE - Updated 21.12.2025
+// ============================================
+
+model IndividualReview {
+  id              String   @id @default(cuid())
+  
+  reviewerId      String
+  reviewer        User     @relation("IndividualReviewReviewer", fields: [reviewerId], references: [id])
+  contactId       String
+  contact         Contact  @relation(fields: [contactId], references: [id])
+  projectId       String
+  project         Project  @relation(fields: [projectId], references: [id])
+  
+  accountability        Int
+  accountabilityNote    String?  @db.Text
+  boqQuality            Int
+  boqQualityNote        String?  @db.Text
+  specQuality           Int
+  specQualityNote       String?  @db.Text
+  planQuality           Int
+  planQualityNote       String?  @db.Text
+  valueEngineering      Int
+  valueEngineeringNote  String?  @db.Text
+  availability          Int
+  availabilityNote      String?  @db.Text
+  interpersonal         Int
+  interpersonalNote     String?  @db.Text
+  creativity            Int
+  creativityNote        String?  @db.Text
+  expertise             Int
+  expertiseNote         String?  @db.Text
+  timelinessAdherence   Int
+  timelinessAdherenceNote String? @db.Text
+  proactivity           Int
+  proactivityNote       String?  @db.Text
+  communication         Int
+  communicationNote     String?  @db.Text
+  
+  generalNotes    String?  @db.Text
+  avgRating       Float
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@unique([reviewerId, contactId, projectId])
+}

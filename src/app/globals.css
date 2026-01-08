@@ -1,0 +1,490 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Hebrew:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ==========================================
+   WDI ERP - Design System
+   Primary: #0a3161 (Navy Blue)
+   Secondary: #ffffff
+   Accent: #8f8f96 (Gray)
+   Dark: #3a3a3d
+   Light: #a7a7b0
+   Background: #f5f6f8
+   ========================================== */
+
+:root {
+  --wdi-primary: #0a3161;
+  --wdi-primary-light: #0d3d7a;
+  --wdi-primary-dark: #082548;
+  --wdi-secondary: #ffffff;
+  --wdi-accent: #8f8f96;
+  --wdi-dark: #3a3a3d;
+  --wdi-light: #a7a7b0;
+  --wdi-background: #f5f6f8;
+  --wdi-border: #e2e4e8;
+  
+  --foreground-rgb: 58, 58, 61;
+  --background-start-rgb: 245, 246, 248;
+  --background-end-rgb: 255, 255, 255;
+}
+
+* {
+  box-sizing: border-box;
+  padding: 0;
+  margin: 0;
+}
+
+html {
+  direction: rtl;
+}
+
+body {
+  font-family: 'Noto Sans Hebrew', sans-serif;
+  background: linear-gradient(
+    to bottom,
+    rgb(var(--background-start-rgb)),
+    rgb(var(--background-end-rgb))
+  );
+  min-height: 100vh;
+  color: var(--wdi-dark);
+}
+
+/* ==========================================
+   RTL Adjustments
+   ========================================== */
+.ltr {
+  direction: ltr;
+  text-align: left;
+}
+
+/* ==========================================
+   Table Styles
+   ========================================== */
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th, td {
+  padding: 0.75rem 1rem;
+  text-align: right;
+  border-bottom: 1px solid var(--wdi-border);
+}
+
+th {
+  background-color: var(--wdi-background);
+  font-weight: 600;
+  color: var(--wdi-dark);
+}
+
+tr:hover {
+  background-color: var(--wdi-background);
+}
+
+.sortable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable:hover {
+  background-color: #ebedf0;
+}
+
+/* ==========================================
+   Form Inputs
+   ========================================== */
+input, select, textarea {
+  direction: rtl;
+  font-family: 'Noto Sans Hebrew', sans-serif;
+}
+
+input[type="email"],
+input[type="url"],
+input[type="tel"] {
+  direction: ltr;
+  text-align: right;
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--wdi-primary);
+  box-shadow: 0 0 0 3px rgba(10, 49, 97, 0.1);
+}
+
+/* ==========================================
+   Scrollbar
+   ========================================== */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--wdi-background);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--wdi-light);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--wdi-accent);
+}
+
+/* ==========================================
+   Status Badges
+   ========================================== */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.badge-active {
+  background-color: #dcfce7;
+  color: #166534;
+}
+
+.badge-inactive {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.badge-pending {
+  background-color: #fef3c7;
+  color: #92400e;
+}
+
+/* ==========================================
+   Cards
+   ========================================== */
+.card {
+  background: var(--wdi-secondary);
+  border-radius: 0.75rem;
+  box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1);
+  padding: 1.5rem;
+  border: 1px solid var(--wdi-border);
+}
+
+.card-header {
+  background: linear-gradient(to left, rgba(10, 49, 97, 0.05), transparent);
+  margin: -1.5rem -1.5rem 1.5rem -1.5rem;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--wdi-border);
+  border-radius: 0.75rem 0.75rem 0 0;
+}
+
+/* ==========================================
+   Buttons
+   ========================================== */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  font-family: 'Noto Sans Hebrew', sans-serif;
+  transition: all 0.2s;
+  cursor: pointer;
+  gap: 0.5rem;
+  border: none;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: var(--wdi-primary);
+  color: var(--wdi-secondary);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--wdi-primary-light);
+}
+
+.btn-secondary {
+  background-color: var(--wdi-background);
+  color: var(--wdi-dark);
+  border: 1px solid var(--wdi-border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #ebedf0;
+}
+
+.btn-danger {
+  background-color: #dc2626;
+  color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.btn-lg {
+  padding: 0.75rem 1.5rem;
+  font-size: 1.125rem;
+}
+
+/* ==========================================
+   Loading Spinner
+   ========================================== */
+.spinner {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ==========================================
+   Sidebar
+   ========================================== */
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  color: var(--wdi-accent);
+  transition: all 0.2s;
+}
+
+.sidebar-link:hover {
+  background-color: var(--wdi-background);
+  color: var(--wdi-dark);
+}
+
+.sidebar-link.active {
+  background-color: rgba(10, 49, 97, 0.1);
+  color: var(--wdi-primary);
+  font-weight: 500;
+}
+
+/* ==========================================
+   Tags / Chips
+   ========================================== */
+.tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 2px solid transparent;
+  background-color: var(--wdi-background);
+  color: var(--wdi-dark);
+}
+
+.tag:hover {
+  background-color: #ebedf0;
+}
+
+.tag.selected {
+  background-color: rgba(10, 49, 97, 0.1);
+  color: var(--wdi-primary);
+  border-color: var(--wdi-primary);
+}
+
+.tag.selected .tag-check {
+  display: inline-flex;
+}
+
+.tag-check {
+  display: none;
+  width: 16px;
+  height: 16px;
+}
+
+/* ==========================================
+   Tabs
+   ========================================== */
+.tabs {
+  display: flex;
+  gap: 0.5rem;
+  border-bottom: 2px solid var(--wdi-border);
+}
+
+.tab {
+  padding: 0.75rem 1.25rem;
+  font-weight: 500;
+  color: var(--wdi-accent);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.tab:hover {
+  color: var(--wdi-dark);
+}
+
+.tab.active {
+  color: var(--wdi-primary);
+  border-bottom-color: var(--wdi-primary);
+}
+
+.tab-badge {
+  background-color: var(--wdi-background);
+  color: var(--wdi-accent);
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tab.active .tab-badge {
+  background-color: rgba(10, 49, 97, 0.1);
+  color: var(--wdi-primary);
+}
+
+/* ==========================================
+   Hierarchy Tree (Sidebar)
+   ========================================== */
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: all 0.15s;
+  color: var(--wdi-dark);
+}
+
+.tree-item:hover {
+  background-color: var(--wdi-background);
+}
+
+.tree-item.active {
+  background-color: rgba(10, 49, 97, 0.1);
+  color: var(--wdi-primary);
+  font-weight: 500;
+}
+
+.tree-item-project { padding-right: 0.5rem; }
+.tree-item-quarter { padding-right: 1.5rem; }
+.tree-item-building { padding-right: 2.5rem; }
+
+/* ==========================================
+   Breadcrumb
+   ========================================== */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  color: var(--wdi-accent);
+}
+
+.breadcrumb-item {
+  color: var(--wdi-accent);
+  transition: color 0.15s;
+}
+
+.breadcrumb-item:hover {
+  color: var(--wdi-primary);
+}
+
+.breadcrumb-item.current {
+  color: var(--wdi-dark);
+  font-weight: 500;
+}
+
+.breadcrumb-separator {
+  color: var(--wdi-light);
+}
+
+/* ==========================================
+   Project Type Cards (Selection)
+   ========================================== */
+.project-type-card {
+  padding: 1.5rem;
+  border: 2px solid var(--wdi-border);
+  border-radius: 0.75rem;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.project-type-card:hover {
+  border-color: var(--wdi-primary);
+  background-color: rgba(10, 49, 97, 0.02);
+}
+
+.project-type-card.selected {
+  border-color: var(--wdi-primary);
+  background-color: rgba(10, 49, 97, 0.05);
+}
+
+.project-type-card .icon {
+  color: var(--wdi-light);
+  transition: color 0.2s;
+}
+
+.project-type-card:hover .icon,
+.project-type-card.selected .icon {
+  color: var(--wdi-primary);
+}
+
+/* ==========================================
+   State Colors
+   ========================================== */
+.state-active {
+  background-color: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.state-completed {
+  background-color: rgba(10, 49, 97, 0.1);
+  color: var(--wdi-primary);
+  border-color: rgba(10, 49, 97, 0.2);
+}
+
+.state-paused {
+  background-color: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+
+.state-cancelled {
+  background-color: #fee2e2;
+  color: #991b1b;
+  border-color: #fecaca;
+}
+
+/* ==========================================
+   Event Type Colors
+   ========================================== */
+.event-challenge { background-color: #fee2e2; color: #991b1b; }
+.event-documentation { background-color: #dcfce7; color: #166534; }
+.event-decision { background-color: rgba(10, 49, 97, 0.1); color: var(--wdi-primary); }
+.event-client { background-color: #f3e8ff; color: #7c3aed; }
+.event-safety { background-color: #ffedd5; color: #c2410c; }
+.event-meeting { background-color: #e0e7ff; color: #4338ca; }
+.event-admin { background-color: #ccfbf1; color: #0f766e; }
+.event-billing { background-color: #fce7f3; color: #be185d; }
+.event-other { background-color: var(--wdi-background); color: var(--wdi-dark); }
