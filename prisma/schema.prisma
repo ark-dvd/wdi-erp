@@ -1,11 +1,15 @@
 // ================================================
 // WDI ERP - Prisma Schema
-// Version: 20251221-071500
+// Version: 20260109-220000
 // Changes: 
-//   - IndividualReview now standalone (not dependent on VendorReview)
-//   - Removed VendorReview model
-//   - IndividualReview unique: [reviewerId, contactId, projectId]
-//   - Removed commitmentAdherence from IndividualReview (12 criteria)
+//   - Added VehicleTollRoad model (כבישי אגרה)
+//   - Added VehicleParking model (חניות)
+//   - Added VehicleTicket model (דוחות)
+//   - Added TicketStatus enum
+//   - Added AccidentStatus enum
+//   - Added employeeId to VehicleFuelLog for expense tracking
+//   - Updated Employee with vehicle expense relations
+//   - Updated Vehicle with new relations
 // ================================================
 
 generator client {
@@ -125,8 +129,13 @@ model Employee {
   managedProjects       ProjectManager[]
   coordinatedProjects   ProjectCoordinator[]
   assignedEquipment     Equipment[]
-  assignedVehicles      Vehicle[]
-  vehicleAccidents      VehicleAccident[]
+  currentVehicle        Vehicle?              @relation("CurrentVehicle")
+  vehicleAssignments    VehicleAssignment[]   @relation("VehicleAssignments")
+  vehicleAccidents      VehicleAccident[]     @relation("DriverAccidents")
+  vehicleFuelLogs       VehicleFuelLog[]      @relation("EmployeeFuelLogs")
+  vehicleTollRoads      VehicleTollRoad[]     @relation("EmployeeTollRoads")
+  vehicleParkings       VehicleParking[]      @relation("EmployeeParkings")
+  vehicleTickets        VehicleTicket[]       @relation("EmployeeTickets")
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 }
@@ -319,41 +328,215 @@ model Equipment {
 
 // ============ VEHICLES MODULE ============
 
+enum VehicleStatus {
+  ACTIVE        // פעיל
+  IN_SERVICE    // בטיפול
+  RETURNED      // הוחזר
+  SOLD          // נמכר
+}
+
+enum VehicleContractType {
+  RENTAL    // השכרה - קצר טווח
+  LEASING   // ליסינג - ארוך טווח
+}
+
+enum AccidentStatus {
+  OPEN          // פתוח
+  IN_PROGRESS   // בטיפול
+  CLOSED        // סגור
+}
+
+enum TicketStatus {
+  PENDING       // ממתין לתשלום
+  PAID          // שולם
+  APPEALED      // בערעור
+  CANCELLED     // בוטל
+}
+
 model Vehicle {
-  id                String            @id @default(cuid())
-  licensePlate      String            @unique
-  manufacturer      String
-  model             String
-  year              Int?
-  color             String?
-  status            String            @default("ליסינג")
-  contractStartDate DateTime?
-  contractEndDate   DateTime?
-  lastServiceDate   DateTime?
-  lastServiceKm     Int?
-  currentKm         Int?
-  nextServiceDate   DateTime?
-  nextServiceKm     Int?
-  assignedTo        Employee?         @relation(fields: [assignedToId], references: [id])
-  assignedToId      String?
-  accidents         VehicleAccident[]
-  notes             String?           @db.Text
-  createdAt         DateTime          @default(now())
-  updatedAt         DateTime          @updatedAt
+  id                 String              @id @default(cuid())
+  licensePlate       String              @unique
+  manufacturer       String
+  model              String
+  year               Int?
+  color              String?
+  
+  contractType       VehicleContractType?
+  leasingCompany     String?
+  contractStartDate  DateTime?
+  contractEndDate    DateTime?
+  monthlyPayment     Float?
+  
+  currentKm          Int?
+  lastServiceDate    DateTime?
+  lastServiceKm      Int?
+  nextServiceDate    DateTime?
+  nextServiceKm      Int?
+  
+  status             VehicleStatus       @default(ACTIVE)
+  notes              String?             @db.Text
+  
+  currentDriverId    String?             @unique
+  currentDriver      Employee?           @relation("CurrentVehicle", fields: [currentDriverId], references: [id])
+  assignments        VehicleAssignment[]
+  services           VehicleService[]
+  accidents          VehicleAccident[]   @relation("VehicleAccidents")
+  fuelLogs           VehicleFuelLog[]
+  tollRoads          VehicleTollRoad[]
+  parkings           VehicleParking[]
+  tickets            VehicleTicket[]
+  
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+}
+
+model VehicleAssignment {
+  id          String    @id @default(cuid())
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  employee    Employee  @relation("VehicleAssignments", fields: [employeeId], references: [id])
+  employeeId  String
+  startDate   DateTime  @default(now())
+  endDate     DateTime?
+  startKm     Int?
+  endKm       Int?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  
+  @@index([vehicleId])
+  @@index([employeeId])
+}
+
+model VehicleService {
+  id            String   @id @default(cuid())
+  vehicle       Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId     String
+  serviceDate   DateTime
+  serviceType   String
+  mileage       Int?
+  cost          Float?
+  garage        String?
+  description   String?  @db.Text
+  invoiceUrl    String?
+  createdAt     DateTime @default(now())
+  
+  @@index([vehicleId])
 }
 
 model VehicleAccident {
-  id          String   @id @default(cuid())
-  vehicle     Vehicle  @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  id             String         @id @default(cuid())
+  vehicle        Vehicle        @relation("VehicleAccidents", fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId      String
+  date           DateTime
+  driver         Employee?      @relation("DriverAccidents", fields: [driverId], references: [id])
+  driverId       String?
+  location       String?
+  description    String?        @db.Text
+  thirdParty     String?
+  policeReport   Boolean        @default(false)
+  policeFileNum  String?
+  cost           Float?
+  insuranceClaim Boolean        @default(false)
+  insuranceNum   String?
+  status         String         @default("פתוח")
+  fileUrl        String?
+  notes          String?        @db.Text
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  
+  @@index([vehicleId])
+  @@index([driverId])
+}
+
+model VehicleFuelLog {
+  id            String    @id @default(cuid())
+  vehicle       Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId     String
+  date          DateTime
+  employee      Employee? @relation("EmployeeFuelLogs", fields: [employeeId], references: [id])
+  employeeId    String?
+  liters        Float
+  pricePerLiter Float?
+  totalCost     Float
+  mileage       Int?
+  station       String?
+  fuelType      String?
+  fullTank      Boolean   @default(true)
+  receiptUrl    String?
+  createdAt     DateTime  @default(now())
+  
+  @@index([vehicleId])
+  @@index([employeeId])
+}
+
+model VehicleTollRoad {
+  id          String    @id @default(cuid())
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleId   String
   date        DateTime
-  driver      Employee? @relation(fields: [driverId], references: [id])
-  driverId    String?
-  description String?  @db.Text
-  cost        Float?
-  status      String   @default("פתוח")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  employee    Employee? @relation("EmployeeTollRoads", fields: [employeeId], references: [id])
+  employeeId  String?
+  road        String
+  entryPoint  String?
+  exitPoint   String?
+  cost        Float
+  invoiceNum  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  
+  @@index([vehicleId])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model VehicleParking {
+  id          String    @id @default(cuid())
+  vehicle     Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId   String
+  date        DateTime
+  employee    Employee? @relation("EmployeeParkings", fields: [employeeId], references: [id])
+  employeeId  String?
+  location    String
+  parkingLot  String?
+  duration    Int?
+  cost        Float
+  receiptUrl  String?
+  notes       String?
+  createdAt   DateTime  @default(now())
+  
+  @@index([vehicleId])
+  @@index([employeeId])
+  @@index([date])
+}
+
+model VehicleTicket {
+  id            String       @id @default(cuid())
+  vehicle       Vehicle      @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  vehicleId     String
+  date          DateTime
+  employee      Employee?    @relation("EmployeeTickets", fields: [employeeId], references: [id])
+  employeeId    String?
+  ticketType    String
+  ticketNumber  String?
+  location      String?
+  description   String?      @db.Text
+  fineAmount    Float
+  points        Int?
+  dueDate       DateTime?
+  status        TicketStatus @default(PENDING)
+  paidDate      DateTime?
+  paidAmount    Float?
+  appealDate    DateTime?
+  appealResult  String?
+  fileUrl       String?
+  notes         String?      @db.Text
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  
+  @@index([vehicleId])
+  @@index([employeeId])
+  @@index([date])
+  @@index([status])
 }
 
 // ============ VENDORS MODULE (Legacy) ============
