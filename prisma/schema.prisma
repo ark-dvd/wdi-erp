@@ -132,7 +132,7 @@ model Employee {
   assignedEquipment     Equipment[]
   currentVehicle        Vehicle?              @relation("CurrentVehicle")
   vehicleAssignments    VehicleAssignment[]   @relation("VehicleAssignments")
-  vehicleAccidents      VehicleAccident[]     @relation("DriverAccidents")
+  vehicleAccidents      VehicleAccident[]     @relation("EmployeeAccidents")
   vehicleFuelLogs       VehicleFuelLog[]      @relation("EmployeeFuelLogs")
   vehicleTollRoads      VehicleTollRoad[]     @relation("EmployeeTollRoads")
   vehicleParkings       VehicleParking[]      @relation("EmployeeParkings")
@@ -430,8 +430,8 @@ model VehicleAccident {
   vehicle        Vehicle        @relation("VehicleAccidents", fields: [vehicleId], references: [id], onDelete: Cascade)
   vehicleId      String
   date           DateTime
-  driver         Employee?      @relation("DriverAccidents", fields: [driverId], references: [id])
-  driverId       String?
+  employee       Employee?      @relation("EmployeeAccidents", fields: [employeeId], references: [id])
+  employeeId     String?
   location       String?
   description    String?        @db.Text
   thirdParty     String?
@@ -447,7 +447,7 @@ model VehicleAccident {
   updatedAt      DateTime       @updatedAt
   
   @@index([vehicleId])
-  @@index([driverId])
+  @@index([employeeId])
 }
 
 model VehicleFuelLog {
