@@ -96,10 +96,11 @@ export async function GET(
       totalAccidentCost: vehicle.accidents.reduce((sum, a) => sum + (a.cost || 0), 0),
       totalTollCost: vehicle.tollRoads.reduce((sum, t) => sum + t.cost, 0),
       totalParkingCost: vehicle.parkings.reduce((sum, p) => sum + p.cost, 0),
-      totalTicketsCost: vehicle.tickets.reduce((sum, t) => sum + (t.paidAmount || t.fineAmount), 0),
+      totalTicketsCost: vehicle.tickets.reduce((sum, t) => sum + (t.paidAmount || t.fineAmount || 0), 0),
       pendingTickets: vehicle.tickets.filter(t => t.status === 'PENDING').length,
       totalFuelLiters: vehicle.fuelLogs.reduce((sum, log) => sum + log.liters, 0),
       avgFuelConsumption: 0,
+      totalCost: 0,
     }
     
     // סה"כ עלויות
