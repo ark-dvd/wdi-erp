@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { Car, User, Gauge, Fuel, Wrench, AlertTriangle, Edit, ArrowRight, Plus, X, FileWarning, MapPin, Route } from 'lucide-react'
+import { Car, User, Gauge, Fuel, Wrench, AlertTriangle, Edit, ArrowRight, Plus, X, FileWarning, MapPin, Milestone } from 'lucide-react'
 
 const statusLabels: Record<string, string> = { ACTIVE: 'פעיל', IN_SERVICE: 'בטיפול', RETURNED: 'הוחזר', SOLD: 'נמכר' }
 const statusColors: Record<string, string> = { ACTIVE: 'bg-green-100 text-green-800', IN_SERVICE: 'bg-yellow-100 text-yellow-800', RETURNED: 'bg-gray-100 text-gray-800', SOLD: 'bg-red-100 text-red-800' }
@@ -69,7 +69,7 @@ export default function VehiclePage() {
     { id: 'services', label: `טיפולים (${vehicle.services?.length || 0})`, icon: Wrench },
     { id: 'accidents', label: `תאונות (${vehicle.accidents?.length || 0})`, icon: AlertTriangle },
     { id: 'fuel', label: `דלק (${vehicle.fuelLogs?.length || 0})`, icon: Fuel },
-    { id: 'tolls', label: `אגרה (${vehicle.tollRoads?.length || 0})`, icon: Route },
+    { id: 'tolls', label: `אגרה (${vehicle.tollRoads?.length || 0})`, icon: Milestone },
     { id: 'parking', label: `חניות (${vehicle.parkings?.length || 0})`, icon: MapPin },
     { id: 'tickets', label: `דוחות (${vehicle.tickets?.length || 0})`, icon: FileWarning },
   ]

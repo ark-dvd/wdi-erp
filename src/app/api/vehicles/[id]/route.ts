@@ -9,7 +9,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
-export async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
+async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
     where: {
       vehicleId,
