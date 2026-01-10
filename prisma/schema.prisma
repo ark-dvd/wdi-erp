@@ -2,7 +2,6 @@
 // WDI ERP - Prisma Schema
 // Version: 20260109-230000
 // Changes: 
-//   - Added vin field to Vehicle model
 //   - Added VehicleTollRoad model (כבישי אגרה)
 //   - Added VehicleParking model (חניות)
 //   - Added VehicleTicket model (דוחות)
@@ -361,7 +360,6 @@ model Vehicle {
   model              String
   year               Int?
   color              String?
-  vin                String?             @unique
   
   contractType       VehicleContractType?
   leasingCompany     String?
