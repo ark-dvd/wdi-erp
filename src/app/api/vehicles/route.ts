@@ -69,7 +69,6 @@ export async function POST(request: NextRequest) {
         model: data.model,
         year: data.year ? parseInt(data.year) : null,
         color: data.color || null,
-        vin: data.vin || null,
         contractType: data.contractType || null,
         leasingCompany: data.leasingCompany || null,
         contractStartDate: data.contractStartDate ? new Date(data.contractStartDate) : null,
