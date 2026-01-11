@@ -1,13 +1,15 @@
 // ============================================
 // src/app/api/vehicles/[id]/accidents/route.ts
-// Version: 20260111-141800
+// Version: 20260111-210500
 // Added: logCrud for CREATE, UPDATE, DELETE
+// Fixed: AccidentStatus enum instead of hardcoded strings
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { AccidentStatus } from '@prisma/client'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -82,7 +84,7 @@ export async function POST(
         cost: data.cost ? parseFloat(data.cost) : null,
         insuranceClaim: data.insuranceClaim || false,
         insuranceNum: data.insuranceNum || null,
-        status: data.status || 'OPEN',
+        status: data.status || AccidentStatus.OPEN,
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
       },
@@ -96,7 +98,7 @@ export async function POST(
       vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
       location: data.location,
       cost: data.cost,
-      status: data.status || 'OPEN',
+      status: data.status || AccidentStatus.OPEN,
     })
     
     return NextResponse.json(accident, { status: 201 })

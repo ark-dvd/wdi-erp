@@ -1,13 +1,15 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260111-142100
+// Version: 20260111-210500
 // Added: logCrud for CREATE, UPDATE, DELETE
+// Fixed: TicketStatus enum instead of hardcoded strings
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { TicketStatus } from '@prisma/client'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -80,7 +82,7 @@ export async function POST(
         fineAmount: parseFloat(data.fineAmount),
         points: data.points ? parseInt(data.points) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        status: data.status || 'PENDING',
+        status: data.status || TicketStatus.PENDING,
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
       },

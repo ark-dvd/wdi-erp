@@ -1,13 +1,15 @@
 // ============================================
 // src/app/api/vehicles/[id]/route.ts
-// Version: 20260111-141500
+// Version: 20260111-210500
 // Added: logCrud for UPDATE, DELETE
+// Fixed: TicketStatus enum instead of hardcoded strings
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { TicketStatus } from '@prisma/client'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -103,7 +105,7 @@ export async function GET(
       totalTollCost: vehicle.tollRoads.reduce((sum, t) => sum + t.cost, 0),
       totalParkingCost: vehicle.parkings.reduce((sum, p) => sum + p.cost, 0),
       totalTicketsCost: vehicle.tickets.reduce((sum, t) => sum + (t.paidAmount || t.fineAmount || 0), 0),
-      pendingTickets: vehicle.tickets.filter(t => t.status === 'PENDING').length,
+      pendingTickets: vehicle.tickets.filter(t => t.status === TicketStatus.PENDING).length,
       totalFuelLiters: vehicle.fuelLogs.reduce((sum, log) => sum + log.liters, 0),
       avgFuelConsumption: 0,
       totalCost: 0,
