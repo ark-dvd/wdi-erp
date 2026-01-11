@@ -1,11 +1,11 @@
 // ============================================
 // src/app/api/vehicles/[id]/fuel/route.ts
-// Version: 20260111-223000
+// Version: 20260111-141600
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -13,10 +13,7 @@ async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string
     where: {
       vehicleId,
       startDate: { lte: date },
-      OR: [
-        { endDate: null },
-        { endDate: { gte: date } }
-      ]
+      OR: [{ endDate: null }, { endDate: { gte: date } }]
     },
     select: { employeeId: true }
   })
@@ -27,11 +24,6 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const fuelLogs = await prisma.vehicleFuelLog.findMany({
       where: { vehicleId: params.id },
@@ -49,54 +41,55 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({
+    const vehicle = await prisma.vehicle.findUnique({ 
       where: { id: params.id },
-      select: { id: true, licensePlate: true, manufacturer: true, model: true }
+      select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
     
     const fuelDate = new Date(data.date)
+    const liters = parseFloat(data.liters)
+    const totalCost = data.totalCost ? parseFloat(data.totalCost) : 0
+    const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : null)
+    const mileage = data.mileage ? parseInt(data.mileage) : null
+    
+    // מציאת העובד שהחזיק ברכב בתאריך התדלוק
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, fuelDate)
     
     const fuelLog = await prisma.vehicleFuelLog.create({
       data: {
         vehicleId: params.id,
         date: fuelDate,
-        liters: parseFloat(data.liters),
-        pricePerLiter: parseFloat(data.pricePerLiter),
-        totalCost: parseFloat(data.totalCost),
-        odometer: data.odometer ? parseInt(data.odometer) : null,
+        employeeId,
+        liters,
+        pricePerLiter,
+        totalCost,
+        mileage,
         station: data.station || null,
         fuelType: data.fuelType || null,
-        employeeId: employeeId,
+        fullTank: data.fullTank !== false,
         receiptUrl: data.receiptUrl || null,
-        notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
-    if (data.odometer) {
-      await prisma.vehicle.update({
-        where: { id: params.id },
-        data: { currentKm: parseInt(data.odometer) }
-      })
+    if (mileage && (!vehicle.currentKm || mileage > vehicle.currentKm)) {
+      await prisma.vehicle.update({ where: { id: params.id }, data: { currentKm: mileage } })
     }
     
-    await logCrud('CREATE', 'vehicles', 'fuel', fuelLog.id,
-      `תדלוק ${vehicle.licensePlate}`, {
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'fuel-log', fuelLog.id,
+      `תדלוק ${vehicle.licensePlate} - ${liters}L`, {
       vehicleId: params.id,
-      liters: data.liters,
-      totalCost: data.totalCost,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      liters,
+      totalCost,
+      station: data.station,
     })
     
     return NextResponse.json(fuelLog, { status: 201 })
@@ -110,42 +103,48 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
-    const data = await request.json()
-    const { fuelLogId, ...updateData } = data
+    const { searchParams } = new URL(request.url)
+    const fuelId = searchParams.get('fuelId')
     
-    if (!fuelLogId) {
-      return NextResponse.json({ error: 'Missing fuelLogId' }, { status: 400 })
+    if (!fuelId) {
+      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
     }
     
-    const fuelLog = await prisma.vehicleFuelLog.update({
-      where: { id: fuelLogId },
-      data: {
-        date: updateData.date ? new Date(updateData.date) : undefined,
-        liters: updateData.liters ? parseFloat(updateData.liters) : undefined,
-        pricePerLiter: updateData.pricePerLiter ? parseFloat(updateData.pricePerLiter) : undefined,
-        totalCost: updateData.totalCost ? parseFloat(updateData.totalCost) : undefined,
-        odometer: updateData.odometer ? parseInt(updateData.odometer) : undefined,
-        station: updateData.station,
-        fuelType: updateData.fuelType,
-        employeeId: updateData.employeeId || undefined,
-        receiptUrl: updateData.receiptUrl,
-        notes: updateData.notes,
-      },
-      include: { 
-        employee: { select: { id: true, firstName: true, lastName: true } },
-        vehicle: { select: { licensePlate: true } }
-      }
+    const data = await request.json()
+    const liters = data.liters ? parseFloat(data.liters) : undefined
+    const totalCost = data.totalCost ? parseFloat(data.totalCost) : undefined
+    const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : undefined)
+    
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
     })
     
-    await logCrud('UPDATE', 'vehicles', 'fuel', fuelLogId,
-      `תדלוק ${fuelLog.vehicle.licensePlate}`, {
+    const fuelLog = await prisma.vehicleFuelLog.update({
+      where: { id: fuelId },
+      data: {
+        date: data.date ? new Date(data.date) : undefined,
+        employeeId: data.employeeId || undefined,
+        liters,
+        pricePerLiter,
+        totalCost,
+        mileage: data.mileage ? parseInt(data.mileage) : null,
+        station: data.station || null,
+        fuelType: data.fuelType || null,
+        fullTank: data.fullTank !== false,
+        receiptUrl: data.receiptUrl || null,
+      },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'fuel-log', fuelId,
+      `תדלוק ${vehicle?.licensePlate}`, {
       vehicleId: params.id,
+      liters,
+      totalCost,
     })
     
     return NextResponse.json(fuelLog)
@@ -159,34 +158,32 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const { searchParams } = new URL(request.url)
-    const fuelLogId = searchParams.get('fuelLogId')
+    const fuelId = searchParams.get('fuelId')
     
-    if (!fuelLogId) {
-      return NextResponse.json({ error: 'Missing fuelLogId' }, { status: 400 })
+    if (!fuelId) {
+      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
     }
     
+    // Get info for logging
     const fuelLog = await prisma.vehicleFuelLog.findUnique({
-      where: { id: fuelLogId },
+      where: { id: fuelId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    if (!fuelLog) {
-      return NextResponse.json({ error: 'Fuel log not found' }, { status: 404 })
-    }
-    
-    await prisma.vehicleFuelLog.delete({ where: { id: fuelLogId } })
-    
-    await logCrud('DELETE', 'vehicles', 'fuel', fuelLogId,
-      `תדלוק ${fuelLog.vehicle.licensePlate}`, {
-      vehicleId: params.id,
+    await prisma.vehicleFuelLog.delete({
+      where: { id: fuelId }
     })
+    
+    // Logging - added
+    if (fuelLog) {
+      await logCrud('DELETE', 'vehicles', 'fuel-log', fuelId,
+        `תדלוק ${fuelLog.vehicle.licensePlate}`, {
+        vehicleId: params.id,
+        liters: fuelLog.liters,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

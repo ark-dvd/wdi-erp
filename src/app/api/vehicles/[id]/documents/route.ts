@@ -1,23 +1,17 @@
 // ============================================
 // src/app/api/vehicles/[id]/documents/route.ts
-// Version: 20260111-220000
-// Fixed: proper try/catch structure with auth
+// Version: 20260111-142200
+// Added: logCrud for CREATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const documents = await prisma.vehicleDocument.findMany({
       where: { vehicleId: params.id },
@@ -34,37 +28,44 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
-      select: { licensePlate: true }
-    })
+    if (!data.type) {
+      return NextResponse.json({ error: 'חובה לבחור סוג מסמך' }, { status: 400 })
+    }
+    if (!data.fileUrl) {
+      return NextResponse.json({ error: 'חובה להעלות קובץ' }, { status: 400 })
+    }
     
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
-      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
     
     const document = await prisma.vehicleDocument.create({
       data: {
         vehicleId: params.id,
         type: data.type,
+        fileUrl: data.fileUrl,
+        fileName: data.fileName || 'מסמך',
         expiryDate: data.expiryDate ? new Date(data.expiryDate) : null,
-        fileUrl: data.fileUrl || null,
+        issueDate: data.issueDate ? new Date(data.issueDate) : null,
         notes: data.notes || null,
+        createdBy: data.createdBy || null,
       }
     })
     
+    // Logging - added
     await logCrud('CREATE', 'vehicles', 'document', document.id,
-      `מסמך ${data.type} - ${vehicle.licensePlate}`, {
+      `מסמך ${vehicle.licensePlate} - ${data.type}`, {
       vehicleId: params.id,
-      type: data.type,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      documentType: data.type,
+      fileName: data.fileName,
     })
     
     return NextResponse.json(document, { status: 201 })
@@ -78,17 +79,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const { searchParams } = new URL(request.url)
     const documentId = searchParams.get('documentId')
     
     if (!documentId) {
-      return NextResponse.json({ error: 'Missing documentId' }, { status: 400 })
+      return NextResponse.json({ error: 'חסר מזהה מסמך' }, { status: 400 })
     }
     
     const document = await prisma.vehicleDocument.findUnique({
@@ -96,16 +92,20 @@ export async function DELETE(
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    if (!document) {
-      return NextResponse.json({ error: 'Document not found' }, { status: 404 })
+    if (!document || document.vehicleId !== params.id) {
+      return NextResponse.json({ error: 'מסמך לא נמצא' }, { status: 404 })
     }
     
-    await prisma.vehicleDocument.delete({ where: { id: documentId } })
+    await prisma.vehicleDocument.delete({
+      where: { id: documentId }
+    })
     
+    // Logging - added
     await logCrud('DELETE', 'vehicles', 'document', documentId,
-      `מסמך ${document.type} - ${document.vehicle.licensePlate}`, {
+      `מסמך ${document.vehicle.licensePlate} - ${document.type}`, {
       vehicleId: params.id,
-      type: document.type,
+      documentType: document.type,
+      fileName: document.fileName,
     })
     
     return NextResponse.json({ success: true })

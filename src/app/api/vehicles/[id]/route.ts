@@ -1,14 +1,14 @@
 // ============================================
 // src/app/api/vehicles/[id]/route.ts
-// Version: 20260111-223000
+// Version: 20260111-141500
+// Added: logCrud for UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-import { TicketStatus } from '@prisma/client'
 
+// פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
     where: {
@@ -28,11 +28,6 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
@@ -43,6 +38,7 @@ export async function GET(
             firstName: true,
             lastName: true,
             phone: true,
+            email: true,
             photoUrl: true,
             role: true,
           }
@@ -50,21 +46,31 @@ export async function GET(
         assignments: {
           include: {
             employee: {
-              select: { id: true, firstName: true, lastName: true, phone: true, photoUrl: true }
+              select: { id: true, firstName: true, lastName: true, photoUrl: true }
             }
           },
-          orderBy: { startDate: 'desc' },
-          take: 10
+          orderBy: { startDate: 'desc' }
+        },
+        services: { orderBy: { serviceDate: 'desc' } },
+        accidents: {
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } }
+          },
+          orderBy: { date: 'desc' }
         },
         fuelLogs: {
-          orderBy: { date: 'desc' },
-          take: 50
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } }
+          },
+          orderBy: { date: 'desc' }
         },
-        services: {
-          orderBy: { serviceDate: 'desc' },
-          take: 20
+        tollRoads: {
+          include: {
+            employee: { select: { id: true, firstName: true, lastName: true } }
+          },
+          orderBy: { date: 'desc' }
         },
-        accidents: {
+        parkings: {
           include: {
             employee: { select: { id: true, firstName: true, lastName: true } }
           },
@@ -75,34 +81,15 @@ export async function GET(
             employee: { select: { id: true, firstName: true, lastName: true } }
           },
           orderBy: { date: 'desc' }
-        },
-        tollRoads: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } }
-          },
-          orderBy: { date: 'desc' },
-          take: 50
-        },
-        parkings: {
-          include: {
-            employee: { select: { id: true, firstName: true, lastName: true } }
-          },
-          orderBy: { date: 'desc' },
-          take: 50
-        },
-        documents: {
-          orderBy: [{ type: 'asc' }, { expiryDate: 'desc' }]
-        },
-        photos: {
-          orderBy: [{ event: 'asc' }, { createdAt: 'desc' }]
         }
       }
     })
-
+    
     if (!vehicle) {
       return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
-
+    
+    // חישוב סטטיסטיקות
     const stats = {
       totalFuelCost: vehicle.fuelLogs.reduce((sum, log) => sum + log.totalCost, 0),
       totalServiceCost: vehicle.services.reduce((sum, s) => sum + (s.cost || 0), 0),
@@ -110,11 +97,32 @@ export async function GET(
       totalTollCost: vehicle.tollRoads.reduce((sum, t) => sum + t.cost, 0),
       totalParkingCost: vehicle.parkings.reduce((sum, p) => sum + p.cost, 0),
       totalTicketsCost: vehicle.tickets.reduce((sum, t) => sum + (t.paidAmount || t.fineAmount || 0), 0),
-      pendingTickets: vehicle.tickets.filter(t => t.status === TicketStatus.PENDING).length,
+      pendingTickets: vehicle.tickets.filter(t => t.status === 'PENDING').length,
       totalFuelLiters: vehicle.fuelLogs.reduce((sum, log) => sum + log.liters, 0),
       avgFuelConsumption: 0,
+      totalCost: 0,
     }
-
+    
+    // סה"כ עלויות
+    stats.totalCost = stats.totalFuelCost + stats.totalServiceCost + stats.totalAccidentCost + 
+                      stats.totalTollCost + stats.totalParkingCost + stats.totalTicketsCost
+    
+    // חישוב צריכת דלק ממוצעת
+    if (vehicle.fuelLogs.length >= 2) {
+      const sortedLogs = [...vehicle.fuelLogs].sort((a, b) => 
+        new Date(a.date).getTime() - new Date(b.date).getTime()
+      )
+      const firstLog = sortedLogs[0]
+      const lastLog = sortedLogs[sortedLogs.length - 1]
+      if (firstLog.mileage && lastLog.mileage) {
+        const kmDiff = lastLog.mileage - firstLog.mileage
+        if (kmDiff > 0) {
+          const litersUsed = sortedLogs.slice(1).reduce((sum, log) => sum + log.liters, 0)
+          stats.avgFuelConsumption = Math.round((litersUsed / kmDiff) * 100 * 10) / 10
+        }
+      }
+    }
+    
     return NextResponse.json({ ...vehicle, stats })
   } catch (error) {
     console.error('Error fetching vehicle:', error)
@@ -126,13 +134,17 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const data = await request.json()
+    
+    if (data.licensePlate) {
+      const existing = await prisma.vehicle.findFirst({
+        where: { licensePlate: data.licensePlate, NOT: { id: params.id } }
+      })
+      if (existing) {
+        return NextResponse.json({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 400 })
+      }
+    }
     
     const vehicle = await prisma.vehicle.update({
       where: { id: params.id },
@@ -142,24 +154,26 @@ export async function PUT(
         model: data.model,
         year: data.year ? parseInt(data.year) : null,
         color: data.color || null,
-        status: data.status,
         contractType: data.contractType || null,
+        leasingCompany: data.leasingCompany || null,
+        contractStartDate: data.contractStartDate ? new Date(data.contractStartDate) : null,
         contractEndDate: data.contractEndDate ? new Date(data.contractEndDate) : null,
         monthlyPayment: data.monthlyPayment ? parseFloat(data.monthlyPayment) : null,
         currentKm: data.currentKm ? parseInt(data.currentKm) : null,
+        lastServiceDate: data.lastServiceDate ? new Date(data.lastServiceDate) : null,
+        lastServiceKm: data.lastServiceKm ? parseInt(data.lastServiceKm) : null,
+        nextServiceDate: data.nextServiceDate ? new Date(data.nextServiceDate) : null,
+        nextServiceKm: data.nextServiceKm ? parseInt(data.nextServiceKm) : null,
+        status: data.status,
         notes: data.notes || null,
-      },
-      include: {
-        currentDriver: {
-          select: { id: true, firstName: true, lastName: true, phone: true, photoUrl: true }
-        }
       }
     })
     
+    // Logging - added
     await logCrud('UPDATE', 'vehicles', 'vehicle', params.id,
-      `${vehicle.manufacturer} ${vehicle.model} (${vehicle.licensePlate})`, {
-      licensePlate: vehicle.licensePlate,
-      status: vehicle.status,
+      `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
+      licensePlate: data.licensePlate,
+      status: data.status,
     })
     
     return NextResponse.json(vehicle)
@@ -173,27 +187,33 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true }
+      select: { 
+        currentDriverId: true,
+        licensePlate: true,
+        manufacturer: true,
+        model: true,
+      }
     })
     
-    if (!vehicle) {
-      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+    if (vehicle?.currentDriverId) {
+      return NextResponse.json(
+        { error: 'לא ניתן למחוק רכב שמשויך לעובד. יש לבטל את השיוך קודם.' },
+        { status: 400 }
+      )
     }
     
     await prisma.vehicle.delete({ where: { id: params.id } })
     
-    await logCrud('DELETE', 'vehicles', 'vehicle', params.id,
-      `${vehicle.manufacturer} ${vehicle.model} (${vehicle.licensePlate})`, {
-      licensePlate: vehicle.licensePlate,
-    })
+    // Logging - added
+    if (vehicle) {
+      await logCrud('DELETE', 'vehicles', 'vehicle', params.id,
+        `${vehicle.manufacturer} ${vehicle.model} (${vehicle.licensePlate})`, {
+        licensePlate: vehicle.licensePlate,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

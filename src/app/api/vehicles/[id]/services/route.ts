@@ -1,22 +1,17 @@
 // ============================================
 // src/app/api/vehicles/[id]/services/route.ts
-// Version: 20260111-223000
+// Version: 20260111-141700
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const services = await prisma.vehicleService.findMany({
       where: { vehicleId: params.id },
@@ -33,50 +28,50 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({
+    const vehicle = await prisma.vehicle.findUnique({ 
       where: { id: params.id },
-      select: { id: true, licensePlate: true, manufacturer: true, model: true }
+      select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
+    
+    const mileage = data.mileage ? parseInt(data.mileage) : null
     
     const service = await prisma.vehicleService.create({
       data: {
         vehicleId: params.id,
         serviceDate: new Date(data.serviceDate),
         serviceType: data.serviceType,
-        description: data.description || null,
-        odometer: data.odometer ? parseInt(data.odometer) : null,
+        mileage,
         cost: data.cost ? parseFloat(data.cost) : null,
         garage: data.garage || null,
+        description: data.description || null,
         invoiceUrl: data.invoiceUrl || null,
-        nextServiceDate: data.nextServiceDate ? new Date(data.nextServiceDate) : null,
-        nextServiceKm: data.nextServiceKm ? parseInt(data.nextServiceKm) : null,
-        notes: data.notes || null,
       }
     })
     
-    if (data.odometer) {
-      await prisma.vehicle.update({
-        where: { id: params.id },
-        data: { currentKm: parseInt(data.odometer) }
-      })
+    const updateData: any = { lastServiceDate: new Date(data.serviceDate) }
+    if (mileage) {
+      updateData.lastServiceKm = mileage
+      if (!vehicle.currentKm || mileage > vehicle.currentKm) {
+        updateData.currentKm = mileage
+      }
     }
     
+    await prisma.vehicle.update({ where: { id: params.id }, data: updateData })
+    
+    // Logging - added
     await logCrud('CREATE', 'vehicles', 'service', service.id,
-      `טיפול ${data.serviceType} - ${vehicle.licensePlate}`, {
+      `טיפול ${vehicle.licensePlate} - ${data.serviceType}`, {
       vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
       serviceType: data.serviceType,
       cost: data.cost,
+      garage: data.garage,
     })
     
     return NextResponse.json(service, { status: 201 })
@@ -90,43 +85,41 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
-    const data = await request.json()
-    const { serviceId, ...updateData } = data
+    const { searchParams } = new URL(request.url)
+    const serviceId = searchParams.get('serviceId')
     
     if (!serviceId) {
-      return NextResponse.json({ error: 'Missing serviceId' }, { status: 400 })
+      return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
     }
     
-    const service = await prisma.vehicleService.update({
-      where: { id: serviceId },
-      data: {
-        serviceDate: updateData.serviceDate ? new Date(updateData.serviceDate) : undefined,
-        serviceType: updateData.serviceType,
-        description: updateData.description,
-        odometer: updateData.odometer ? parseInt(updateData.odometer) : undefined,
-        cost: updateData.cost ? parseFloat(updateData.cost) : undefined,
-        garage: updateData.garage,
-        invoiceUrl: updateData.invoiceUrl,
-        nextServiceDate: updateData.nextServiceDate ? new Date(updateData.nextServiceDate) : undefined,
-        nextServiceKm: updateData.nextServiceKm ? parseInt(updateData.nextServiceKm) : undefined,
-        notes: updateData.notes,
-      }
-    })
+    const data = await request.json()
     
-    const vehicleData = await prisma.vehicle.findUnique({
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true }
     })
     
+    const service = await prisma.vehicleService.update({
+      where: { id: serviceId },
+      data: {
+        serviceDate: data.serviceDate ? new Date(data.serviceDate) : undefined,
+        serviceType: data.serviceType,
+        mileage: data.mileage ? parseInt(data.mileage) : null,
+        cost: data.cost ? parseFloat(data.cost) : null,
+        garage: data.garage || null,
+        description: data.description || null,
+        invoiceUrl: data.invoiceUrl || null,
+      }
+    })
+    
+    // Logging - added
     await logCrud('UPDATE', 'vehicles', 'service', serviceId,
-      `טיפול ${vehicleData?.licensePlate}`, {
+      `טיפול ${vehicle?.licensePlate} - ${data.serviceType}`, {
       vehicleId: params.id,
+      serviceType: data.serviceType,
+      cost: data.cost,
     })
     
     return NextResponse.json(service)
@@ -140,34 +133,32 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
     const { searchParams } = new URL(request.url)
     const serviceId = searchParams.get('serviceId')
     
     if (!serviceId) {
-      return NextResponse.json({ error: 'Missing serviceId' }, { status: 400 })
+      return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
     }
     
+    // Get info for logging
     const service = await prisma.vehicleService.findUnique({
       where: { id: serviceId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    if (!service) {
-      return NextResponse.json({ error: 'Service not found' }, { status: 404 })
-    }
-    
-    await prisma.vehicleService.delete({ where: { id: serviceId } })
-    
-    await logCrud('DELETE', 'vehicles', 'service', serviceId,
-      `טיפול ${service.vehicle.licensePlate}`, {
-      vehicleId: params.id,
+    await prisma.vehicleService.delete({
+      where: { id: serviceId }
     })
+    
+    // Logging - added
+    if (service) {
+      await logCrud('DELETE', 'vehicles', 'service', serviceId,
+        `טיפול ${service.vehicle.licensePlate} - ${service.serviceType}`, {
+        vehicleId: params.id,
+        serviceType: service.serviceType,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {
