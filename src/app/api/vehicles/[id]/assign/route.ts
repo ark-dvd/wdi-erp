@@ -18,7 +18,7 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { employeeId, currentKm, notes } = await request.json()
     
     if (!employeeId) {
@@ -111,7 +111,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { currentKm, notes } = await request.json().catch(() => ({}))
     
     const vehicle = await prisma.vehicle.findUnique({ 

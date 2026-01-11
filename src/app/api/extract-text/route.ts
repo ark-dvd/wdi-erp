@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { fileId } = await request.json();
 
     if (!fileId) {
@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const fileId = request.nextUrl.searchParams.get('fileId');
 
     if (!fileId) {

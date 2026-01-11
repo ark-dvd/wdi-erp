@@ -18,7 +18,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const documents = await prisma.vehicleDocument.findMany({
       where: { vehicleId: params.id },
       orderBy: [{ type: 'asc' }, { expiryDate: 'desc' }]
@@ -39,7 +39,7 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const data = await request.json()
     
     if (!data.type) {
@@ -95,7 +95,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { searchParams } = new URL(request.url)
     const documentId = searchParams.get('documentId')
     

@@ -33,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const accidents = await prisma.vehicleAccident.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -55,7 +55,7 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const data = await request.json()
     
     const vehicle = await prisma.vehicle.findUnique({ 
@@ -117,7 +117,7 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')
     
@@ -177,7 +177,7 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')
     
