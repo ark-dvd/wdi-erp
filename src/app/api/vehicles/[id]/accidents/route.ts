@@ -1,12 +1,15 @@
 // ============================================
 // src/app/api/vehicles/[id]/accidents/route.ts
-// Version: 20260111-141800
+// Version: 20260112-000000
+// Added: auth check for all functions
 // Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { auth } from '@/lib/auth'
+import { AccidentStatus } from '@prisma/client'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -25,6 +28,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const accidents = await prisma.vehicleAccident.findMany({
       where: { vehicleId: params.id },
@@ -42,6 +50,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const data = await request.json()
     
@@ -71,7 +84,7 @@ export async function POST(
         cost: data.cost ? parseFloat(data.cost) : null,
         insuranceClaim: data.insuranceClaim || false,
         insuranceNum: data.insuranceNum || null,
-        status: data.status || 'OPEN',
+        status: data.status || AccidentStatus.OPEN,
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
       },
@@ -85,7 +98,7 @@ export async function POST(
       vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
       location: data.location,
       cost: data.cost,
-      status: data.status || 'OPEN',
+      status: data.status || AccidentStatus.OPEN,
     })
     
     return NextResponse.json(accident, { status: 201 })
@@ -99,6 +112,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')
@@ -154,6 +172,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')

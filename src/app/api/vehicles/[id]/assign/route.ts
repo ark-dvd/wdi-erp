@@ -1,17 +1,24 @@
 // ============================================
 // src/app/api/vehicles/[id]/assign/route.ts
-// Version: 20260111-142400
+// Version: 20260112-000000
+// Added: auth check for all functions
 // Added: logCrud for ASSIGN, UNASSIGN
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { auth } from '@/lib/auth'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { employeeId, currentKm, notes } = await request.json()
     
@@ -100,6 +107,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { currentKm, notes } = await request.json().catch(() => ({}))
     

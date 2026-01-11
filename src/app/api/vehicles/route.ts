@@ -1,14 +1,22 @@
 // ============================================
 // src/app/api/vehicles/route.ts
-// Version: 20260111-141000
+// Version: 20260112-000000
+// Added: auth check for all functions
 // Added: logCrud for CREATE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { auth } from '@/lib/auth'
+import { VehicleStatus } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -53,6 +61,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const data = await request.json()
     
@@ -78,7 +91,7 @@ export async function POST(request: NextRequest) {
         currentKm: data.currentKm ? parseInt(data.currentKm) : null,
         nextServiceDate: data.nextServiceDate ? new Date(data.nextServiceDate) : null,
         nextServiceKm: data.nextServiceKm ? parseInt(data.nextServiceKm) : null,
-        status: data.status || 'ACTIVE',
+        status: data.status || VehicleStatus.ACTIVE,
         notes: data.notes || null,
       }
     })
@@ -104,7 +117,7 @@ export async function POST(request: NextRequest) {
     await logCrud('CREATE', 'vehicles', 'vehicle', vehicle.id, 
       `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
       licensePlate: data.licensePlate,
-      status: data.status || 'ACTIVE',
+      status: data.status || VehicleStatus.ACTIVE,
     })
     
     return NextResponse.json(vehicle, { status: 201 })

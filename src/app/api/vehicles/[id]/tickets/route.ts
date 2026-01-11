@@ -1,12 +1,15 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260111-142100
+// Version: 20260112-000000
+// Added: auth check for all functions
 // Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { auth } from '@/lib/auth'
+import { TicketStatus } from '@prisma/client'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -24,6 +27,11 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const tickets = await prisma.vehicleTicket.findMany({
       where: { vehicleId: params.id },
@@ -41,6 +49,11 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const data = await request.json()
     
@@ -69,7 +82,7 @@ export async function POST(
         fineAmount: parseFloat(data.fineAmount),
         points: data.points ? parseInt(data.points) : null,
         dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        status: data.status || 'PENDING',
+        status: data.status || TicketStatus.PENDING,
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
       },
@@ -98,6 +111,11 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
@@ -158,6 +176,11 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
