@@ -1,7 +1,6 @@
 // ============================================
 // src/app/api/vehicles/[id]/fuel/route.ts
-// Version: 20260111-141600
-// Added: logCrud for CREATE, UPDATE, DELETE
+// Version: 20260111-223000
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -14,7 +13,10 @@ async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string
     where: {
       vehicleId,
       startDate: { lte: date },
-      OR: [{ endDate: null }, { endDate: { gte: date } }]
+      OR: [
+        { endDate: null },
+        { endDate: { gte: date } }
+      ]
     },
     select: { employeeId: true }
   })
@@ -30,7 +32,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const fuelLogs = await prisma.vehicleFuelLog.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -52,55 +54,49 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ 
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
+      select: { id: true, licensePlate: true, manufacturer: true, model: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     const fuelDate = new Date(data.date)
-    const liters = parseFloat(data.liters)
-    const totalCost = data.totalCost ? parseFloat(data.totalCost) : 0
-    const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : null)
-    const mileage = data.mileage ? parseInt(data.mileage) : null
-    
-    // מציאת העובד שהחזיק ברכב בתאריך התדלוק
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, fuelDate)
     
     const fuelLog = await prisma.vehicleFuelLog.create({
       data: {
         vehicleId: params.id,
         date: fuelDate,
-        employeeId,
-        liters,
-        pricePerLiter,
-        totalCost,
-        mileage,
+        liters: parseFloat(data.liters),
+        pricePerLiter: parseFloat(data.pricePerLiter),
+        totalCost: parseFloat(data.totalCost),
+        odometer: data.odometer ? parseInt(data.odometer) : null,
         station: data.station || null,
         fuelType: data.fuelType || null,
-        fullTank: data.fullTank !== false,
+        employeeId: employeeId,
         receiptUrl: data.receiptUrl || null,
+        notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
-    if (mileage && (!vehicle.currentKm || mileage > vehicle.currentKm)) {
-      await prisma.vehicle.update({ where: { id: params.id }, data: { currentKm: mileage } })
+    if (data.odometer) {
+      await prisma.vehicle.update({
+        where: { id: params.id },
+        data: { currentKm: parseInt(data.odometer) }
+      })
     }
     
-    // Logging - added
-    await logCrud('CREATE', 'vehicles', 'fuel-log', fuelLog.id,
-      `תדלוק ${vehicle.licensePlate} - ${liters}L`, {
+    await logCrud('CREATE', 'vehicles', 'fuel', fuelLog.id,
+      `תדלוק ${vehicle.licensePlate}`, {
       vehicleId: params.id,
-      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
-      liters,
-      totalCost,
-      station: data.station,
+      liters: data.liters,
+      totalCost: data.totalCost,
     })
     
     return NextResponse.json(fuelLog, { status: 201 })
@@ -119,48 +115,37 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
-    const { searchParams } = new URL(request.url)
-    const fuelId = searchParams.get('fuelId')
+  try {
+    const data = await request.json()
+    const { fuelLogId, ...updateData } = data
     
-    if (!fuelId) {
-      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
+    if (!fuelLogId) {
+      return NextResponse.json({ error: 'Missing fuelLogId' }, { status: 400 })
     }
     
-    const data = await request.json()
-    const liters = data.liters ? parseFloat(data.liters) : undefined
-    const totalCost = data.totalCost ? parseFloat(data.totalCost) : undefined
-    const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : undefined)
-    
-    // Get vehicle info for logging
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true }
-    })
-    
     const fuelLog = await prisma.vehicleFuelLog.update({
-      where: { id: fuelId },
+      where: { id: fuelLogId },
       data: {
-        date: data.date ? new Date(data.date) : undefined,
-        employeeId: data.employeeId || undefined,
-        liters,
-        pricePerLiter,
-        totalCost,
-        mileage: data.mileage ? parseInt(data.mileage) : null,
-        station: data.station || null,
-        fuelType: data.fuelType || null,
-        fullTank: data.fullTank !== false,
-        receiptUrl: data.receiptUrl || null,
+        date: updateData.date ? new Date(updateData.date) : undefined,
+        liters: updateData.liters ? parseFloat(updateData.liters) : undefined,
+        pricePerLiter: updateData.pricePerLiter ? parseFloat(updateData.pricePerLiter) : undefined,
+        totalCost: updateData.totalCost ? parseFloat(updateData.totalCost) : undefined,
+        odometer: updateData.odometer ? parseInt(updateData.odometer) : undefined,
+        station: updateData.station,
+        fuelType: updateData.fuelType,
+        employeeId: updateData.employeeId || undefined,
+        receiptUrl: updateData.receiptUrl,
+        notes: updateData.notes,
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+      include: { 
+        employee: { select: { id: true, firstName: true, lastName: true } },
+        vehicle: { select: { licensePlate: true } }
+      }
     })
     
-    // Logging - added
-    await logCrud('UPDATE', 'vehicles', 'fuel-log', fuelId,
-      `תדלוק ${vehicle?.licensePlate}`, {
+    await logCrud('UPDATE', 'vehicles', 'fuel', fuelLogId,
+      `תדלוק ${fuelLog.vehicle.licensePlate}`, {
       vehicleId: params.id,
-      liters,
-      totalCost,
     })
     
     return NextResponse.json(fuelLog)
@@ -179,32 +164,29 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const { searchParams } = new URL(request.url)
-    const fuelId = searchParams.get('fuelId')
+    const fuelLogId = searchParams.get('fuelLogId')
     
-    if (!fuelId) {
-      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
+    if (!fuelLogId) {
+      return NextResponse.json({ error: 'Missing fuelLogId' }, { status: 400 })
     }
     
-    // Get info for logging
     const fuelLog = await prisma.vehicleFuelLog.findUnique({
-      where: { id: fuelId },
+      where: { id: fuelLogId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    await prisma.vehicleFuelLog.delete({
-      where: { id: fuelId }
-    })
-    
-    // Logging - added
-    if (fuelLog) {
-      await logCrud('DELETE', 'vehicles', 'fuel-log', fuelId,
-        `תדלוק ${fuelLog.vehicle.licensePlate}`, {
-        vehicleId: params.id,
-        liters: fuelLog.liters,
-      })
+    if (!fuelLog) {
+      return NextResponse.json({ error: 'Fuel log not found' }, { status: 404 })
     }
+    
+    await prisma.vehicleFuelLog.delete({ where: { id: fuelLogId } })
+    
+    await logCrud('DELETE', 'vehicles', 'fuel', fuelLogId,
+      `תדלוק ${fuelLog.vehicle.licensePlate}`, {
+      vehicleId: params.id,
+    })
     
     return NextResponse.json({ success: true })
   } catch (error) {

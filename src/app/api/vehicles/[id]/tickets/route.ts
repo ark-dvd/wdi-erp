@@ -1,8 +1,6 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260111-210500
-// Added: logCrud for CREATE, UPDATE, DELETE
-// Fixed: TicketStatus enum instead of hardcoded strings
+// Version: 20260111-223000
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -16,7 +14,10 @@ async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string
     where: {
       vehicleId,
       startDate: { lte: date },
-      OR: [{ endDate: null }, { endDate: { gte: date } }]
+      OR: [
+        { endDate: null },
+        { endDate: { gte: date } }
+      ]
     },
     select: { employeeId: true }
   })
@@ -32,7 +33,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const tickets = await prisma.vehicleTicket.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -54,29 +55,25 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ 
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true }
+      select: { id: true, licensePlate: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     const ticketDate = new Date(data.date)
-    
-    // מציאת העובד שהחזיק ברכב בתאריך העבירה
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, ticketDate)
     
     const ticket = await prisma.vehicleTicket.create({
       data: {
         vehicleId: params.id,
         date: ticketDate,
-        employeeId,
-        ticketType: data.ticketType,
-        ticketNumber: data.ticketNumber || null,
+        type: data.type,
         location: data.location || null,
         description: data.description || null,
         fineAmount: parseFloat(data.fineAmount),
@@ -85,18 +82,16 @@ export async function POST(
         status: data.status || TicketStatus.PENDING,
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
+        employeeId: employeeId,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
-    // Logging - added
     await logCrud('CREATE', 'vehicles', 'ticket', ticket.id,
-      `דוח ${vehicle.licensePlate} - ${data.ticketType}`, {
+      `דוח ${data.type} - ${vehicle.licensePlate}`, {
       vehicleId: params.id,
-      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
-      ticketType: data.ticketType,
+      type: data.type,
       fineAmount: data.fineAmount,
-      location: data.location,
     })
     
     return NextResponse.json(ticket, { status: 201 })
@@ -106,7 +101,6 @@ export async function POST(
   }
 }
 
-// עדכון סטטוס דוח (תשלום/ערעור)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -116,53 +110,41 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
-    const { searchParams } = new URL(request.url)
-    const ticketId = searchParams.get('ticketId')
+  try {
     const data = await request.json()
+    const { ticketId, ...updateData } = data
     
-    // תמיכה גם בפורמט הישן (ticketId בגוף הבקשה) וגם החדש (ב-query string)
-    const id = ticketId || data.ticketId
-    if (!id) {
-      return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
+    if (!ticketId) {
+      return NextResponse.json({ error: 'Missing ticketId' }, { status: 400 })
     }
     
-    // Get vehicle info for logging
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
-      select: { licensePlate: true }
-    })
-    
     const ticket = await prisma.vehicleTicket.update({
-      where: { id },
+      where: { id: ticketId },
       data: {
-        date: data.date ? new Date(data.date) : undefined,
-        employeeId: data.employeeId || undefined,
-        ticketType: data.ticketType || undefined,
-        ticketNumber: data.ticketNumber || null,
-        location: data.location || null,
-        description: data.description || null,
-        fineAmount: data.fineAmount ? parseFloat(data.fineAmount) : undefined,
-        points: data.points ? parseInt(data.points) : null,
-        dueDate: data.dueDate ? new Date(data.dueDate) : null,
-        status: data.status || undefined,
-        paidDate: data.paidDate ? new Date(data.paidDate) : null,
-        paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : null,
-        appealDate: data.appealDate ? new Date(data.appealDate) : null,
-        appealResult: data.appealResult || null,
-        fileUrl: data.fileUrl || null,
-        notes: data.notes || null,
+        date: updateData.date ? new Date(updateData.date) : undefined,
+        type: updateData.type,
+        location: updateData.location,
+        description: updateData.description,
+        fineAmount: updateData.fineAmount ? parseFloat(updateData.fineAmount) : undefined,
+        points: updateData.points ? parseInt(updateData.points) : undefined,
+        dueDate: updateData.dueDate ? new Date(updateData.dueDate) : undefined,
+        status: updateData.status,
+        paidAmount: updateData.paidAmount ? parseFloat(updateData.paidAmount) : undefined,
+        paidDate: updateData.paidDate ? new Date(updateData.paidDate) : undefined,
+        fileUrl: updateData.fileUrl,
+        notes: updateData.notes,
+        employeeId: updateData.employeeId || undefined,
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+      include: { 
+        employee: { select: { id: true, firstName: true, lastName: true } },
+        vehicle: { select: { licensePlate: true } }
+      }
     })
     
-    // Logging - added
-    await logCrud('UPDATE', 'vehicles', 'ticket', id,
-      `דוח ${vehicle?.licensePlate} - ${data.ticketType || ticket.ticketType}`, {
+    await logCrud('UPDATE', 'vehicles', 'ticket', ticketId,
+      `דוח ${ticket.vehicle.licensePlate}`, {
       vehicleId: params.id,
-      ticketType: data.ticketType || ticket.ticketType,
-      status: data.status,
-      fineAmount: data.fineAmount,
+      status: updateData.status,
     })
     
     return NextResponse.json(ticket)
@@ -181,32 +163,29 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
     
     if (!ticketId) {
-      return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing ticketId' }, { status: 400 })
     }
     
-    // Get info for logging
     const ticket = await prisma.vehicleTicket.findUnique({
       where: { id: ticketId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    await prisma.vehicleTicket.delete({
-      where: { id: ticketId }
-    })
-    
-    // Logging - added
-    if (ticket) {
-      await logCrud('DELETE', 'vehicles', 'ticket', ticketId,
-        `דוח ${ticket.vehicle.licensePlate} - ${ticket.ticketType}`, {
-        vehicleId: params.id,
-        ticketType: ticket.ticketType,
-      })
+    if (!ticket) {
+      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 })
     }
+    
+    await prisma.vehicleTicket.delete({ where: { id: ticketId } })
+    
+    await logCrud('DELETE', 'vehicles', 'ticket', ticketId,
+      `דוח ${ticket.vehicle.licensePlate}`, {
+      vehicleId: params.id,
+    })
     
     return NextResponse.json({ success: true })
   } catch (error) {

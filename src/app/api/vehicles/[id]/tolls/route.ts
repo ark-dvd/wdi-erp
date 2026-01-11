@@ -1,7 +1,6 @@
 // ============================================
 // src/app/api/vehicles/[id]/tolls/route.ts
-// Version: 20260111-141900
-// Added: logCrud for CREATE, UPDATE, DELETE
+// Version: 20260111-223000
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -14,7 +13,10 @@ async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string
     where: {
       vehicleId,
       startDate: { lte: date },
-      OR: [{ endDate: null }, { endDate: { gte: date } }]
+      OR: [
+        { endDate: null },
+        { endDate: { gte: date } }
+      ]
     },
     select: { employeeId: true }
   })
@@ -30,7 +32,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const tolls = await prisma.vehicleTollRoad.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -38,8 +40,8 @@ export async function GET(
     })
     return NextResponse.json(tolls)
   } catch (error) {
-    console.error('Error fetching toll roads:', error)
-    return NextResponse.json({ error: 'Failed to fetch toll roads' }, { status: 500 })
+    console.error('Error fetching tolls:', error)
+    return NextResponse.json({ error: 'Failed to fetch tolls' }, { status: 500 })
   }
 }
 
@@ -52,50 +54,45 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ 
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true }
+      select: { id: true, licensePlate: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     const tollDate = new Date(data.date)
-    
-    // מציאת העובד שהחזיק ברכב בתאריך הנסיעה
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, tollDate)
     
     const toll = await prisma.vehicleTollRoad.create({
       data: {
         vehicleId: params.id,
         date: tollDate,
-        employeeId,
         road: data.road,
         entryPoint: data.entryPoint || null,
         exitPoint: data.exitPoint || null,
         cost: parseFloat(data.cost),
-        invoiceNum: data.invoiceNum || null,
+        employeeId: employeeId,
         notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
-    // Logging - added
     await logCrud('CREATE', 'vehicles', 'toll', toll.id,
-      `כביש אגרה ${vehicle.licensePlate} - ${data.road}`, {
+      `כביש אגרה ${data.road} - ${vehicle.licensePlate}`, {
       vehicleId: params.id,
-      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
       road: data.road,
       cost: data.cost,
     })
     
     return NextResponse.json(toll, { status: 201 })
   } catch (error) {
-    console.error('Error creating toll road:', error)
-    return NextResponse.json({ error: 'Failed to create toll road' }, { status: 500 })
+    console.error('Error creating toll:', error)
+    return NextResponse.json({ error: 'Failed to create toll' }, { status: 500 })
   }
 }
 
@@ -108,49 +105,40 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
-    const { searchParams } = new URL(request.url)
-    const tollId = searchParams.get('tollId')
+  try {
+    const data = await request.json()
+    const { tollId, ...updateData } = data
     
     if (!tollId) {
-      return NextResponse.json({ error: 'tollId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing tollId' }, { status: 400 })
     }
-    
-    const data = await request.json()
-    
-    // Get vehicle info for logging
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
-      select: { licensePlate: true }
-    })
     
     const toll = await prisma.vehicleTollRoad.update({
       where: { id: tollId },
       data: {
-        date: data.date ? new Date(data.date) : undefined,
-        employeeId: data.employeeId || undefined,
-        road: data.road,
-        entryPoint: data.entryPoint || null,
-        exitPoint: data.exitPoint || null,
-        cost: data.cost ? parseFloat(data.cost) : undefined,
-        invoiceNum: data.invoiceNum || null,
-        notes: data.notes || null,
+        date: updateData.date ? new Date(updateData.date) : undefined,
+        road: updateData.road,
+        entryPoint: updateData.entryPoint,
+        exitPoint: updateData.exitPoint,
+        cost: updateData.cost ? parseFloat(updateData.cost) : undefined,
+        employeeId: updateData.employeeId || undefined,
+        notes: updateData.notes,
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+      include: { 
+        employee: { select: { id: true, firstName: true, lastName: true } },
+        vehicle: { select: { licensePlate: true } }
+      }
     })
     
-    // Logging - added
     await logCrud('UPDATE', 'vehicles', 'toll', tollId,
-      `כביש אגרה ${vehicle?.licensePlate} - ${data.road}`, {
+      `כביש אגרה ${toll.vehicle.licensePlate}`, {
       vehicleId: params.id,
-      road: data.road,
-      cost: data.cost,
     })
     
     return NextResponse.json(toll)
   } catch (error) {
-    console.error('Error updating toll road:', error)
-    return NextResponse.json({ error: 'Failed to update toll road' }, { status: 500 })
+    console.error('Error updating toll:', error)
+    return NextResponse.json({ error: 'Failed to update toll' }, { status: 500 })
   }
 }
 
@@ -163,36 +151,33 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const { searchParams } = new URL(request.url)
     const tollId = searchParams.get('tollId')
     
     if (!tollId) {
-      return NextResponse.json({ error: 'tollId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing tollId' }, { status: 400 })
     }
     
-    // Get info for logging
     const toll = await prisma.vehicleTollRoad.findUnique({
       where: { id: tollId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    await prisma.vehicleTollRoad.delete({
-      where: { id: tollId }
-    })
-    
-    // Logging - added
-    if (toll) {
-      await logCrud('DELETE', 'vehicles', 'toll', tollId,
-        `כביש אגרה ${toll.vehicle.licensePlate} - ${toll.road}`, {
-        vehicleId: params.id,
-        road: toll.road,
-      })
+    if (!toll) {
+      return NextResponse.json({ error: 'Toll not found' }, { status: 404 })
     }
+    
+    await prisma.vehicleTollRoad.delete({ where: { id: tollId } })
+    
+    await logCrud('DELETE', 'vehicles', 'toll', tollId,
+      `כביש אגרה ${toll.vehicle.licensePlate}`, {
+      vehicleId: params.id,
+    })
     
     return NextResponse.json({ success: true })
   } catch (error) {
-    console.error('Error deleting toll road:', error)
-    return NextResponse.json({ error: 'Failed to delete toll road' }, { status: 500 })
+    console.error('Error deleting toll:', error)
+    return NextResponse.json({ error: 'Failed to delete toll' }, { status: 500 })
   }
 }
