@@ -9,7 +9,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
-import { AccidentStatus } from '@prisma/client'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -84,7 +83,7 @@ export async function POST(
         cost: data.cost ? parseFloat(data.cost) : null,
         insuranceClaim: data.insuranceClaim || false,
         insuranceNum: data.insuranceNum || null,
-        status: data.status || AccidentStatus.OPEN,
+        status: data.status || 'OPEN',
         fileUrl: data.fileUrl || null,
         notes: data.notes || null,
       },
@@ -98,7 +97,7 @@ export async function POST(
       vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
       location: data.location,
       cost: data.cost,
-      status: data.status || AccidentStatus.OPEN,
+      status: data.status || 'OPEN',
     })
     
     return NextResponse.json(accident, { status: 201 })
