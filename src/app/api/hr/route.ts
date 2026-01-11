@@ -131,7 +131,6 @@ export async function POST(request: Request) {
 
     // תיעוד הפעולה
     await logCrud('CREATE', 'hr', 'employee', employee.id, `${data.firstName} ${data.lastName}`, {
-      idNumber: data.idNumber,
       role: data.role,
       department: data.department
     })

@@ -295,13 +295,16 @@ model ProjectEvent {
 }
 
 model EventFile {
+  // Version: 20260111-190000 - Added text extraction fields
   id        String       @id @default(cuid())
   event     ProjectEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
   eventId   String
   fileUrl   String
   fileName  String
   fileType  String
-  fileSize  Int?
+  fileSize        Int?
+  extractedText   String?      @db.Text
+  textExtractedAt DateTime?
   createdAt DateTime     @default(now())
 }
 
