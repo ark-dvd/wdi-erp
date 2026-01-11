@@ -1,12 +1,14 @@
 // ============================================
 // src/app/api/vehicles/route.ts
-// Version: 20260111-141000
+// Version: 20260111-200000
 // Added: logCrud for CREATE
+// Fixed: VehicleStatus enum instead of hardcoded strings
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { VehicleStatus } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
   try {
@@ -78,7 +80,7 @@ export async function POST(request: NextRequest) {
         currentKm: data.currentKm ? parseInt(data.currentKm) : null,
         nextServiceDate: data.nextServiceDate ? new Date(data.nextServiceDate) : null,
         nextServiceKm: data.nextServiceKm ? parseInt(data.nextServiceKm) : null,
-        status: data.status || 'ACTIVE',
+        status: data.status || VehicleStatus.ACTIVE,
         notes: data.notes || null,
       }
     })
@@ -104,7 +106,7 @@ export async function POST(request: NextRequest) {
     await logCrud('CREATE', 'vehicles', 'vehicle', vehicle.id, 
       `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
       licensePlate: data.licensePlate,
-      status: data.status || 'ACTIVE',
+      status: data.status || VehicleStatus.ACTIVE,
     })
     
     return NextResponse.json(vehicle, { status: 201 })

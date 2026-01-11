@@ -1,9 +1,11 @@
 // ================================================
 // WDI ERP - Agent Queries for Vehicles
-// Version: 20260111-150500
+// Version: 20260111-200000
+// Fixed: VehicleStatus enum instead of hardcoded strings
 // ================================================
 
 import { prisma } from './prisma';
+import { VehicleStatus } from '@prisma/client';
 
 export async function getVehicles(params: {
   status?: string;
@@ -365,7 +367,7 @@ export async function countVehicles(params: {
 
 export async function getVehiclesStats() {
   const vehicles = await prisma.vehicle.findMany({
-    where: { status: 'ACTIVE' },
+    where: { status: VehicleStatus.ACTIVE },
     include: {
       fuelLogs: {
         where: {
@@ -425,7 +427,7 @@ export async function getVehiclesNeedingService(params: { daysAhead?: number }) 
 
   const vehicles = await prisma.vehicle.findMany({
     where: {
-      status: 'ACTIVE',
+      status: VehicleStatus.ACTIVE,
       OR: [
         { nextServiceDate: { lte: futureDate } },
       ]
@@ -439,7 +441,7 @@ export async function getVehiclesNeedingService(params: { daysAhead?: number }) 
   // גם רכבים שהגיעו לק"מ טיפול
   const byKm = await prisma.vehicle.findMany({
     where: {
-      status: 'ACTIVE',
+      status: VehicleStatus.ACTIVE,
       nextServiceKm: { not: null },
     },
     include: {
