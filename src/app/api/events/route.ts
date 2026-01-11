@@ -97,6 +97,7 @@ export async function GET(request: Request) {
           select: {
             id: true,
             email: true,
+            name: true,
             employee: {
               select: { firstName: true, lastName: true }
             }
@@ -112,7 +113,7 @@ export async function GET(request: Request) {
       ...event,
       createdByName: event.createdBy?.employee 
         ? `${event.createdBy.employee.firstName} ${event.createdBy.employee.lastName}`
-        : event.createdBy?.email || null
+        : event.createdBy?.name || event.createdBy?.email || null
     }))
     
     return NextResponse.json({
