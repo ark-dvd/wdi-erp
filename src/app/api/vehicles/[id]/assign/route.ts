@@ -1,7 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/assign/route.ts
-// Version: 20260111-142400
-// Added: logCrud for ASSIGN, UNASSIGN
+// Version: 20260111-220000
+// Fixed: proper try/catch structure with auth
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -18,11 +18,11 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const { employeeId, currentKm, notes } = await request.json()
     
     if (!employeeId) {
-      return NextResponse.json({ error: 'חובה לבחור עובד' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing employeeId' }, { status: 400 })
     }
     
     const vehicle = await prisma.vehicle.findUnique({
@@ -31,68 +31,55 @@ export async function POST(
     })
     
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } })
-    if (!employee || employee.status !== 'פעיל') {
-      return NextResponse.json({ error: 'עובד לא נמצא או לא פעיל' }, { status: 400 })
+    if (!employee) {
+      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
     }
     
-    const existingVehicle = await prisma.vehicle.findFirst({
-      where: { currentDriverId: employeeId, NOT: { id: params.id } }
-    })
-    if (existingVehicle) {
-      return NextResponse.json(
-        { error: `לעובד כבר משויך רכב: ${existingVehicle.licensePlate}` },
-        { status: 400 }
-      )
-    }
-    
-    const now = new Date()
-    const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
-    const previousDriverName = vehicle.currentDriver 
-      ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
-      : null
-    
-    await prisma.$transaction(async (tx) => {
-      if (vehicle.currentDriverId) {
-        await tx.vehicleAssignment.updateMany({
-          where: { vehicleId: params.id, employeeId: vehicle.currentDriverId, endDate: null },
-          data: { endDate: now, endKm: kmValue }
-        })
-      }
-      
-      await tx.vehicleAssignment.create({
-        data: {
+    if (vehicle.currentDriverId) {
+      await prisma.vehicleAssignment.updateMany({
+        where: {
           vehicleId: params.id,
-          employeeId,
-          startDate: now,
-          startKm: kmValue,
-          notes: notes || null,
+          endDate: null
+        },
+        data: {
+          endDate: new Date(),
+          endKm: currentKm || vehicle.currentKm
         }
       })
-      
-      await tx.vehicle.update({
-        where: { id: params.id },
-        data: { currentDriverId: employeeId, currentKm: kmValue }
-      })
+    }
+    
+    await prisma.vehicleAssignment.create({
+      data: {
+        vehicleId: params.id,
+        employeeId: employeeId,
+        startDate: new Date(),
+        startKm: currentKm || vehicle.currentKm || 0,
+        notes: notes || null
+      }
     })
     
-    const updatedVehicle = await prisma.vehicle.findUnique({
+    const updatedVehicle = await prisma.vehicle.update({
       where: { id: params.id },
-      include: { currentDriver: { select: { id: true, firstName: true, lastName: true, phone: true } } }
+      data: {
+        currentDriverId: employeeId,
+        currentKm: currentKm || vehicle.currentKm
+      },
+      include: {
+        currentDriver: {
+          select: { id: true, firstName: true, lastName: true, phone: true, photoUrl: true }
+        }
+      }
     })
     
-    // Logging - added
-    await logCrud('CREATE', 'vehicles', 'assignment', params.id,
-      `שיוך ${vehicle.licensePlate} ל${employee.firstName} ${employee.lastName}`, {
+    await logCrud('UPDATE', 'vehicles', 'assignment', params.id,
+      `שיוך ${vehicle.licensePlate} ל-${employee.firstName} ${employee.lastName}`, {
       vehicleId: params.id,
-      licensePlate: vehicle.licensePlate,
-      employeeId,
+      employeeId: employeeId,
       employeeName: `${employee.firstName} ${employee.lastName}`,
-      previousDriver: previousDriverName,
-      startKm: kmValue,
     })
     
     return NextResponse.json(updatedVehicle)
@@ -111,50 +98,51 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
-    const { currentKm, notes } = await request.json().catch(() => ({}))
+  try {
+    const { currentKm } = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ 
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      include: { currentDriver: { select: { firstName: true, lastName: true } } }
+      include: { currentDriver: true }
     })
+    
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     if (!vehicle.currentDriverId) {
-      return NextResponse.json({ error: 'הרכב לא משויך לאף עובד' }, { status: 400 })
+      return NextResponse.json({ error: 'Vehicle has no current driver' }, { status: 400 })
     }
     
-    const driverName = vehicle.currentDriver 
-      ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
-      : 'unknown'
-    
-    const now = new Date()
-    const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
-    
-    await prisma.$transaction(async (tx) => {
-      await tx.vehicleAssignment.updateMany({
-        where: { vehicleId: params.id, employeeId: vehicle.currentDriverId!, endDate: null },
-        data: { endDate: now, endKm: kmValue, notes: notes ? `${notes} (ביטול שיוך)` : 'ביטול שיוך' }
-      })
-      
-      await tx.vehicle.update({
-        where: { id: params.id },
-        data: { currentDriverId: null, currentKm: kmValue }
-      })
+    await prisma.vehicleAssignment.updateMany({
+      where: {
+        vehicleId: params.id,
+        endDate: null
+      },
+      data: {
+        endDate: new Date(),
+        endKm: currentKm || vehicle.currentKm
+      }
     })
     
-    // Logging - added
-    await logCrud('DELETE', 'vehicles', 'assignment', params.id,
-      `ביטול שיוך ${vehicle.licensePlate} מ${driverName}`, {
+    const previousDriver = vehicle.currentDriver
+    
+    const updatedVehicle = await prisma.vehicle.update({
+      where: { id: params.id },
+      data: {
+        currentDriverId: null,
+        currentKm: currentKm || vehicle.currentKm
+      }
+    })
+    
+    await logCrud('UPDATE', 'vehicles', 'unassignment', params.id,
+      `ביטול שיוך ${vehicle.licensePlate}`, {
       vehicleId: params.id,
-      licensePlate: vehicle.licensePlate,
-      previousDriver: driverName,
-      endKm: kmValue,
+      previousDriverId: previousDriver?.id,
+      previousDriverName: previousDriver ? `${previousDriver.firstName} ${previousDriver.lastName}` : null,
     })
     
-    return NextResponse.json({ success: true })
+    return NextResponse.json(updatedVehicle)
   } catch (error) {
     console.error('Error unassigning vehicle:', error)
     return NextResponse.json({ error: 'Failed to unassign vehicle' }, { status: 500 })

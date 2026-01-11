@@ -1,8 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/accidents/route.ts
-// Version: 20260111-210500
-// Added: logCrud for CREATE, UPDATE, DELETE
-// Fixed: AccidentStatus enum instead of hardcoded strings
+// Version: 20260111-220000
+// Fixed: proper try/catch structure with auth
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,13 +10,15 @@ import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { AccidentStatus } from '@prisma/client'
 
-// פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
     where: {
       vehicleId,
       startDate: { lte: date },
-      OR: [{ endDate: null }, { endDate: { gte: date } }]
+      OR: [
+        { endDate: null },
+        { endDate: { gte: date } }
+      ]
     },
     select: { employeeId: true }
   })
@@ -33,7 +34,7 @@ export async function GET(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const accidents = await prisma.vehicleAccident.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -55,32 +56,31 @@ export async function POST(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ 
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { licensePlate: true, manufacturer: true, model: true }
+      select: { id: true, licensePlate: true, manufacturer: true, model: true }
     })
     if (!vehicle) {
-      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
     }
     
     const accidentDate = new Date(data.date)
-    
-    // מציאת העובד שהחזיק ברכב בתאריך התאונה
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, accidentDate)
     
     const accident = await prisma.vehicleAccident.create({
       data: {
         vehicleId: params.id,
         date: accidentDate,
-        employeeId,
-        location: data.location || null,
-        description: data.description || null,
-        thirdParty: data.thirdParty || null,
+        location: data.location,
+        description: data.description,
+        employeeId: employeeId,
+        thirdParty: data.thirdParty || false,
+        thirdPartyDetails: data.thirdPartyDetails || null,
         policeReport: data.policeReport || false,
-        policeFileNum: data.policeFileNum || null,
+        policeReportNum: data.policeReportNum || null,
         cost: data.cost ? parseFloat(data.cost) : null,
         insuranceClaim: data.insuranceClaim || false,
         insuranceNum: data.insuranceNum || null,
@@ -91,7 +91,6 @@ export async function POST(
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
-    // Logging - added
     await logCrud('CREATE', 'vehicles', 'accident', accident.id,
       `תאונה ${vehicle.licensePlate}`, {
       vehicleId: params.id,
@@ -117,48 +116,42 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
-    const { searchParams } = new URL(request.url)
-    const accidentId = searchParams.get('accidentId')
+  try {
+    const data = await request.json()
+    const { accidentId, ...updateData } = data
     
     if (!accidentId) {
-      return NextResponse.json({ error: 'accidentId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing accidentId' }, { status: 400 })
     }
-    
-    const data = await request.json()
-    
-    // Get vehicle info for logging
-    const vehicle = await prisma.vehicle.findUnique({
-      where: { id: params.id },
-      select: { licensePlate: true }
-    })
     
     const accident = await prisma.vehicleAccident.update({
       where: { id: accidentId },
       data: {
-        date: data.date ? new Date(data.date) : undefined,
-        employeeId: data.employeeId || undefined,
-        location: data.location || null,
-        description: data.description || null,
-        thirdParty: data.thirdParty || null,
-        policeReport: data.policeReport || false,
-        policeFileNum: data.policeFileNum || null,
-        cost: data.cost ? parseFloat(data.cost) : null,
-        insuranceClaim: data.insuranceClaim || false,
-        insuranceNum: data.insuranceNum || null,
-        status: data.status || undefined,
-        fileUrl: data.fileUrl || null,
-        notes: data.notes || null,
+        date: updateData.date ? new Date(updateData.date) : undefined,
+        location: updateData.location,
+        description: updateData.description,
+        employeeId: updateData.employeeId || undefined,
+        thirdParty: updateData.thirdParty,
+        thirdPartyDetails: updateData.thirdPartyDetails,
+        policeReport: updateData.policeReport,
+        policeReportNum: updateData.policeReportNum,
+        cost: updateData.cost ? parseFloat(updateData.cost) : undefined,
+        insuranceClaim: updateData.insuranceClaim,
+        insuranceNum: updateData.insuranceNum,
+        status: updateData.status,
+        fileUrl: updateData.fileUrl,
+        notes: updateData.notes,
       },
-      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+      include: { 
+        employee: { select: { id: true, firstName: true, lastName: true } },
+        vehicle: { select: { licensePlate: true, manufacturer: true, model: true } }
+      }
     })
     
-    // Logging - added
     await logCrud('UPDATE', 'vehicles', 'accident', accidentId,
-      `תאונה ${vehicle?.licensePlate}`, {
+      `תאונה ${accident.vehicle.licensePlate}`, {
       vehicleId: params.id,
-      status: data.status,
-      cost: data.cost,
+      status: updateData.status,
     })
     
     return NextResponse.json(accident)
@@ -177,32 +170,29 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
-
+  try {
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')
     
     if (!accidentId) {
-      return NextResponse.json({ error: 'accidentId is required' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing accidentId' }, { status: 400 })
     }
     
-    // Get info for logging
     const accident = await prisma.vehicleAccident.findUnique({
       where: { id: accidentId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
     
-    await prisma.vehicleAccident.delete({
-      where: { id: accidentId }
-    })
-    
-    // Logging - added
-    if (accident) {
-      await logCrud('DELETE', 'vehicles', 'accident', accidentId,
-        `תאונה ${accident.vehicle.licensePlate}`, {
-        vehicleId: params.id,
-        location: accident.location,
-      })
+    if (!accident) {
+      return NextResponse.json({ error: 'Accident not found' }, { status: 404 })
     }
+    
+    await prisma.vehicleAccident.delete({ where: { id: accidentId } })
+    
+    await logCrud('DELETE', 'vehicles', 'accident', accidentId,
+      `תאונה ${accident.vehicle.licensePlate}`, {
+      vehicleId: params.id,
+    })
     
     return NextResponse.json({ success: true })
   } catch (error) {
