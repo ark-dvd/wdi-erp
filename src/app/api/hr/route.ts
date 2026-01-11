@@ -1,7 +1,8 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260111-153000
+// Version: 20260111-211000
 // Added: updatedAt, updatedBy for list view
+// Security: Removed idNumber from GET response (PII)
 // ================================================
 
 import { NextResponse } from 'next/server'
@@ -22,7 +23,7 @@ export async function GET() {
         id: true,
         firstName: true,
         lastName: true,
-        idNumber: true,
+        // idNumber: removed from response for security (PII)
         role: true,
         department: true,
         phone: true,
