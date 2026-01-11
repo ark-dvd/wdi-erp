@@ -1,5 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/services/route.ts
+// Version: 20260110-080000
+// Added: PUT, DELETE methods
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -62,5 +64,62 @@ export async function POST(
   } catch (error) {
     console.error('Error creating service:', error)
     return NextResponse.json({ error: 'Failed to create service' }, { status: 500 })
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const serviceId = searchParams.get('serviceId')
+    
+    if (!serviceId) {
+      return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
+    }
+    
+    const data = await request.json()
+    
+    const service = await prisma.vehicleService.update({
+      where: { id: serviceId },
+      data: {
+        serviceDate: data.serviceDate ? new Date(data.serviceDate) : undefined,
+        serviceType: data.serviceType,
+        mileage: data.mileage ? parseInt(data.mileage) : null,
+        cost: data.cost ? parseFloat(data.cost) : null,
+        garage: data.garage || null,
+        description: data.description || null,
+        invoiceUrl: data.invoiceUrl || null,
+      }
+    })
+    
+    return NextResponse.json(service)
+  } catch (error) {
+    console.error('Error updating service:', error)
+    return NextResponse.json({ error: 'Failed to update service' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const serviceId = searchParams.get('serviceId')
+    
+    if (!serviceId) {
+      return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
+    }
+    
+    await prisma.vehicleService.delete({
+      where: { id: serviceId }
+    })
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting service:', error)
+    return NextResponse.json({ error: 'Failed to delete service' }, { status: 500 })
   }
 }

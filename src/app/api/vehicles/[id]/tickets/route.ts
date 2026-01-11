@@ -1,5 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
+// Version: 20260110-080000
+// Added: DELETE method
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -83,18 +85,35 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
+    const { searchParams } = new URL(request.url)
+    const ticketId = searchParams.get('ticketId')
     const data = await request.json()
-    const { ticketId, ...updateData } = data
+    
+    // תמיכה גם בפורמט הישן (ticketId בגוף הבקשה) וגם החדש (ב-query string)
+    const id = ticketId || data.ticketId
+    if (!id) {
+      return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
+    }
     
     const ticket = await prisma.vehicleTicket.update({
-      where: { id: ticketId },
+      where: { id },
       data: {
-        status: updateData.status,
-        paidDate: updateData.paidDate ? new Date(updateData.paidDate) : null,
-        paidAmount: updateData.paidAmount ? parseFloat(updateData.paidAmount) : null,
-        appealDate: updateData.appealDate ? new Date(updateData.appealDate) : null,
-        appealResult: updateData.appealResult || null,
-        notes: updateData.notes || null,
+        date: data.date ? new Date(data.date) : undefined,
+        employeeId: data.employeeId || undefined,
+        ticketType: data.ticketType || undefined,
+        ticketNumber: data.ticketNumber || null,
+        location: data.location || null,
+        description: data.description || null,
+        fineAmount: data.fineAmount ? parseFloat(data.fineAmount) : undefined,
+        points: data.points ? parseInt(data.points) : null,
+        dueDate: data.dueDate ? new Date(data.dueDate) : null,
+        status: data.status || undefined,
+        paidDate: data.paidDate ? new Date(data.paidDate) : null,
+        paidAmount: data.paidAmount ? parseFloat(data.paidAmount) : null,
+        appealDate: data.appealDate ? new Date(data.appealDate) : null,
+        appealResult: data.appealResult || null,
+        fileUrl: data.fileUrl || null,
+        notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
@@ -103,5 +122,28 @@ export async function PUT(
   } catch (error) {
     console.error('Error updating ticket:', error)
     return NextResponse.json({ error: 'Failed to update ticket' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const ticketId = searchParams.get('ticketId')
+    
+    if (!ticketId) {
+      return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
+    }
+    
+    await prisma.vehicleTicket.delete({
+      where: { id: ticketId }
+    })
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting ticket:', error)
+    return NextResponse.json({ error: 'Failed to delete ticket' }, { status: 500 })
   }
 }

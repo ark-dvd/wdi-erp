@@ -1,5 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/parking/route.ts
+// Version: 20260110-080000
+// Added: PUT, DELETE methods
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -70,5 +72,64 @@ export async function POST(
   } catch (error) {
     console.error('Error creating parking:', error)
     return NextResponse.json({ error: 'Failed to create parking' }, { status: 500 })
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const parkingId = searchParams.get('parkingId')
+    
+    if (!parkingId) {
+      return NextResponse.json({ error: 'parkingId is required' }, { status: 400 })
+    }
+    
+    const data = await request.json()
+    
+    const parking = await prisma.vehicleParking.update({
+      where: { id: parkingId },
+      data: {
+        date: data.date ? new Date(data.date) : undefined,
+        employeeId: data.employeeId || undefined,
+        location: data.location,
+        parkingLot: data.parkingLot || null,
+        duration: data.duration ? parseInt(data.duration) : null,
+        cost: data.cost ? parseFloat(data.cost) : undefined,
+        receiptUrl: data.receiptUrl || null,
+        notes: data.notes || null,
+      },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    return NextResponse.json(parking)
+  } catch (error) {
+    console.error('Error updating parking:', error)
+    return NextResponse.json({ error: 'Failed to update parking' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const parkingId = searchParams.get('parkingId')
+    
+    if (!parkingId) {
+      return NextResponse.json({ error: 'parkingId is required' }, { status: 400 })
+    }
+    
+    await prisma.vehicleParking.delete({
+      where: { id: parkingId }
+    })
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting parking:', error)
+    return NextResponse.json({ error: 'Failed to delete parking' }, { status: 500 })
   }
 }

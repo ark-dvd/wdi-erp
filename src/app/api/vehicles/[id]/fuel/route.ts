@@ -1,5 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/fuel/route.ts
+// Version: 20260110-080000
+// Added: PUT, DELETE methods
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -80,5 +82,69 @@ export async function POST(
   } catch (error) {
     console.error('Error creating fuel log:', error)
     return NextResponse.json({ error: 'Failed to create fuel log' }, { status: 500 })
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const fuelId = searchParams.get('fuelId')
+    
+    if (!fuelId) {
+      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
+    }
+    
+    const data = await request.json()
+    const liters = data.liters ? parseFloat(data.liters) : undefined
+    const totalCost = data.totalCost ? parseFloat(data.totalCost) : undefined
+    const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : undefined)
+    
+    const fuelLog = await prisma.vehicleFuelLog.update({
+      where: { id: fuelId },
+      data: {
+        date: data.date ? new Date(data.date) : undefined,
+        employeeId: data.employeeId || undefined,
+        liters,
+        pricePerLiter,
+        totalCost,
+        mileage: data.mileage ? parseInt(data.mileage) : null,
+        station: data.station || null,
+        fuelType: data.fuelType || null,
+        fullTank: data.fullTank !== false,
+        receiptUrl: data.receiptUrl || null,
+      },
+      include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    return NextResponse.json(fuelLog)
+  } catch (error) {
+    console.error('Error updating fuel log:', error)
+    return NextResponse.json({ error: 'Failed to update fuel log' }, { status: 500 })
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const fuelId = searchParams.get('fuelId')
+    
+    if (!fuelId) {
+      return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
+    }
+    
+    await prisma.vehicleFuelLog.delete({
+      where: { id: fuelId }
+    })
+    
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('Error deleting fuel log:', error)
+    return NextResponse.json({ error: 'Failed to delete fuel log' }, { status: 500 })
   }
 }

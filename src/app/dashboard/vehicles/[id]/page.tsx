@@ -2,7 +2,7 @@
 
 // ============================================
 // src/app/dashboard/vehicles/[id]/page.tsx
-// Version: 20260110-070000
+// Version: 20260110-090000
 // ============================================
 
 import { useState, useEffect, useCallback } from 'react'
@@ -214,6 +214,7 @@ export default function VehiclePage() {
         <div className="flex items-center gap-3">
           <span className={`px-3 py-1 rounded-full text-sm ${statusColors[vehicle.status]}`}>{statusLabels[vehicle.status]}</span>
           <Link href={`/dashboard/vehicles/${vehicle.id}/edit`} className="bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center gap-2"><Edit size={16} /> עריכה</Link>
+          <button onClick={() => setModal('deleteVehicle')} className="bg-red-600 text-white px-4 py-2 rounded-lg flex items-center gap-2 hover:bg-red-700"><Trash2 size={16} /> מחיקה</button>
         </div>
       </div>
 
@@ -321,7 +322,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">טיפולים</h3><button onClick={() => { setEditingItem(null); setModal('service') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.services?.length ? <p className="text-gray-500 text-center py-8">אין טיפולים</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="serviceDate" label="תאריך" /><SortHeader k="serviceType" label="סוג" /><SortHeader k="mileage" label='ק"מ' /><SortHeader k="cost" label="עלות" /><SortHeader k="garage" label="מוסך" /></tr></thead><tbody>{sortData(vehicle.services, 'serviceDate').map((s: any) => <tr key={s.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(s.serviceDate)}</td><td className="p-2">{s.serviceType}</td><td className="p-2">{s.mileage?.toLocaleString() || '-'}</td><td className="p-2">{formatCurrency(s.cost)}</td><td className="p-2">{s.garage || '-'}</td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="serviceDate" label="תאריך" /><SortHeader k="serviceType" label="סוג" /><SortHeader k="mileage" label='ק"מ' /><SortHeader k="cost" label="עלות" /><SortHeader k="garage" label="מוסך" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.services, 'serviceDate').map((s: any) => <tr key={s.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(s.serviceDate)}</td><td className="p-2">{s.serviceType}</td><td className="p-2">{s.mileage?.toLocaleString() || '-'}</td><td className="p-2">{formatCurrency(s.cost)}</td><td className="p-2">{s.garage || '-'}</td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('service', s)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('services', s.id, 'למחוק את הטיפול?', 'serviceId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -331,7 +332,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">תאונות</h3><button onClick={() => { setEditingItem(null); setModal('accident') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.accidents?.length ? <p className="text-gray-500 text-center py-8">אין תאונות</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="location" label="מיקום" /><SortHeader k="cost" label="עלות" /><SortHeader k="status" label="סטטוס" /></tr></thead><tbody>{sortData(vehicle.accidents, 'date').map((a: any) => <tr key={a.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(a.date)}</td><td className="p-2">{a.employee ? `${a.employee.firstName} ${a.employee.lastName}` : '-'}</td><td className="p-2">{a.location || '-'}</td><td className="p-2">{formatCurrency(a.cost)}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${accidentStatusColors[a.status] || 'bg-gray-100'}`}>{accidentStatusLabels[a.status] || a.status}</span></td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="location" label="מיקום" /><SortHeader k="cost" label="עלות" /><SortHeader k="status" label="סטטוס" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.accidents, 'date').map((a: any) => <tr key={a.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(a.date)}</td><td className="p-2">{a.employee ? `${a.employee.firstName} ${a.employee.lastName}` : '-'}</td><td className="p-2">{a.location || '-'}</td><td className="p-2">{formatCurrency(a.cost)}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${accidentStatusColors[a.status] || 'bg-gray-100'}`}>{accidentStatusLabels[a.status] || a.status}</span></td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('accident', a)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('accidents', a.id, 'למחוק את התאונה?', 'accidentId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -341,7 +342,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">תדלוקים</h3><button onClick={() => { setEditingItem(null); setModal('fuel') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.fuelLogs?.length ? <p className="text-gray-500 text-center py-8">אין תדלוקים</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="liters" label="ליטרים" /><SortHeader k="totalCost" label="עלות" /><SortHeader k="mileage" label='ק"מ' /><SortHeader k="station" label="תחנה" /></tr></thead><tbody>{sortData(vehicle.fuelLogs, 'date').map((f: any) => <tr key={f.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(f.date)}</td><td className="p-2">{f.employee ? `${f.employee.firstName} ${f.employee.lastName}` : '-'}</td><td className="p-2">{f.liters.toFixed(1)}</td><td className="p-2">{formatCurrency(f.totalCost)}</td><td className="p-2">{f.mileage?.toLocaleString() || '-'}</td><td className="p-2">{f.station || '-'}</td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="liters" label="ליטרים" /><SortHeader k="totalCost" label="עלות" /><SortHeader k="mileage" label='ק"מ' /><SortHeader k="station" label="תחנה" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.fuelLogs, 'date').map((f: any) => <tr key={f.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(f.date)}</td><td className="p-2">{f.employee ? `${f.employee.firstName} ${f.employee.lastName}` : '-'}</td><td className="p-2">{f.liters.toFixed(1)}</td><td className="p-2">{formatCurrency(f.totalCost)}</td><td className="p-2">{f.mileage?.toLocaleString() || '-'}</td><td className="p-2">{f.station || '-'}</td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('fuel', f)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('fuel', f.id, 'למחוק את התדלוק?', 'fuelId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -351,7 +352,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">כבישי אגרה</h3><button onClick={() => { setEditingItem(null); setModal('toll') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.tollRoads?.length ? <p className="text-gray-500 text-center py-8">אין נסיעות</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="road" label="כביש" /><SortHeader k="entryPoint" label="כניסה" /><SortHeader k="exitPoint" label="יציאה" /><SortHeader k="cost" label="עלות" /></tr></thead><tbody>{sortData(vehicle.tollRoads, 'date').map((t: any) => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(t.date)}</td><td className="p-2">{t.employee ? `${t.employee.firstName} ${t.employee.lastName}` : '-'}</td><td className="p-2">{t.road}</td><td className="p-2">{t.entryPoint || '-'}</td><td className="p-2">{t.exitPoint || '-'}</td><td className="p-2">{formatCurrency(t.cost)}</td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="road" label="כביש" /><SortHeader k="entryPoint" label="כניסה" /><SortHeader k="exitPoint" label="יציאה" /><SortHeader k="cost" label="עלות" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.tollRoads, 'date').map((t: any) => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(t.date)}</td><td className="p-2">{t.employee ? `${t.employee.firstName} ${t.employee.lastName}` : '-'}</td><td className="p-2">{t.road}</td><td className="p-2">{t.entryPoint || '-'}</td><td className="p-2">{t.exitPoint || '-'}</td><td className="p-2">{formatCurrency(t.cost)}</td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('toll', t)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('tolls', t.id, 'למחוק את הנסיעה?', 'tollId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -361,7 +362,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">חניות</h3><button onClick={() => { setEditingItem(null); setModal('parking') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.parkings?.length ? <p className="text-gray-500 text-center py-8">אין חניות</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="location" label="מיקום" /><SortHeader k="parkingLot" label="חניון" /><SortHeader k="cost" label="עלות" /></tr></thead><tbody>{sortData(vehicle.parkings, 'date').map((p: any) => <tr key={p.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(p.date)}</td><td className="p-2">{p.employee ? `${p.employee.firstName} ${p.employee.lastName}` : '-'}</td><td className="p-2">{p.location}</td><td className="p-2">{p.parkingLot || '-'}</td><td className="p-2">{formatCurrency(p.cost)}</td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="location" label="מיקום" /><SortHeader k="parkingLot" label="חניון" /><SortHeader k="cost" label="עלות" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.parkings, 'date').map((p: any) => <tr key={p.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(p.date)}</td><td className="p-2">{p.employee ? `${p.employee.firstName} ${p.employee.lastName}` : '-'}</td><td className="p-2">{p.location}</td><td className="p-2">{p.parkingLot || '-'}</td><td className="p-2">{formatCurrency(p.cost)}</td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('parking', p)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('parking', p.id, 'למחוק את החניה?', 'parkingId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -371,7 +372,7 @@ export default function VehiclePage() {
           <div>
             <div className="flex justify-between mb-4"><h3 className="font-semibold">דוחות</h3><button onClick={() => { setEditingItem(null); setModal('ticket') }} className="text-blue-600 text-sm flex items-center gap-1"><Plus size={14} />הוסף</button></div>
             {!vehicle.tickets?.length ? <p className="text-gray-500 text-center py-8">אין דוחות</p> : (
-              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="ticketType" label="סוג" /><SortHeader k="location" label="מיקום" /><SortHeader k="fineAmount" label="קנס" /><SortHeader k="points" label="נקודות" /><SortHeader k="status" label="סטטוס" /></tr></thead><tbody>{sortData(vehicle.tickets, 'date').map((t: any) => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(t.date)}</td><td className="p-2">{t.employee ? `${t.employee.firstName} ${t.employee.lastName}` : '-'}</td><td className="p-2">{t.ticketType}</td><td className="p-2">{t.location || '-'}</td><td className="p-2">{formatCurrency(t.fineAmount)}</td><td className="p-2">{t.points || '-'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${ticketStatusColors[t.status]}`}>{ticketStatusLabels[t.status]}</span></td></tr>)}</tbody></table></div>
+              <div className="overflow-auto"><table className="w-full text-sm"><thead className="bg-gray-50"><tr><SortHeader k="date" label="תאריך" /><SortHeader k="employee.firstName" label="עובד" /><SortHeader k="ticketType" label="סוג" /><SortHeader k="location" label="מיקום" /><SortHeader k="fineAmount" label="קנס" /><SortHeader k="points" label="נקודות" /><SortHeader k="status" label="סטטוס" /><th className="text-right p-2 w-20">פעולות</th></tr></thead><tbody>{sortData(vehicle.tickets, 'date').map((t: any) => <tr key={t.id} className="border-t hover:bg-gray-50"><td className="p-2">{formatDate(t.date)}</td><td className="p-2">{t.employee ? `${t.employee.firstName} ${t.employee.lastName}` : '-'}</td><td className="p-2">{t.ticketType}</td><td className="p-2">{t.location || '-'}</td><td className="p-2">{formatCurrency(t.fineAmount)}</td><td className="p-2">{t.points || '-'}</td><td className="p-2"><span className={`px-2 py-0.5 rounded text-xs ${ticketStatusColors[t.status]}`}>{ticketStatusLabels[t.status]}</span></td><td className="p-2"><div className="flex items-center gap-1"><button onClick={() => openEditModal('ticket', t)} className="p-1 text-gray-400 hover:text-blue-600" title="עריכה"><Edit size={14} /></button><button onClick={() => handleDelete('tickets', t.id, 'למחוק את הדוח?', 'ticketId')} className="p-1 text-gray-400 hover:text-red-600" title="מחיקה"><Trash2 size={14} /></button></div></td></tr>)}</tbody></table></div>
             )}
           </div>
         )}
@@ -566,6 +567,37 @@ export default function VehiclePage() {
             <div className="flex gap-3 justify-end"><button type="button" onClick={() => setModal(null)} className="px-4 py-2 border rounded">ביטול</button><button type="submit" disabled={saving} className="px-4 py-2 bg-blue-600 text-white rounded disabled:opacity-50">{saving ? 'שומר...' : 'הוסף'}</button></div>
           </form>
         </div></div>
+      )}
+
+      {/* Delete Vehicle Modal */}
+      {modal === 'deleteVehicle' && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 max-w-md w-full mx-4">
+            <h3 className="font-semibold text-lg mb-4 text-red-600">מחיקת רכב</h3>
+            <p className="mb-2">האם למחוק את הרכב {vehicle.manufacturer} {vehicle.model}?</p>
+            <p className="text-sm text-gray-500 mb-4">מספר רישוי: {vehicle.licensePlate}</p>
+            <p className="text-sm text-red-600 mb-4">שים לב: פעולה זו תמחק את כל הנתונים הקשורים לרכב ואינה ניתנת לביטול!</p>
+            <div className="flex gap-3 justify-end">
+              <button onClick={() => setModal(null)} className="px-4 py-2 border rounded">ביטול</button>
+              <button 
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/vehicles/${vehicle.id}`, { method: 'DELETE' })
+                    if (res.ok) {
+                      window.location.href = '/dashboard/vehicles'
+                    } else {
+                      alert((await res.json()).error || 'שגיאה במחיקה')
+                    }
+                  } catch { alert('שגיאה במחיקה') }
+                }} 
+                disabled={saving}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                {saving ? 'מוחק...' : 'מחק רכב'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
