@@ -1,16 +1,22 @@
 // ============================================
 // src/app/api/vehicles/route.ts
-// Version: 20260111-200000
-// Added: logCrud for CREATE
+// Version: 20260111-205500
+// Added: logCrud for CREATE, auth check
 // Fixed: VehicleStatus enum instead of hardcoded strings
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { auth } from '@/lib/auth'
 import { VehicleStatus } from '@prisma/client'
 
 export async function GET(request: NextRequest) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status')
@@ -55,6 +61,11 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const data = await request.json()
     

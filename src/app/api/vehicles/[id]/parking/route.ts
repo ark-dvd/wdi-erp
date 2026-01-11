@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -24,7 +25,12 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const parkings = await prisma.vehicleParking.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -41,7 +47,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const data = await request.json()
     
     const vehicle = await prisma.vehicle.findUnique({ 
@@ -92,7 +103,12 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { searchParams } = new URL(request.url)
     const parkingId = searchParams.get('parkingId')
     
@@ -142,7 +158,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { searchParams } = new URL(request.url)
     const parkingId = searchParams.get('parkingId')
     

@@ -6,6 +6,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { auth } from '@/lib/auth'
 import { extractTextFromFile, supportsTextExtraction } from '@/lib/text-extraction';
 
 /**
@@ -17,7 +18,12 @@ import { extractTextFromFile, supportsTextExtraction } from '@/lib/text-extracti
  * Body: { fileId: string }
  */
 export async function POST(request: NextRequest) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { fileId } = await request.json();
 
     if (!fileId) {
@@ -105,7 +111,12 @@ export async function POST(request: NextRequest) {
  * Check extraction status for a file
  */
 export async function GET(request: NextRequest) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const fileId = request.nextUrl.searchParams.get('fileId');
 
     if (!fileId) {

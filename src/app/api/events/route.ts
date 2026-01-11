@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma"
+import { auth } from '@/lib/auth'
 import { NextResponse } from "next/server"
 
+// Version: 20260111-205500 - Added auth check
+
 export async function GET(request: Request) {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     

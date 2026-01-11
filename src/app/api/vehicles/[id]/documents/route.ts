@@ -6,13 +6,19 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const documents = await prisma.vehicleDocument.findMany({
       where: { vehicleId: params.id },
       orderBy: [{ type: 'asc' }, { expiryDate: 'desc' }]
@@ -28,7 +34,12 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const data = await request.json()
     
     if (!data.type) {
@@ -79,7 +90,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { searchParams } = new URL(request.url)
     const documentId = searchParams.get('documentId')
     

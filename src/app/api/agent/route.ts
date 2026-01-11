@@ -1,9 +1,23 @@
+// ============================================
+// src/app/api/agent/route.ts
+// Version: 20260111-205500
+// Added: auth check, MAX_ITERATIONS limit
+// ============================================
+
 import { NextRequest, NextResponse } from 'next/server';
 import { getGeminiModel } from '@/lib/gemini';
 import { functionMap } from '@/lib/agent-queries';
 import { logAgentQuery } from '@/lib/activity';
+import { auth } from '@/lib/auth';
+
+const MAX_ITERATIONS = 10;
 
 export async function POST(request: NextRequest) {
+  const session = await auth();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const startTime = Date.now();
   let questionText = '';
   let answerText = '';
@@ -33,8 +47,10 @@ export async function POST(request: NextRequest) {
     let functionCalls = response.functionCalls();
     
     const calledFunctions: string[] = [];
+    let iterations = 0;
 
-    while (functionCalls && functionCalls.length > 0) {
+    while (functionCalls && functionCalls.length > 0 && iterations < MAX_ITERATIONS) {
+      iterations++;
       const functionCall = functionCalls[0];
       const functionName = functionCall.name;
       const functionArgs = functionCall.args || {};

@@ -6,13 +6,19 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { employeeId, currentKm, notes } = await request.json()
     
     if (!employeeId) {
@@ -100,7 +106,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+
     const { currentKm, notes } = await request.json().catch(() => ({}))
     
     const vehicle = await prisma.vehicle.findUnique({ 
