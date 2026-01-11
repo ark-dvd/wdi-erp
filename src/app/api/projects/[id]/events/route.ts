@@ -1,6 +1,10 @@
+// Version: 20260111-180200
+// Added: logCrud for CREATE, async text extraction trigger
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
+import { supportsTextExtraction } from '@/lib/text-extraction'
 
 export async function GET(
   request: NextRequest,
@@ -72,6 +76,12 @@ export async function POST(
       return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
     }
 
+    // Get project name for logging
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { name: true, projectNumber: true }
+    })
+
     const event = await prisma.projectEvent.create({
       data: {
         projectId: id,
@@ -90,6 +100,30 @@ export async function POST(
       },
       include: { files: true }
     })
+
+    // Logging - added
+    await logCrud('CREATE', 'events', 'event', event.id,
+      `${data.eventType} - ${project?.name || ''}`, {
+      projectId: id,
+      projectName: project?.name,
+      projectNumber: project?.projectNumber,
+      eventType: data.eventType,
+    })
+
+    // Trigger text extraction for files (async, non-blocking)
+    if (event.files && event.files.length > 0) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://erp.wdi.one'
+      for (const file of event.files) {
+        if (supportsTextExtraction(file.fileType, file.fileUrl)) {
+          // Fire and forget - don't await
+          fetch(`${baseUrl}/api/extract-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: file.id }),
+          }).catch(err => console.error('Text extraction trigger failed:', err))
+        }
+      }
+    }
 
     return NextResponse.json(event, { status: 201 })
   } catch (error) {

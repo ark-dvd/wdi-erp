@@ -78,7 +78,7 @@ export default function Sidebar() {
       <div className="p-6 border-b border-[#e2e4e8]">
         <Link href="/dashboard" className="flex flex-col items-center">
           <img src="/logo.png" alt="WDI Logo" className="h-12 mb-2" />
-          <span className="text-xs text-[#8f8f96]">v04.20122025.0445</span>
+          <span className="text-xs text-[#8f8f96]">v05.15012026.1600</span>
         </Link>
       </div>
 

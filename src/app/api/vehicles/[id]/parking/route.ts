@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/parking/route.ts
-// Version: 20260110-080000
-// Added: PUT, DELETE methods
+// Version: 20260111-142000
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -43,7 +44,10 @@ export async function POST(
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -68,6 +72,15 @@ export async function POST(
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'parking', parking.id,
+      `חניה ${vehicle.licensePlate} - ${data.location}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      location: data.location,
+      cost: data.cost,
+    })
+    
     return NextResponse.json(parking, { status: 201 })
   } catch (error) {
     console.error('Error creating parking:', error)
@@ -89,6 +102,12 @@ export async function PUT(
     
     const data = await request.json()
     
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true }
+    })
+    
     const parking = await prisma.vehicleParking.update({
       where: { id: parkingId },
       data: {
@@ -102,6 +121,14 @@ export async function PUT(
         notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'parking', parkingId,
+      `חניה ${vehicle?.licensePlate} - ${data.location}`, {
+      vehicleId: params.id,
+      location: data.location,
+      cost: data.cost,
     })
     
     return NextResponse.json(parking)
@@ -123,9 +150,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'parkingId is required' }, { status: 400 })
     }
     
+    // Get info for logging
+    const parking = await prisma.vehicleParking.findUnique({
+      where: { id: parkingId },
+      include: { vehicle: { select: { licensePlate: true } } }
+    })
+    
     await prisma.vehicleParking.delete({
       where: { id: parkingId }
     })
+    
+    // Logging - added
+    if (parking) {
+      await logCrud('DELETE', 'vehicles', 'parking', parkingId,
+        `חניה ${parking.vehicle.licensePlate} - ${parking.location}`, {
+        vehicleId: params.id,
+        location: parking.location,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

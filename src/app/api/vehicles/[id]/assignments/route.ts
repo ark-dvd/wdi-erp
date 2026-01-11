@@ -1,14 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/assignments/route.ts
-// Version: 20260110-063000
-// GET - רשימת כל השיוכים של הרכב
-// POST - הוספת שיוך היסטורי (בדיעבד)
-// PUT - עדכון שיוך קיים
-// DELETE - מחיקת שיוך
+// Version: 20260111-142500
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -38,7 +36,6 @@ export async function POST(
   try {
     const data = await request.json()
     
-    // ולידציה בסיסית
     if (!data.employeeId) {
       return NextResponse.json({ error: 'חובה לבחור עובד' }, { status: 400 })
     }
@@ -46,7 +43,10 @@ export async function POST(
       return NextResponse.json({ error: 'חובה להזין תאריך ושעת התחלה' }, { status: 400 })
     }
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -56,16 +56,13 @@ export async function POST(
       return NextResponse.json({ error: 'עובד לא נמצא' }, { status: 404 })
     }
     
-    // המרת תאריכים
     const startDate = new Date(data.startDate)
     const endDate = data.endDate ? new Date(data.endDate) : null
     
-    // ולידציה: תאריך סיום חייב להיות אחרי תאריך התחלה
     if (endDate && endDate <= startDate) {
       return NextResponse.json({ error: 'תאריך ושעת סיום חייבים להיות אחרי תאריך ושעת ההתחלה' }, { status: 400 })
     }
     
-    // בדיקת overlap עם שיוכים קיימים
     const existingAssignments = await prisma.vehicleAssignment.findMany({
       where: { vehicleId: params.id },
       select: { id: true, startDate: true, endDate: true, employee: { select: { firstName: true, lastName: true } } }
@@ -74,11 +71,6 @@ export async function POST(
     for (const existing of existingAssignments) {
       const existingStart = new Date(existing.startDate)
       const existingEnd = existing.endDate ? new Date(existing.endDate) : null
-      
-      // בדיקת חפיפה
-      // חפיפה קיימת אם:
-      // 1. השיוך החדש מתחיל לפני שהקיים נגמר (או הקיים אין לו סוף)
-      // 2. השיוך החדש נגמר אחרי שהקיים מתחיל (או החדש אין לו סוף)
       
       const newEndsAfterExistingStarts = !endDate || endDate > existingStart
       const newStartsBeforeExistingEnds = !existingEnd || startDate < existingEnd
@@ -95,7 +87,6 @@ export async function POST(
       }
     }
     
-    // יצירת השיוך
     const assignment = await prisma.vehicleAssignment.create({
       data: {
         vehicleId: params.id,
@@ -113,10 +104,8 @@ export async function POST(
       }
     })
     
-    // אם זה שיוך פעיל (בלי תאריך סיום) ותאריך ההתחלה הוא עכשיו או בעבר - עדכון currentDriver
     const now = new Date()
     if (!endDate && startDate <= now) {
-      // בדיקה שאין שיוך פעיל אחר שמאוחר יותר
       const laterActiveAssignment = await prisma.vehicleAssignment.findFirst({
         where: {
           vehicleId: params.id,
@@ -133,6 +122,14 @@ export async function POST(
         })
       }
     }
+    
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'assignment-history', assignment.id,
+      `שיוך היסטורי ${vehicle.licensePlate} - ${employee.firstName} ${employee.lastName}`, {
+      vehicleId: params.id,
+      licensePlate: vehicle.licensePlate,
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+    })
     
     return NextResponse.json(assignment, { status: 201 })
   } catch (error) {
@@ -153,22 +150,26 @@ export async function PUT(
     }
     
     const existingAssignment = await prisma.vehicleAssignment.findUnique({
-      where: { id: data.assignmentId }
+      where: { id: data.assignmentId },
+      include: { employee: { select: { firstName: true, lastName: true } } }
     })
     
     if (!existingAssignment || existingAssignment.vehicleId !== params.id) {
       return NextResponse.json({ error: 'שיוך לא נמצא' }, { status: 404 })
     }
     
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true }
+    })
+    
     const startDate = data.startDate ? new Date(data.startDate) : existingAssignment.startDate
     const endDate = data.endDate ? new Date(data.endDate) : (data.endDate === null ? null : existingAssignment.endDate)
     
-    // ולידציה: תאריך סיום חייב להיות אחרי תאריך התחלה
     if (endDate && endDate <= startDate) {
       return NextResponse.json({ error: 'תאריך ושעת סיום חייבים להיות אחרי תאריך ושעת ההתחלה' }, { status: 400 })
     }
     
-    // בדיקת overlap עם שיוכים אחרים (לא כולל הנוכחי)
     const otherAssignments = await prisma.vehicleAssignment.findMany({
       where: { 
         vehicleId: params.id,
@@ -213,6 +214,14 @@ export async function PUT(
       }
     })
     
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'assignment-history', data.assignmentId,
+      `עדכון שיוך ${vehicle?.licensePlate} - ${existingAssignment.employee.firstName} ${existingAssignment.employee.lastName}`, {
+      vehicleId: params.id,
+      licensePlate: vehicle?.licensePlate,
+      employeeName: `${existingAssignment.employee.firstName} ${existingAssignment.employee.lastName}`,
+    })
+    
     return NextResponse.json(updatedAssignment)
   } catch (error) {
     console.error('Error updating assignment:', error)
@@ -233,14 +242,17 @@ export async function DELETE(
     }
     
     const assignment = await prisma.vehicleAssignment.findUnique({
-      where: { id: assignmentId }
+      where: { id: assignmentId },
+      include: { 
+        employee: { select: { firstName: true, lastName: true } },
+        vehicle: { select: { licensePlate: true } }
+      }
     })
     
     if (!assignment || assignment.vehicleId !== params.id) {
       return NextResponse.json({ error: 'שיוך לא נמצא' }, { status: 404 })
     }
     
-    // אם זה השיוך הפעיל הנוכחי - לעדכן את currentDriver
     const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
     if (vehicle?.currentDriverId === assignment.employeeId && !assignment.endDate) {
       await prisma.vehicle.update({
@@ -251,6 +263,14 @@ export async function DELETE(
     
     await prisma.vehicleAssignment.delete({
       where: { id: assignmentId }
+    })
+    
+    // Logging - added
+    await logCrud('DELETE', 'vehicles', 'assignment-history', assignmentId,
+      `מחיקת שיוך ${assignment.vehicle.licensePlate} - ${assignment.employee.firstName} ${assignment.employee.lastName}`, {
+      vehicleId: params.id,
+      licensePlate: assignment.vehicle.licensePlate,
+      employeeName: `${assignment.employee.firstName} ${assignment.employee.lastName}`,
     })
     
     return NextResponse.json({ success: true })

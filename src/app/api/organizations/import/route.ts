@@ -1,9 +1,11 @@
 // src/app/api/organizations/import/route.ts
-// גרסה: v20251217-201000
+// Version: 20260111-143200
+// Added: logCrud for bulk import
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 interface OrganizationImport {
   name: string
@@ -72,6 +74,17 @@ export async function POST(request: Request) {
         const error = err as Error
         results.errors.push(`${org.name}: ${error.message}`)
       }
+    }
+
+    // Logging - added (log bulk import as single action)
+    if (results.created > 0) {
+      await logCrud('CREATE', 'organizations', 'import', 'bulk',
+        `ייבוא ${results.created} ארגונים`, {
+        totalOrganizations: organizations.length,
+        created: results.created,
+        skipped: results.skipped,
+        errors: results.errors.length,
+      })
     }
 
     return NextResponse.json({

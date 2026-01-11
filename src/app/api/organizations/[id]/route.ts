@@ -1,9 +1,11 @@
 // /home/user/wdi-erp/src/app/api/organizations/[id]/route.ts
-// Version: 20251221-073300
+// Version: 20260111-140300
+// Added: logCrud for UPDATE, DELETE
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -94,6 +96,13 @@ export async function PUT(
         updatedById: userId,
       }
     })
+
+    // Logging - added
+    await logCrud('UPDATE', 'organizations', 'organization', id, data.name, {
+      type: data.type,
+      isVendor: data.isVendor,
+    })
+
     return NextResponse.json(organization)
   } catch (error) {
     console.error('Error updating organization:', error)
@@ -109,7 +118,22 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Get org info before delete for logging
+    const org = await prisma.organization.findUnique({
+      where: { id },
+      select: { name: true, type: true }
+    })
+
     await prisma.organization.delete({ where: { id } })
+
+    // Logging - added
+    if (org) {
+      await logCrud('DELETE', 'organizations', 'organization', id, org.name, {
+        type: org.type,
+      })
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting organization:', error)

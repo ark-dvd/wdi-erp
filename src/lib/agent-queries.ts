@@ -1,9 +1,23 @@
 import { prisma } from './prisma';
 
+// ייבוא פונקציות רכבים
+import {
+  getVehicles,
+  getVehicleById,
+  getVehicleByDriver,
+  getVehicleFuelLogs,
+  getVehicleServices,
+  getVehicleAccidents,
+  getVehicleTickets,
+  countVehicles,
+  getVehiclesStats,
+  getVehiclesNeedingService,
+} from './agent-queries-vehicles';
+
 // ================================================
 // WDI ERP - Agent Queries
-// Version: 20251215-223000
-// Changes: Fixed getProjectContacts (ContactProject), Added searchEvents
+// Version: 20260111-180300
+// Changes: Added vehicles functions, searchFileContents, getFileSummary
 // ================================================
 
 // פונקציות לביצוע שאילתות בטוחות
@@ -1294,6 +1308,134 @@ export async function getVendorRatingStats() {
   };
 }
 
+// ================================================
+// File Content Search - חיפוש בתוכן קבצים מצורפים
+// ================================================
+
+export async function searchFileContents(params: {
+  query: string;
+  projectId?: string;
+  projectName?: string;
+  eventType?: string;
+  limit?: number;
+}) {
+  const where: any = {
+    extractedText: {
+      not: null,
+      contains: params.query,
+      mode: 'insensitive',
+    },
+  };
+
+  // Filter by project if specified
+  if (params.projectId || params.projectName) {
+    where.event = {
+      project: params.projectId 
+        ? { id: params.projectId }
+        : { name: { contains: params.projectName, mode: 'insensitive' } },
+    };
+  }
+
+  // Filter by event type if specified
+  if (params.eventType) {
+    where.event = {
+      ...where.event,
+      eventType: params.eventType,
+    };
+  }
+
+  const files = await prisma.eventFile.findMany({
+    where,
+    include: {
+      event: {
+        include: {
+          project: {
+            select: { id: true, name: true, projectNumber: true }
+          },
+        },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: params.limit || 10,
+  });
+
+  return files.map(f => ({
+    fileId: f.id,
+    fileName: f.fileName,
+    fileType: f.fileType,
+    eventId: f.event.id,
+    eventType: f.event.eventType,
+    eventDate: f.event.eventDate,
+    eventDescription: f.event.description,
+    projectId: f.event.project.id,
+    projectName: f.event.project.name,
+    projectNumber: f.event.project.projectNumber,
+    // Return relevant excerpt from extracted text
+    textExcerpt: getTextExcerpt(f.extractedText || '', params.query, 500),
+    fullText: f.extractedText,
+  }));
+}
+
+/**
+ * Get excerpt from text around the search query
+ */
+function getTextExcerpt(text: string, query: string, maxLength: number): string {
+  if (!text || !query) return text.substring(0, maxLength);
+  
+  const lowerText = text.toLowerCase();
+  const lowerQuery = query.toLowerCase();
+  const index = lowerText.indexOf(lowerQuery);
+  
+  if (index === -1) {
+    return text.substring(0, maxLength);
+  }
+  
+  // Get context around the match
+  const start = Math.max(0, index - 200);
+  const end = Math.min(text.length, index + query.length + 300);
+  
+  let excerpt = text.substring(start, end);
+  if (start > 0) excerpt = '...' + excerpt;
+  if (end < text.length) excerpt = excerpt + '...';
+  
+  return excerpt;
+}
+
+/**
+ * Get summary of file for Agent to read
+ */
+export async function getFileSummary(params: { fileId: string }) {
+  const file = await prisma.eventFile.findUnique({
+    where: { id: params.fileId },
+    include: {
+      event: {
+        include: {
+          project: {
+            select: { id: true, name: true, projectNumber: true }
+          },
+        },
+      },
+    },
+  });
+
+  if (!file) {
+    return { error: 'קובץ לא נמצא' };
+  }
+
+  return {
+    fileName: file.fileName,
+    fileType: file.fileType,
+    eventType: file.event.eventType,
+    eventDate: file.event.eventDate,
+    eventDescription: file.event.description,
+    projectName: file.event.project.name,
+    projectNumber: file.event.project.projectNumber,
+    hasExtractedText: !!file.extractedText,
+    extractedText: file.extractedText || 'לא נמצא טקסט בקובץ זה',
+    textLength: file.extractedText?.length || 0,
+  };
+}
+
 // מיפוי שמות פונקציות לפונקציות בפועל
 export const functionMap: Record<string, Function> = {
   getEmployees,
@@ -1321,4 +1463,18 @@ export const functionMap: Record<string, Function> = {
   getVendorRatings,
   getTopRatedVendors,
   getVendorRatingStats,
+  // Vehicles
+  getVehicles,
+  getVehicleById,
+  getVehicleByDriver,
+  getVehicleFuelLogs,
+  getVehicleServices,
+  getVehicleAccidents,
+  getVehicleTickets,
+  countVehicles,
+  getVehiclesStats,
+  getVehiclesNeedingService,
+  // File Content Search
+  searchFileContents,
+  getFileSummary,
 };

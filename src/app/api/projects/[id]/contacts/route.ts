@@ -1,6 +1,9 @@
+// Version: 20260111-143000
+// Added: logCrud for CREATE
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -81,6 +84,18 @@ export async function POST(
       return NextResponse.json({ error: 'איש הקשר כבר משויך לפרויקט זה' }, { status: 400 })
     }
 
+    // Get contact and project info for logging
+    const [contact, project] = await Promise.all([
+      prisma.contact.findUnique({
+        where: { id: data.contactId },
+        select: { firstName: true, lastName: true }
+      }),
+      prisma.project.findUnique({
+        where: { id },
+        select: { name: true, projectNumber: true }
+      })
+    ])
+
     const contactProject = await prisma.contactProject.create({
       data: {
         contactId: data.contactId,
@@ -103,6 +118,16 @@ export async function POST(
     await prisma.project.update({
       where: { id },
       data: { updatedById: userId }
+    })
+
+    // Logging - added
+    await logCrud('CREATE', 'projects', 'contact-project', contactProject.id,
+      `שיוך ${contact?.firstName} ${contact?.lastName} לפרויקט ${project?.name}`, {
+      projectId: id,
+      projectName: project?.name,
+      contactId: data.contactId,
+      contactName: `${contact?.firstName} ${contact?.lastName}`,
+      roleInProject: data.roleInProject,
     })
 
     return NextResponse.json(contactProject)

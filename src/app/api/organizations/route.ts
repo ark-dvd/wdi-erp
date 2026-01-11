@@ -1,6 +1,9 @@
+// Version: 20260111-140200
+// Added: logCrud for CREATE
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(request: Request) {
   try {
@@ -55,6 +58,13 @@ export async function POST(request: Request) {
         updatedById: userId,
       }
     })
+
+    // Logging - added
+    await logCrud('CREATE', 'organizations', 'organization', organization.id, data.name, {
+      type: data.type,
+      isVendor: data.isVendor,
+    })
+
     return NextResponse.json(organization)
   } catch (error) {
     console.error('Error creating organization:', error)

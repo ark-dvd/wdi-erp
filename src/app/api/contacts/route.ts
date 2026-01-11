@@ -1,7 +1,9 @@
-// Version: 20251210-203000
+// Version: 20260111-140000
+// Added: logCrud for CREATE
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(request: Request) {
   try {
@@ -113,6 +115,11 @@ export async function POST(request: Request) {
       include: {
         organization: { select: { id: true, name: true, type: true } },
       }
+    })
+
+    // Logging - added
+    await logCrud('CREATE', 'contacts', 'contact', contact.id, `${data.firstName} ${data.lastName}`, {
+      organizationName: contact.organization?.name,
     })
 
     return NextResponse.json(contact)

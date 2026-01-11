@@ -1,8 +1,10 @@
+// Version: 20260111-152000
+// Added: Sorting, updatedAt/By, Edit/Delete columns
 'use client'
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { Car, Plus, Search, Filter, User, Gauge, Calendar, AlertTriangle } from 'lucide-react'
+import { Car, Plus, Search, Filter, User, Gauge, Calendar, AlertTriangle, Edit, Trash2, ChevronUp, ChevronDown } from 'lucide-react'
 
 const statusLabels: Record<string, string> = { 
   ACTIVE: 'פעיל', 
@@ -21,11 +23,18 @@ const contractLabels: Record<string, string> = {
   LEASING: 'ליסינג' 
 }
 
+type SortField = 'licensePlate' | 'manufacturer' | 'driver' | 'currentKm' | 'status' | 'updatedAt'
+
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
+  const [sortField, setSortField] = useState<SortField>('updatedAt')
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc')
+  const [showDeleteModal, setShowDeleteModal] = useState(false)
+  const [vehicleToDelete, setVehicleToDelete] = useState<any>(null)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     fetch('/api/vehicles')
@@ -37,18 +46,54 @@ export default function VehiclesPage() {
       .catch(() => setLoading(false))
   }, [])
 
-  const filtered = vehicles.filter(v => {
-    const matchSearch = search === '' || 
-      v.licensePlate?.toLowerCase().includes(search.toLowerCase()) ||
-      v.manufacturer?.toLowerCase().includes(search.toLowerCase()) ||
-      v.model?.toLowerCase().includes(search.toLowerCase()) ||
-      v.currentDriver?.firstName?.toLowerCase().includes(search.toLowerCase()) ||
-      v.currentDriver?.lastName?.toLowerCase().includes(search.toLowerCase())
-    
-    const matchStatus = statusFilter === 'all' || v.status === statusFilter
-    
-    return matchSearch && matchStatus
-  })
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(d => d === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+  }
+
+  const filtered = vehicles
+    .filter(v => {
+      const matchSearch = search === '' || 
+        v.licensePlate?.toLowerCase().includes(search.toLowerCase()) ||
+        v.manufacturer?.toLowerCase().includes(search.toLowerCase()) ||
+        v.model?.toLowerCase().includes(search.toLowerCase()) ||
+        v.currentDriver?.firstName?.toLowerCase().includes(search.toLowerCase()) ||
+        v.currentDriver?.lastName?.toLowerCase().includes(search.toLowerCase())
+      
+      const matchStatus = statusFilter === 'all' || v.status === statusFilter
+      
+      return matchSearch && matchStatus
+    })
+    .sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'licensePlate':
+          cmp = (a.licensePlate || '').localeCompare(b.licensePlate || '')
+          break
+        case 'manufacturer':
+          cmp = `${a.manufacturer} ${a.model}`.localeCompare(`${b.manufacturer} ${b.model}`)
+          break
+        case 'driver':
+          const driverA = a.currentDriver ? `${a.currentDriver.firstName} ${a.currentDriver.lastName}` : ''
+          const driverB = b.currentDriver ? `${b.currentDriver.firstName} ${b.currentDriver.lastName}` : ''
+          cmp = driverA.localeCompare(driverB)
+          break
+        case 'currentKm':
+          cmp = (a.currentKm || 0) - (b.currentKm || 0)
+          break
+        case 'status':
+          cmp = (a.status || '').localeCompare(b.status || '')
+          break
+        case 'updatedAt':
+          cmp = new Date(a.updatedAt || 0).getTime() - new Date(b.updatedAt || 0).getTime()
+          break
+      }
+      return sortDirection === 'asc' ? cmp : -cmp
+    })
 
   const stats = {
     total: vehicles.length,
@@ -56,6 +101,50 @@ export default function VehiclesPage() {
     inService: vehicles.filter(v => v.status === 'IN_SERVICE').length,
     unassigned: vehicles.filter(v => !v.currentDriverId && v.status === 'ACTIVE').length,
   }
+
+  const openDeleteModal = (vehicle: any) => {
+    setVehicleToDelete(vehicle)
+    setShowDeleteModal(true)
+  }
+
+  const handleDelete = async () => {
+    if (!vehicleToDelete) return
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/vehicles/${vehicleToDelete.id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setVehicles(vehicles.filter(v => v.id !== vehicleToDelete.id))
+        setShowDeleteModal(false)
+        setVehicleToDelete(null)
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  const formatDateTime = (dateStr: string) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    return date.toLocaleString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
+  }
+
+  const SortHeader = ({ field, children }: { field: SortField; children: React.ReactNode }) => (
+    <div 
+      onClick={() => handleSort(field)} 
+      className="flex items-center gap-1 cursor-pointer hover:text-blue-600 select-none"
+    >
+      <span>{children}</span>
+      {sortField === field && (
+        sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+      )}
+    </div>
+  )
 
   if (loading) {
     return <div className="p-8 text-center">טוען...</div>
@@ -148,12 +237,26 @@ export default function VehiclesPage() {
           <table className="w-full">
             <thead className="bg-gray-50 text-sm text-gray-600">
               <tr>
-                <th className="text-right p-4 font-medium">רכב</th>
-                <th className="text-right p-4 font-medium">מספר רישוי</th>
-                <th className="text-right p-4 font-medium">נהג נוכחי</th>
-                <th className="text-right p-4 font-medium">ק"מ</th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="manufacturer">רכב</SortHeader>
+                </th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="licensePlate">מספר רישוי</SortHeader>
+                </th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="driver">נהג נוכחי</SortHeader>
+                </th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="currentKm">ק"מ</SortHeader>
+                </th>
                 <th className="text-right p-4 font-medium">חוזה</th>
-                <th className="text-right p-4 font-medium">סטטוס</th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="status">סטטוס</SortHeader>
+                </th>
+                <th className="text-right p-4 font-medium">
+                  <SortHeader field="updatedAt">עודכן</SortHeader>
+                </th>
+                <th className="text-right p-4 font-medium w-24">פעולות</th>
               </tr>
             </thead>
             <tbody className="divide-y">
@@ -224,10 +327,69 @@ export default function VehiclesPage() {
                       {statusLabels[vehicle.status]}
                     </span>
                   </td>
+                  <td className="p-4">
+                    <div className="text-sm text-gray-500">{formatDateTime(vehicle.updatedAt)}</div>
+                  </td>
+                  <td className="p-4">
+                    <div className="flex items-center gap-1">
+                      <Link
+                        href={`/dashboard/vehicles/${vehicle.id}/edit`}
+                        className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
+                        title="עריכה"
+                      >
+                        <Edit size={18} />
+                      </Link>
+                      <button
+                        onClick={() => openDeleteModal(vehicle)}
+                        className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+                        title="מחיקה"
+                      >
+                        <Trash2 size={18} />
+                      </button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Delete Modal */}
+      {showDeleteModal && vehicleToDelete && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                <AlertTriangle size={24} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold">מחיקת רכב</h3>
+                <p className="text-gray-500 text-sm">פעולה זו לא ניתנת לביטול</p>
+              </div>
+            </div>
+            <p className="text-gray-600 mb-6">
+              האם אתה בטוח שברצונך למחוק את הרכב{' '}
+              <strong>{vehicleToDelete.manufacturer} {vehicleToDelete.model}</strong>{' '}
+              ({vehicleToDelete.licensePlate})?
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 border rounded-lg hover:bg-gray-50"
+                disabled={deleting}
+              >
+                ביטול
+              </button>
+              <button
+                onClick={handleDelete}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+                disabled={deleting}
+              >
+                {deleting ? 'מוחק...' : 'מחק רכב'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

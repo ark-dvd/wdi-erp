@@ -2,8 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================
 // WDI ERP - Gemini Configuration
-// Version: 20251215-223000
-// Changes: Added searchEvents function for email/event content search
+// Version: 20260111-180400
+// Changes: Added vehicles functions, searchFileContents, getFileSummary
 // ================================================
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -291,6 +291,142 @@ export const agentFunctions: any[] = [
       properties: {},
     },
   },
+  // === VEHICLES FUNCTIONS ===
+  {
+    name: 'getVehicles',
+    description: 'מחזיר רשימת רכבים עם אפשרות סינון לפי סטטוס, יצרן או סוג חוזה',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: 'סטטוס: ACTIVE, INACTIVE, IN_SERVICE, SOLD, או all' },
+        manufacturer: { type: 'STRING', description: 'יצרן הרכב' },
+        contractType: { type: 'STRING', description: 'סוג חוזה: LEASING, RENTAL, OWNED' },
+      },
+    },
+  },
+  {
+    name: 'getVehicleById',
+    description: 'מחזיר פרטים מלאים של רכב ספציפי לפי מספר רישוי, כולל: נהג נוכחי, היסטוריית שיוכים, תדלוקים, טיפולים, תאונות, דוחות וכו',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        searchTerm: { type: 'STRING', description: 'מספר רישוי או חלק ממנו' },
+      },
+      required: ['searchTerm'],
+    },
+  },
+  {
+    name: 'getVehicleByDriver',
+    description: 'מחזיר את הרכב המשויך לעובד ספציפי',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        driverName: { type: 'STRING', description: 'שם הנהג/עובד' },
+      },
+      required: ['driverName'],
+    },
+  },
+  {
+    name: 'getVehicleFuelLogs',
+    description: 'מחזיר היסטוריית תדלוקים של רכב',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        licensePlate: { type: 'STRING', description: 'מספר רישוי' },
+        daysBack: { type: 'NUMBER', description: 'כמה ימים אחורה (ברירת מחדל: 30)' },
+        limit: { type: 'NUMBER', description: 'מספר תוצאות מקסימלי' },
+      },
+    },
+  },
+  {
+    name: 'getVehicleServices',
+    description: 'מחזיר היסטוריית טיפולים של רכב',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        licensePlate: { type: 'STRING', description: 'מספר רישוי' },
+        limit: { type: 'NUMBER', description: 'מספר תוצאות מקסימלי' },
+      },
+    },
+  },
+  {
+    name: 'getVehicleAccidents',
+    description: 'מחזיר תאונות של רכב',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        licensePlate: { type: 'STRING', description: 'מספר רישוי' },
+        status: { type: 'STRING', description: 'סטטוס: פתוח, סגור, או all' },
+      },
+    },
+  },
+  {
+    name: 'getVehicleTickets',
+    description: 'מחזיר דוחות תנועה של רכב',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        licensePlate: { type: 'STRING', description: 'מספר רישוי' },
+        status: { type: 'STRING', description: 'סטטוס: ממתין לתשלום, שולם, בערעור, או all' },
+      },
+    },
+  },
+  {
+    name: 'countVehicles',
+    description: 'מחזיר ספירת רכבים לפי קריטריונים',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: 'סטטוס לספירה' },
+        groupBy: { type: 'STRING', description: 'שדה לקיבוץ: manufacturer, contractType, status' },
+      },
+    },
+  },
+  {
+    name: 'getVehiclesStats',
+    description: 'מחזיר סטטיסטיקות צי רכב: סה"כ עלויות, ממוצע צריכת דלק, רכבים לטיפול קרוב',
+    parameters: {
+      type: 'OBJECT',
+      properties: {},
+    },
+  },
+  {
+    name: 'getVehiclesNeedingService',
+    description: 'מחזיר רכבים שצריכים טיפול בקרוב (לפי תאריך או ק"מ)',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        daysAhead: { type: 'NUMBER', description: 'כמה ימים קדימה לבדוק (ברירת מחדל: 30)' },
+      },
+    },
+  },
+  // File Content Search - חיפוש בתוכן קבצים
+  {
+    name: 'searchFileContents',
+    description: 'חיפוש בתוכן קבצים מצורפים לאירועים (PDF, PPTX, DOCX). משמש כשהמשתמש שואל על תוכן מסמכים, מצגות, או סיכומי פגישות',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'מילות חיפוש בתוכן הקובץ' },
+        projectId: { type: 'STRING', description: 'מזהה פרויקט להגבלת החיפוש (אופציונלי)' },
+        projectName: { type: 'STRING', description: 'שם פרויקט להגבלת החיפוש (אופציונלי)' },
+        eventType: { type: 'STRING', description: 'סוג אירוע להגבלת החיפוש (אופציונלי)' },
+        limit: { type: 'NUMBER', description: 'מספר תוצאות מקסימלי (ברירת מחדל: 10)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'getFileSummary',
+    description: 'מחזיר את התוכן המלא של קובץ מצורף לאירוע. משמש כשהמשתמש רוצה לקרוא או לסכם מסמך ספציפי',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        fileId: { type: 'STRING', description: 'מזהה הקובץ' },
+      },
+      required: ['fileId'],
+    },
+  },
 ];
 
 export function getGeminiModel() {
@@ -361,13 +497,25 @@ export function getGeminiModel() {
 - getOrganizations - רשימת ארגונים
 - getOrganizationById - פרטים מלאים של ארגון (כולל: ח.פ., כתובת, אתר, הערות)
 
-### כללי:
-- searchAll - חיפוש חופשי (עובדים, פרויקטים, אירועים)
+### רכבים:
+- getVehicles - רשימת רכבים עם סינון
+- getVehicleById - פרטים מלאים של רכב (נהג, תדלוקים, טיפולים, תאונות, דוחות)
+- getVehicleByDriver - הרכב של עובד ספציפי
+- getVehicleFuelLogs - היסטוריית תדלוקים
+- getVehicleServices - היסטוריית טיפולים
+- getVehicleAccidents - תאונות רכב
+- getVehicleTickets - דוחות תנועה
+- countVehicles - ספירת רכבים
+- getVehiclesStats - סטטיסטיקות צי רכב
+- getVehiclesNeedingService - רכבים שצריכים טיפול
 
 ### דירוגי ספקים:
 - getVendorRatings - דירוגים של ספקים/יועצים (לפי ארגון, איש קשר, פרויקט)
 - getTopRatedVendors - הספקים והיועצים עם הדירוג הגבוה ביותר
 - getVendorRatingStats - סטטיסטיקות דירוגים
+
+### כללי:
+- searchAll - חיפוש חופשי (עובדים, פרויקטים, אירועים)
 
 ## כללים:
 - השתמש בפונקציה המתאימה ביותר לשאלה
@@ -375,6 +523,7 @@ export function getGeminiModel() {
 - לשאלות על השכלה/תעודות/הכשרות של עובד - השתמש ב-getEmployeeById
 - לשאלות על כתובת/תיאור פרויקט - השתמש ב-getProjectById
 - **לשאלות על תוכן מיילים או אירועים** - השתמש ב-searchEvents
+- **לשאלות על רכבים** - השתמש בפונקציות getVehicle*
 - אל תמציא מידע שלא קיבלת מהפונקציות
 `,
   });

@@ -1,12 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/route.ts
-// GET - רכב בודד עם כל הפרטים
-// PUT - עדכון רכב
-// DELETE - מחיקת רכב
+// Version: 20260111-141500
+// Added: logCrud for UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -169,6 +169,13 @@ export async function PUT(
       }
     })
     
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'vehicle', params.id,
+      `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
+      licensePlate: data.licensePlate,
+      status: data.status,
+    })
+    
     return NextResponse.json(vehicle)
   } catch (error) {
     console.error('Error updating vehicle:', error)
@@ -183,7 +190,12 @@ export async function DELETE(
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { currentDriverId: true }
+      select: { 
+        currentDriverId: true,
+        licensePlate: true,
+        manufacturer: true,
+        model: true,
+      }
     })
     
     if (vehicle?.currentDriverId) {
@@ -194,6 +206,15 @@ export async function DELETE(
     }
     
     await prisma.vehicle.delete({ where: { id: params.id } })
+    
+    // Logging - added
+    if (vehicle) {
+      await logCrud('DELETE', 'vehicles', 'vehicle', params.id,
+        `${vehicle.manufacturer} ${vehicle.model} (${vehicle.licensePlate})`, {
+        licensePlate: vehicle.licensePlate,
+      })
+    }
+    
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting vehicle:', error)

@@ -2,9 +2,8 @@
 
 // ================================================
 // WDI ERP - HR List Page
-// Version: 20251211-143000
-// Fixes: #1 dynamic subtitle, #2 age sorting, #3 actions column,
-//        #4 delete modal, #9 default filter, #12 dates
+// Version: 20260111-153500
+// Added: updatedAt column for standardization
 // ================================================
 
 import { useState, useEffect } from 'react'
@@ -37,6 +36,8 @@ interface Employee {
   photoUrl: string | null
   birthDate: string | null
   startDate: string | null
+  updatedAt: string | null
+  // Note: Employee model doesn't have updatedBy in schema
   managedProjects: ManagedProject[]
   ledProjects: Project[]
   age?: number | null
@@ -105,6 +106,18 @@ export default function HRPage() {
     const month = (date.getUTCMonth() + 1).toString().padStart(2, '0')
     const year = date.getUTCFullYear()
     return `${day}.${month}.${year}`
+  }
+
+  const formatDateTime = (dateStr: string | null) => {
+    if (!dateStr) return '-'
+    const date = new Date(dateStr)
+    return date.toLocaleString('he-IL', {
+      day: '2-digit',
+      month: '2-digit',
+      year: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    })
   }
 
   // #2: חישוב גיל כמספר לצורך מיון
@@ -277,6 +290,14 @@ export default function HRPage() {
         }`}>
           {item.status}
         </span>
+      ),
+    },
+    {
+      key: 'updatedAt',
+      label: 'עודכן',
+      sortable: true,
+      render: (item) => (
+        <div className="text-sm text-gray-500">{formatDateTime(item.updatedAt)}</div>
       ),
     },
     {

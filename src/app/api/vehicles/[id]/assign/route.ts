@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/assign/route.ts
-// POST - שיוך רכב לעובד חדש
-// DELETE - ביטול שיוך
+// Version: 20260111-142400
+// Added: logCrud for ASSIGN, UNASSIGN
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function POST(
   request: NextRequest,
@@ -44,6 +45,9 @@ export async function POST(
     
     const now = new Date()
     const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
+    const previousDriverName = vehicle.currentDriver 
+      ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
+      : null
     
     await prisma.$transaction(async (tx) => {
       if (vehicle.currentDriverId) {
@@ -74,6 +78,17 @@ export async function POST(
       include: { currentDriver: { select: { id: true, firstName: true, lastName: true, phone: true } } }
     })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'assignment', params.id,
+      `שיוך ${vehicle.licensePlate} ל${employee.firstName} ${employee.lastName}`, {
+      vehicleId: params.id,
+      licensePlate: vehicle.licensePlate,
+      employeeId,
+      employeeName: `${employee.firstName} ${employee.lastName}`,
+      previousDriver: previousDriverName,
+      startKm: kmValue,
+    })
+    
     return NextResponse.json(updatedVehicle)
   } catch (error) {
     console.error('Error assigning vehicle:', error)
@@ -88,7 +103,10 @@ export async function DELETE(
   try {
     const { currentKm, notes } = await request.json().catch(() => ({}))
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      include: { currentDriver: { select: { firstName: true, lastName: true } } }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -96,6 +114,10 @@ export async function DELETE(
     if (!vehicle.currentDriverId) {
       return NextResponse.json({ error: 'הרכב לא משויך לאף עובד' }, { status: 400 })
     }
+    
+    const driverName = vehicle.currentDriver 
+      ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
+      : 'unknown'
     
     const now = new Date()
     const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
@@ -110,6 +132,15 @@ export async function DELETE(
         where: { id: params.id },
         data: { currentDriverId: null, currentKm: kmValue }
       })
+    })
+    
+    // Logging - added
+    await logCrud('DELETE', 'vehicles', 'assignment', params.id,
+      `ביטול שיוך ${vehicle.licensePlate} מ${driverName}`, {
+      vehicleId: params.id,
+      licensePlate: vehicle.licensePlate,
+      previousDriver: driverName,
+      endKm: kmValue,
     })
     
     return NextResponse.json({ success: true })

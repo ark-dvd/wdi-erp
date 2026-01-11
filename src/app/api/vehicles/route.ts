@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/route.ts
-// GET - רשימת כל הרכבים
-// POST - יצירת רכב חדש
+// Version: 20260111-141000
+// Added: logCrud for CREATE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(request: NextRequest) {
   try {
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: { createdAt: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     })
     
     return NextResponse.json(vehicles)
@@ -98,6 +99,13 @@ export async function POST(request: NextRequest) {
         })
       ])
     }
+    
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'vehicle', vehicle.id, 
+      `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
+      licensePlate: data.licensePlate,
+      status: data.status || 'ACTIVE',
+    })
     
     return NextResponse.json(vehicle, { status: 201 })
   } catch (error) {

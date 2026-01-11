@@ -1,6 +1,9 @@
+// Version: 20260111-140400
+// Added: logCrud for UPDATE, DELETE
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -41,6 +44,12 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
 
+    // Get event with project info for logging
+    const existingEvent = await prisma.projectEvent.findUnique({
+      where: { id },
+      include: { project: { select: { name: true } } }
+    })
+
     const event = await prisma.projectEvent.update({
       where: { id },
       data: {
@@ -48,6 +57,13 @@ export async function PUT(
         description: data.description,
         eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
       },
+    })
+
+    // Logging - added
+    await logCrud('UPDATE', 'events', 'event', id, 
+      `${data.eventType} - ${existingEvent?.project?.name || ''}`, {
+      projectName: existingEvent?.project?.name,
+      eventType: data.eventType,
     })
 
     return NextResponse.json(event)
@@ -67,6 +83,12 @@ export async function DELETE(
 
     const { id } = await params
 
+    // Get event info before delete for logging
+    const event = await prisma.projectEvent.findUnique({
+      where: { id },
+      include: { project: { select: { name: true } } }
+    })
+
     // Delete associated files first
     await prisma.eventFile.deleteMany({
       where: { eventId: id },
@@ -75,6 +97,15 @@ export async function DELETE(
     await prisma.projectEvent.delete({
       where: { id },
     })
+
+    // Logging - added
+    if (event) {
+      await logCrud('DELETE', 'events', 'event', id,
+        `${event.eventType} - ${event.project?.name || ''}`, {
+        projectName: event.project?.name,
+        eventType: event.eventType,
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

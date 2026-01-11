@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/fuel/route.ts
-// Version: 20260110-080000
-// Added: PUT, DELETE methods
+// Version: 20260111-141600
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -43,7 +44,10 @@ export async function POST(
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -78,6 +82,16 @@ export async function POST(
       await prisma.vehicle.update({ where: { id: params.id }, data: { currentKm: mileage } })
     }
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'fuel-log', fuelLog.id,
+      `תדלוק ${vehicle.licensePlate} - ${liters}L`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      liters,
+      totalCost,
+      station: data.station,
+    })
+    
     return NextResponse.json(fuelLog, { status: 201 })
   } catch (error) {
     console.error('Error creating fuel log:', error)
@@ -102,6 +116,12 @@ export async function PUT(
     const totalCost = data.totalCost ? parseFloat(data.totalCost) : undefined
     const pricePerLiter = data.pricePerLiter ? parseFloat(data.pricePerLiter) : (totalCost && liters ? totalCost / liters : undefined)
     
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
+    
     const fuelLog = await prisma.vehicleFuelLog.update({
       where: { id: fuelId },
       data: {
@@ -117,6 +137,14 @@ export async function PUT(
         receiptUrl: data.receiptUrl || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'fuel-log', fuelId,
+      `תדלוק ${vehicle?.licensePlate}`, {
+      vehicleId: params.id,
+      liters,
+      totalCost,
     })
     
     return NextResponse.json(fuelLog)
@@ -138,9 +166,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'fuelId is required' }, { status: 400 })
     }
     
+    // Get info for logging
+    const fuelLog = await prisma.vehicleFuelLog.findUnique({
+      where: { id: fuelId },
+      include: { vehicle: { select: { licensePlate: true } } }
+    })
+    
     await prisma.vehicleFuelLog.delete({
       where: { id: fuelId }
     })
+    
+    // Logging - added
+    if (fuelLog) {
+      await logCrud('DELETE', 'vehicles', 'fuel-log', fuelId,
+        `תדלוק ${fuelLog.vehicle.licensePlate}`, {
+        vehicleId: params.id,
+        liters: fuelLog.liters,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

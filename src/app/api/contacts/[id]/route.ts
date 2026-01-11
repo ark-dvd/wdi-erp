@@ -1,9 +1,11 @@
 // /home/user/wdi-erp/src/app/api/contacts/[id]/route.ts
-// Version: 20251221-073200
+// Version: 20260111-140100
+// Added: logCrud for UPDATE, DELETE
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -105,6 +107,12 @@ export async function PUT(
       },
       include: { organization: { select: { id: true, name: true, type: true } } }
     })
+
+    // Logging - added
+    await logCrud('UPDATE', 'contacts', 'contact', id, `${data.firstName} ${data.lastName}`, {
+      organizationName: contact.organization?.name,
+    })
+
     return NextResponse.json(contact)
   } catch (error) {
     console.error('Error updating contact:', error)
@@ -120,7 +128,22 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    // Get contact info before delete for logging
+    const contact = await prisma.contact.findUnique({
+      where: { id },
+      select: { firstName: true, lastName: true, organization: { select: { name: true } } }
+    })
+
     await prisma.contact.delete({ where: { id } })
+
+    // Logging - added
+    if (contact) {
+      await logCrud('DELETE', 'contacts', 'contact', id, `${contact.firstName} ${contact.lastName}`, {
+        organizationName: contact.organization?.name,
+      })
+    }
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting contact:', error)

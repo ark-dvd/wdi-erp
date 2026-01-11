@@ -1,0 +1,36 @@
+// ================================================
+// Schema Changes for Text Extraction Feature
+// Version: 20260115
+// 
+// Instructions: Add these fields to the existing EventFile model in schema.prisma
+// ================================================
+
+// BEFORE (existing):
+// model EventFile {
+//   id        String       @id @default(cuid())
+//   event     ProjectEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+//   eventId   String
+//   fileUrl   String
+//   fileName  String
+//   fileType  String
+//   fileSize  Int?
+//   createdAt DateTime     @default(now())
+// }
+
+// AFTER (with new fields):
+// model EventFile {
+//   id              String       @id @default(cuid())
+//   event           ProjectEvent @relation(fields: [eventId], references: [id], onDelete: Cascade)
+//   eventId         String
+//   fileUrl         String
+//   fileName        String
+//   fileType        String
+//   fileSize        Int?
+//   extractedText   String?      @db.Text    // NEW: Extracted text content from PDF/PPTX/DOCX
+//   textExtractedAt DateTime?                // NEW: Timestamp when text was extracted
+//   createdAt       DateTime     @default(now())
+// }
+
+// Note: After updating schema.prisma, run:
+// 1. npx prisma migrate dev --name add_extracted_text
+// 2. npx prisma generate

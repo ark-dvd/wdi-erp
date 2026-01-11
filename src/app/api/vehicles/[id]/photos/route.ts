@@ -1,13 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/photos/route.ts
-// Version: 20260110-070000
-// GET - רשימת תמונות רכב
-// POST - העלאת תמונה חדשה
-// DELETE - מחיקת תמונה
+// Version: 20260111-142300
+// Added: logCrud for CREATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -51,7 +50,10 @@ export async function POST(
       return NextResponse.json({ error: 'חובה להעלות תמונה' }, { status: 400 })
     }
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -84,6 +86,15 @@ export async function POST(
       }
     })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'photo', photo.id,
+      `תמונה ${vehicle.licensePlate} - ${data.photoType}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      photoType: data.photoType,
+      eventType: data.eventType,
+    })
+    
     return NextResponse.json(photo, { status: 201 })
   } catch (error) {
     console.error('Error creating photo:', error)
@@ -104,7 +115,8 @@ export async function DELETE(
     }
     
     const photo = await prisma.vehiclePhoto.findUnique({
-      where: { id: photoId }
+      where: { id: photoId },
+      include: { vehicle: { select: { licensePlate: true } } }
     })
     
     if (!photo || photo.vehicleId !== params.id) {
@@ -113,6 +125,13 @@ export async function DELETE(
     
     await prisma.vehiclePhoto.delete({
       where: { id: photoId }
+    })
+    
+    // Logging - added
+    await logCrud('DELETE', 'vehicles', 'photo', photoId,
+      `תמונה ${photo.vehicle.licensePlate} - ${photo.photoType}`, {
+      vehicleId: params.id,
+      photoType: photo.photoType,
     })
     
     return NextResponse.json({ success: true })

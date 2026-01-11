@@ -1,3 +1,5 @@
+// Version: 20260111-143500
+// Added: vehicles, organizations to ActivityModule
 import { prisma } from './prisma'
 import { auth } from './auth'
 import { headers } from 'next/headers'
@@ -13,7 +15,19 @@ export type ActivityAction =
 
 export type ActivityCategory = 'auth' | 'navigation' | 'data' | 'search' | 'files' | 'agent' | 'system'
 
-export type ActivityModule = 'hr' | 'projects' | 'events' | 'contacts' | 'vendor-rating' | 'agent' | 'admin' | 'settings' | 'files' | 'auth'
+export type ActivityModule = 
+  | 'hr' 
+  | 'projects' 
+  | 'events' 
+  | 'contacts' 
+  | 'organizations'
+  | 'vehicles'
+  | 'vendor-rating' 
+  | 'agent' 
+  | 'admin' 
+  | 'settings' 
+  | 'files' 
+  | 'auth'
 
 interface ActivityParams {
   action: ActivityAction

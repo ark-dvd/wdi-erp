@@ -1,6 +1,9 @@
+// Version: 20260111-145000
+// Added: logActivity for UPLOAD
 import { NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
 import { auth } from '@/lib/auth'
+import { logActivity } from '@/lib/activity'
 
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
@@ -66,6 +69,23 @@ export async function POST(request: Request) {
 
     // יצירת URL ציבורי
     const publicUrl = `https://storage.googleapis.com/${bucketName}/${fileName}`
+
+    // Logging - added
+    await logActivity({
+      action: 'UPLOAD',
+      category: 'files',
+      module: 'files',
+      targetType: 'file',
+      targetId: fileName,
+      targetName: file.name,
+      details: {
+        folder,
+        originalName: file.name,
+        type: file.type,
+        size: file.size,
+        path: fileName,
+      }
+    })
 
     return NextResponse.json({
       url: publicUrl,

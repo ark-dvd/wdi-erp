@@ -1,9 +1,11 @@
 // /app/api/individual-reviews/[id]/route.ts
-// Version: 20251221-072100
+// Version: 20260111-140700
+// Added: logCrud for UPDATE, DELETE
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { logCrud } from '@/lib/activity';
 
 const CRITERIA_FIELDS = [
   'accountability', 'boqQuality', 'specQuality', 'planQuality',
@@ -67,7 +69,8 @@ export async function PUT(
     const review = await prisma.individualReview.findUnique({
       where: { id: params.id },
       include: {
-        contact: { select: { organizationId: true } },
+        contact: { select: { organizationId: true, firstName: true, lastName: true } },
+        project: { select: { name: true } },
       },
     });
 
@@ -121,6 +124,14 @@ export async function PUT(
       await updateOrganizationAvgRating(review.contact.organizationId);
     }
 
+    // Logging - added
+    await logCrud('UPDATE', 'vendor-rating', 'individual-review', params.id,
+      `דירוג ${review.contact.firstName} ${review.contact.lastName} - ${review.project?.name}`, {
+      contactName: `${review.contact.firstName} ${review.contact.lastName}`,
+      projectName: review.project?.name,
+      avgRating: avgRating.toFixed(2),
+    });
+
     return NextResponse.json(updatedReview);
   } catch (error) {
     console.error('Error updating individual review:', error);
@@ -141,7 +152,8 @@ export async function DELETE(
     const review = await prisma.individualReview.findUnique({
       where: { id: params.id },
       include: {
-        contact: { select: { organizationId: true } },
+        contact: { select: { organizationId: true, firstName: true, lastName: true } },
+        project: { select: { name: true } },
       },
     });
 
@@ -162,6 +174,8 @@ export async function DELETE(
 
     const contactId = review.contactId;
     const organizationId = review.contact.organizationId;
+    const contactName = `${review.contact.firstName} ${review.contact.lastName}`;
+    const projectName = review.project?.name;
 
     await prisma.individualReview.delete({
       where: { id: params.id },
@@ -172,6 +186,13 @@ export async function DELETE(
     if (organizationId) {
       await updateOrganizationAvgRating(organizationId);
     }
+
+    // Logging - added
+    await logCrud('DELETE', 'vendor-rating', 'individual-review', params.id,
+      `דירוג ${contactName} - ${projectName}`, {
+      contactName,
+      projectName,
+    });
 
     return NextResponse.json({ success: true });
   } catch (error) {

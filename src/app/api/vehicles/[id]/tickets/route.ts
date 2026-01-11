@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260110-080000
-// Added: DELETE method
+// Version: 20260111-142100
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -43,7 +44,10 @@ export async function POST(
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -72,6 +76,16 @@ export async function POST(
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'ticket', ticket.id,
+      `דוח ${vehicle.licensePlate} - ${data.ticketType}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      ticketType: data.ticketType,
+      fineAmount: data.fineAmount,
+      location: data.location,
+    })
+    
     return NextResponse.json(ticket, { status: 201 })
   } catch (error) {
     console.error('Error creating ticket:', error)
@@ -94,6 +108,12 @@ export async function PUT(
     if (!id) {
       return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
     }
+    
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true }
+    })
     
     const ticket = await prisma.vehicleTicket.update({
       where: { id },
@@ -118,6 +138,15 @@ export async function PUT(
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'ticket', id,
+      `דוח ${vehicle?.licensePlate} - ${data.ticketType || ticket.ticketType}`, {
+      vehicleId: params.id,
+      ticketType: data.ticketType || ticket.ticketType,
+      status: data.status,
+      fineAmount: data.fineAmount,
+    })
+    
     return NextResponse.json(ticket)
   } catch (error) {
     console.error('Error updating ticket:', error)
@@ -137,9 +166,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
     }
     
+    // Get info for logging
+    const ticket = await prisma.vehicleTicket.findUnique({
+      where: { id: ticketId },
+      include: { vehicle: { select: { licensePlate: true } } }
+    })
+    
     await prisma.vehicleTicket.delete({
       where: { id: ticketId }
     })
+    
+    // Logging - added
+    if (ticket) {
+      await logCrud('DELETE', 'vehicles', 'ticket', ticketId,
+        `דוח ${ticket.vehicle.licensePlate} - ${ticket.ticketType}`, {
+        vehicleId: params.id,
+        ticketType: ticket.ticketType,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

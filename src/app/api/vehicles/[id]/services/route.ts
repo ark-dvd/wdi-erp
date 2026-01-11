@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/services/route.ts
-// Version: 20260110-080000
-// Added: PUT, DELETE methods
+// Version: 20260111-141700
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -30,7 +31,10 @@ export async function POST(
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -60,6 +64,16 @@ export async function POST(
     
     await prisma.vehicle.update({ where: { id: params.id }, data: updateData })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'service', service.id,
+      `טיפול ${vehicle.licensePlate} - ${data.serviceType}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      serviceType: data.serviceType,
+      cost: data.cost,
+      garage: data.garage,
+    })
+    
     return NextResponse.json(service, { status: 201 })
   } catch (error) {
     console.error('Error creating service:', error)
@@ -81,6 +95,12 @@ export async function PUT(
     
     const data = await request.json()
     
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true }
+    })
+    
     const service = await prisma.vehicleService.update({
       where: { id: serviceId },
       data: {
@@ -92,6 +112,14 @@ export async function PUT(
         description: data.description || null,
         invoiceUrl: data.invoiceUrl || null,
       }
+    })
+    
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'service', serviceId,
+      `טיפול ${vehicle?.licensePlate} - ${data.serviceType}`, {
+      vehicleId: params.id,
+      serviceType: data.serviceType,
+      cost: data.cost,
     })
     
     return NextResponse.json(service)
@@ -113,9 +141,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
     }
     
+    // Get info for logging
+    const service = await prisma.vehicleService.findUnique({
+      where: { id: serviceId },
+      include: { vehicle: { select: { licensePlate: true } } }
+    })
+    
     await prisma.vehicleService.delete({
       where: { id: serviceId }
     })
+    
+    // Logging - added
+    if (service) {
+      await logCrud('DELETE', 'vehicles', 'service', serviceId,
+        `טיפול ${service.vehicle.licensePlate} - ${service.serviceType}`, {
+        vehicleId: params.id,
+        serviceType: service.serviceType,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

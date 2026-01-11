@@ -1,9 +1,12 @@
 'use client'
 
+// Version: 20260111-180500
+// Fix: Filter params (project, type), Edit button (standard), File viewing (no download)
+
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, FileText, ChevronDown, ChevronLeft, X, Upload, Trash2 } from 'lucide-react'
+import { Plus, Search, FileText, ChevronDown, ChevronLeft, X, Upload, Trash2, Pencil, Eye, Download } from 'lucide-react'
 
 const EVENT_TYPES = [
   { value: 'אתגר', color: 'bg-red-100 text-red-800' },
@@ -50,8 +53,8 @@ function EventsContent() {
   const fetchEvents = async () => {
     setLoading(true)
     const params = new URLSearchParams()
-    if (selectedProject) params.set('projectId', selectedProject)
-    if (selectedType) params.set('eventType', selectedType)
+    if (selectedProject) params.set('project', selectedProject)
+    if (selectedType) params.set('type', selectedType)
     const res = await fetch('/api/events?' + params.toString())
     if (res.ok) {
       const data = await res.json()
@@ -407,7 +410,7 @@ function EventsContent() {
                           : event.createdBy?.name || '-'}
                       </div>
                       <div className="flex items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); window.location.href = '/dashboard/events/' + event.id }} className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded" title="צפייה"><FileText size={14} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); window.location.href = '/dashboard/events/' + event.id }} className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded" title="עריכה"><Pencil size={14} /></button>
                         <button onClick={(e) => { e.stopPropagation(); if(confirm('האם למחוק את האירוע?')) handleDeleteEvent(event.id) }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="מחיקה"><Trash2 size={14} /></button>
                       </div>
                     </div>
@@ -423,7 +426,7 @@ function EventsContent() {
                                   <img src={fileUrl} alt="" className="h-32 w-32 object-cover rounded hover:opacity-80" />
                                 </a>
                               ) : (
-                                <a key={file.id} href={fileUrl + '&download=true'} className="flex items-center gap-2 p-3 bg-gray-100 rounded hover:bg-gray-200">
+                                <a key={file.id} href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-gray-100 rounded hover:bg-gray-200">
                                   <FileText size={20} className="text-red-500" />
                                   <span className="text-sm">{file.fileName || 'PDF'}</span>
                                 </a>

@@ -1,3 +1,5 @@
+// Version: 20260111-144000
+// Added: contacts, organizations, vehicles, vendor-rating to moduleLabels
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -72,6 +74,10 @@ const actionLabels: Record<string, string> = {
 }
 
 const moduleLabels: Record<string, string> = {
+  contacts: 'אנשי קשר',
+  organizations: 'ארגונים',
+  vehicles: 'רכבים',
+  'vendor-rating': 'דירוג ספקים',
   hr: 'כוח אדם',
   projects: 'פרויקטים',
   events: 'אירועים',

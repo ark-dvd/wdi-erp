@@ -1,11 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/accidents/route.ts
-// Version: 20260110-080000
-// Added: PUT, DELETE methods
+// Version: 20260111-141800
+// Added: logCrud for CREATE, UPDATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -44,7 +45,10 @@ export async function POST(
   try {
     const data = await request.json()
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -74,6 +78,16 @@ export async function POST(
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
     
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'accident', accident.id,
+      `תאונה ${vehicle.licensePlate}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      location: data.location,
+      cost: data.cost,
+      status: data.status || 'OPEN',
+    })
+    
     return NextResponse.json(accident, { status: 201 })
   } catch (error) {
     console.error('Error creating accident:', error)
@@ -95,6 +109,12 @@ export async function PUT(
     
     const data = await request.json()
     
+    // Get vehicle info for logging
+    const vehicle = await prisma.vehicle.findUnique({
+      where: { id: params.id },
+      select: { licensePlate: true }
+    })
+    
     const accident = await prisma.vehicleAccident.update({
       where: { id: accidentId },
       data: {
@@ -113,6 +133,14 @@ export async function PUT(
         notes: data.notes || null,
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
+    })
+    
+    // Logging - added
+    await logCrud('UPDATE', 'vehicles', 'accident', accidentId,
+      `תאונה ${vehicle?.licensePlate}`, {
+      vehicleId: params.id,
+      status: data.status,
+      cost: data.cost,
     })
     
     return NextResponse.json(accident)
@@ -134,9 +162,24 @@ export async function DELETE(
       return NextResponse.json({ error: 'accidentId is required' }, { status: 400 })
     }
     
+    // Get info for logging
+    const accident = await prisma.vehicleAccident.findUnique({
+      where: { id: accidentId },
+      include: { vehicle: { select: { licensePlate: true } } }
+    })
+    
     await prisma.vehicleAccident.delete({
       where: { id: accidentId }
     })
+    
+    // Logging - added
+    if (accident) {
+      await logCrud('DELETE', 'vehicles', 'accident', accidentId,
+        `תאונה ${accident.vehicle.licensePlate}`, {
+        vehicleId: params.id,
+        location: accident.location,
+      })
+    }
     
     return NextResponse.json({ success: true })
   } catch (error) {

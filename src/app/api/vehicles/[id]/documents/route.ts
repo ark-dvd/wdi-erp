@@ -1,13 +1,12 @@
 // ============================================
 // src/app/api/vehicles/[id]/documents/route.ts
-// Version: 20260110-070000
-// GET - רשימת מסמכי רכב
-// POST - העלאת מסמך חדש
-// DELETE - מחיקת מסמך
+// Version: 20260111-142200
+// Added: logCrud for CREATE, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function GET(
   request: NextRequest,
@@ -39,7 +38,10 @@ export async function POST(
       return NextResponse.json({ error: 'חובה להעלות קובץ' }, { status: 400 })
     }
     
-    const vehicle = await prisma.vehicle.findUnique({ where: { id: params.id } })
+    const vehicle = await prisma.vehicle.findUnique({ 
+      where: { id: params.id },
+      select: { licensePlate: true, manufacturer: true, model: true }
+    })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
@@ -55,6 +57,15 @@ export async function POST(
         notes: data.notes || null,
         createdBy: data.createdBy || null,
       }
+    })
+    
+    // Logging - added
+    await logCrud('CREATE', 'vehicles', 'document', document.id,
+      `מסמך ${vehicle.licensePlate} - ${data.type}`, {
+      vehicleId: params.id,
+      vehicleName: `${vehicle.manufacturer} ${vehicle.model}`,
+      documentType: data.type,
+      fileName: data.fileName,
     })
     
     return NextResponse.json(document, { status: 201 })
@@ -77,7 +88,8 @@ export async function DELETE(
     }
     
     const document = await prisma.vehicleDocument.findUnique({
-      where: { id: documentId }
+      where: { id: documentId },
+      include: { vehicle: { select: { licensePlate: true } } }
     })
     
     if (!document || document.vehicleId !== params.id) {
@@ -86,6 +98,14 @@ export async function DELETE(
     
     await prisma.vehicleDocument.delete({
       where: { id: documentId }
+    })
+    
+    // Logging - added
+    await logCrud('DELETE', 'vehicles', 'document', documentId,
+      `מסמך ${document.vehicle.licensePlate} - ${document.type}`, {
+      vehicleId: params.id,
+      documentType: document.type,
+      fileName: document.fileName,
     })
     
     return NextResponse.json({ success: true })

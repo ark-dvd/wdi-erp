@@ -1,9 +1,11 @@
 // src/app/api/individual-reviews/route.ts
-// Version: 20251221-073000
+// Version: 20260111-140600
+// Added: logCrud for CREATE
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
+import { logCrud } from '@/lib/activity';
 
 const CRITERIA_FIELDS = [
   'accountability', 'boqQuality', 'specQuality', 'planQuality',
@@ -122,7 +124,12 @@ export async function POST(request: NextRequest) {
 
     const contact = await prisma.contact.findUnique({
       where: { id: contactId },
-      select: { organizationId: true },
+      select: { organizationId: true, firstName: true, lastName: true },
+    });
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true },
     });
 
     const review = await prisma.individualReview.create({
@@ -175,6 +182,16 @@ export async function POST(request: NextRequest) {
     if (contact?.organizationId) {
       await updateOrganizationAvgRating(contact.organizationId);
     }
+
+    // Logging - added
+    await logCrud('CREATE', 'vendor-rating', 'individual-review', review.id,
+      `דירוג ${contact?.firstName} ${contact?.lastName} - ${project?.name}`, {
+      contactId,
+      contactName: `${contact?.firstName} ${contact?.lastName}`,
+      projectId,
+      projectName: project?.name,
+      avgRating: avgRating.toFixed(2),
+    });
 
     return NextResponse.json(review, { status: 201 });
   } catch (error) {

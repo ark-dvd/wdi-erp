@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20251211-160000
-// Added: personalEmail, certifications fields
+// Version: 20260111-153000
+// Added: updatedAt, updatedBy for list view
 // ================================================
 
 import { NextResponse } from 'next/server'
@@ -31,6 +31,8 @@ export async function GET() {
         photoUrl: true,
         birthDate: true,
         startDate: true,
+        updatedAt: true,
+        // Note: Employee model doesn't have updatedBy field in schema
         managedProjects: {
           select: {
             project: {
@@ -123,6 +125,7 @@ export async function POST(request: Request) {
         idCardSpouseFileUrl: data.idCardSpouseFileUrl || null,
         driversLicenseFileUrl: data.driversLicenseFileUrl || null,
         contractFileUrl: data.contractFileUrl || null,
+        // Note: Employee model doesn't have updatedById in schema
       },
     })
 
