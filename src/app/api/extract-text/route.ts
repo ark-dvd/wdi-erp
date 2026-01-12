@@ -1,7 +1,7 @@
 // ============================================
 // src/app/api/extract-text/route.ts
-// Version: 20260111-220000
-// Fixed: proper try/catch structure with auth
+// Version: 20260112-004500
+// Note: POST has no auth - called internally by events API
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -10,11 +10,7 @@ import { extractTextFromFile, supportsTextExtraction } from '@/lib/text-extracti
 import { auth } from '@/lib/auth';
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
+  // No auth check - this is called internally by the events API after file upload
   try {
     const { fileId } = await request.json();
 
