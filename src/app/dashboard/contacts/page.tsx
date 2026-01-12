@@ -1,12 +1,12 @@
 'use client'
 
 // /home/user/wdi-erp/src/app/dashboard/contacts/page.tsx
-// Version: 20251219-220200
+// Version: 20260112-230000
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Plus, Eye, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star } from 'lucide-react'
+import { Search, Plus, Trash2, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star } from 'lucide-react'
 
 interface Organization {
   id: string
@@ -95,10 +95,47 @@ export default function ContactsPage() {
     else { setOrgSortField(field); setSortDirection('asc') }
   }
 
+  const handleDeleteContact = async (id: string, name: string) => {
+    if (!confirm(`האם למחוק את איש הקשר "${name}"?`)) return
+    try {
+      const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setContacts(contacts.filter(c => c.id !== id))
+      } else {
+        alert('שגיאה במחיקת איש הקשר')
+      }
+    } catch (error) {
+      console.error('Error deleting contact:', error)
+      alert('שגיאה במחיקת איש הקשר')
+    }
+  }
+
+  const handleDeleteOrg = async (id: string, name: string) => {
+    if (!confirm(`האם למחוק את הארגון "${name}"?`)) return
+    try {
+      const res = await fetch(`/api/organizations/${id}`, { method: 'DELETE' })
+      if (res.ok) {
+        setOrganizations(organizations.filter(o => o.id !== id))
+      } else {
+        alert('שגיאה במחיקת הארגון')
+      }
+    } catch (error) {
+      console.error('Error deleting organization:', error)
+      alert('שגיאה במחיקת הארגון')
+    }
+  }
+
   const formatDateTime = (date: string | null) => {
     if (!date) return '-'
     const d = new Date(date)
     return `${d.toLocaleDateString('he-IL')} ${d.toLocaleTimeString('he-IL', { hour: '2-digit', minute: '2-digit' })}`
+  }
+
+  const getUpdaterName = (updatedBy: Contact['updatedBy'] | Organization['updatedBy']) => {
+    if (!updatedBy) return ''
+    if (updatedBy.name === 'WDI Agent' || updatedBy.name === 'system') return 'WDI Agent'
+    if (updatedBy.employee) return `${updatedBy.employee.firstName} ${updatedBy.employee.lastName}`
+    return updatedBy.name || ''
   }
 
   const getActiveProjectsCount = (contact: Contact) => contact.projects?.filter(p => p.status === 'פעיל').length || 0
@@ -244,10 +281,13 @@ export default function ContactsPage() {
                 <div className="text-sm text-[#3a3a3d] flex items-center gap-1"><Phone size={14} className="text-[#8f8f96]" /><span className="tabular-nums">{contact.phone}</span></div>
                 <div className="flex flex-wrap gap-1">{contact.contactTypes?.slice(0, 2).map(type => <span key={type} className="px-2 py-0.5 bg-[#0a3161]/10 text-[#0a3161] text-xs rounded">{type}</span>)}{contact.contactTypes?.length > 2 && <span className="text-xs text-[#8f8f96]">+{contact.contactTypes.length - 2}</span>}</div>
                 <div className="text-sm text-[#3a3a3d] text-center flex items-center justify-center gap-1"><FolderKanban size={14} className="text-[#8f8f96]" />{getActiveProjectsCount(contact)}</div>
-                <div className="text-sm text-[#8f8f96]">{formatDateTime(contact.updatedAt)}</div>
+                <div className="text-sm text-[#8f8f96]">
+                  <div>{formatDateTime(contact.updatedAt)}</div>
+                  {getUpdaterName(contact.updatedBy) && <div className="text-xs">{getUpdaterName(contact.updatedBy)}</div>}
+                </div>
                 <div className="flex items-center gap-1">
-                  <Link href={`/dashboard/contacts/${contact.id}`} onClick={(e) => e.stopPropagation()} className="p-2 text-[#a7a7b0] hover:text-[#0a3161] transition-colors" title="צפייה"><Eye size={18} /></Link>
                   <Link href={`/dashboard/contacts/${contact.id}/edit`} onClick={(e) => e.stopPropagation()} className="p-2 text-[#a7a7b0] hover:text-[#0a3161] transition-colors" title="עריכה"><Edit size={18} /></Link>
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteContact(contact.id, `${contact.firstName} ${contact.lastName}`) }} className="p-2 text-[#a7a7b0] hover:text-red-600 transition-colors" title="מחיקה"><Trash2 size={18} /></button>
                 </div>
               </div>
             ))}
@@ -270,10 +310,13 @@ export default function ContactsPage() {
                 <div className="text-sm text-[#3a3a3d]">{org.phone || <span className="text-[#a7a7b0]">-</span>}</div>
                 <div className="text-sm text-[#3a3a3d] truncate">{org.email || <span className="text-[#a7a7b0]">-</span>}</div>
                 <div className="text-sm text-[#3a3a3d] text-center flex items-center justify-center gap-1"><User size={14} className="text-[#8f8f96]" />{org._count?.contacts || 0}</div>
-                <div className="text-sm text-[#8f8f96]">{formatDateTime(org.updatedAt)}</div>
+                <div className="text-sm text-[#8f8f96]">
+                  <div>{formatDateTime(org.updatedAt)}</div>
+                  {getUpdaterName(org.updatedBy) && <div className="text-xs">{getUpdaterName(org.updatedBy)}</div>}
+                </div>
                 <div className="flex items-center gap-1">
-                  <Link href={`/dashboard/contacts/org/${org.id}`} onClick={(e) => e.stopPropagation()} className="p-2 text-[#a7a7b0] hover:text-[#0a3161] transition-colors" title="צפייה"><Eye size={18} /></Link>
                   <Link href={`/dashboard/contacts/org/${org.id}/edit`} onClick={(e) => e.stopPropagation()} className="p-2 text-[#a7a7b0] hover:text-[#0a3161] transition-colors" title="עריכה"><Edit size={18} /></Link>
+                  <button onClick={(e) => { e.stopPropagation(); handleDeleteOrg(org.id, org.name) }} className="p-2 text-[#a7a7b0] hover:text-red-600 transition-colors" title="מחיקה"><Trash2 size={18} /></button>
                 </div>
               </div>
             ))}

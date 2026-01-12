@@ -41,6 +41,8 @@ model User {
   updatedContactProjects ContactProject[] @relation("ContactProjectUpdatedBy")
   importLogs    ImportLog[] @relation("UserImportLogs")
   individualReviews IndividualReview[] @relation("IndividualReviewReviewer")
+  createdEquipment Equipment[] @relation("EquipmentCreatedBy")
+  updatedEquipment Equipment[] @relation("EquipmentUpdatedBy")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   activityLogs  ActivityLog[] @relation("UserActivityLogs")
@@ -128,6 +130,7 @@ model Employee {
   managedProjects       ProjectManager[]
   coordinatedProjects   ProjectCoordinator[]
   assignedEquipment     Equipment[]
+  equipmentAssignments  EquipmentAssignment[] @relation("EquipmentAssignments")
   currentVehicle        Vehicle?              @relation("CurrentVehicle")
   vehicleAssignments    VehicleAssignment[]   @relation("VehicleAssignments")
   vehicleAccidents      VehicleAccident[]     @relation("EmployeeAccidents")
@@ -310,22 +313,100 @@ model EventFile {
 
 // ============ EQUIPMENT MODULE ============
 
+// ============ EQUIPMENT MODULE - Updated 12.01.2026 ============
+
+enum EquipmentType {
+  LAPTOP            // מחשב נייד
+  CHARGER           // מטען למחשב
+  DOCKING_STATION   // תחנת עגינה
+  MONITOR           // מסך
+  MOUSE             // עכבר
+  KEYBOARD          // מקלדת
+  MONITOR_ARM       // זרוע למסך
+  MEETING_ROOM_TV   // מסך/טלוויזיה חדר ישיבות
+  PRINTER           // מדפסת
+  SCANNER           // סורק
+  OTHER             // אחר
+}
+
+enum EquipmentStatus {
+  ACTIVE            // פעיל
+  INACTIVE          // מושבת
+  IN_REPAIR         // בתיקון
+  SOLD              // נמכר
+  LOST              // אבד
+}
+
 model Equipment {
-  id            String    @id @default(cuid())
-  type          String
-  manufacturer  String?
-  model         String?
-  serialNumber  String?   @unique
-  specs         String?   @db.Text
-  purchaseDate  DateTime?
-  warrantyEnd   DateTime?
-  location      String?
-  status        String    @default("פעיל")
-  assignedTo    Employee? @relation(fields: [assignedToId], references: [id])
-  assignedToId  String?
-  notes         String?   @db.Text
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                  String            @id @default(cuid())
+  
+  // Basic info
+  type                EquipmentType
+  typeOther           String?           // אם סוג = אחר
+  manufacturer        String            // יצרן
+  model               String            // דגם
+  serialNumber        String?           @unique // מספר סריאלי
+  yearOfManufacture   Int?              // שנת ייצור
+  
+  // Purchase info
+  supplier            String?           // ספק
+  purchaseDate        DateTime?         // תאריך רכישה
+  warrantyExpiry      DateTime?         // תאריך תפוגת אחריות
+  invoiceUrl          String?           // קישור לחשבונית
+  
+  // Location & Status
+  location            String?           // משרד / בית העובד / חדר ישיבות א'
+  status              EquipmentStatus   @default(ACTIVE)
+  isOfficeEquipment   Boolean           @default(false) // true = ציוד משרדי
+  
+  // Current assignment
+  currentAssigneeId   String?
+  currentAssignee     Employee?         @relation(fields: [currentAssigneeId], references: [id])
+  
+  // Screen size (for monitors, laptops, meeting room TVs)
+  screenSizeInch      Float?            // גודל מסך באינצ'ים
+  
+  // Laptop-specific fields
+  processor           String?           // מעבד
+  ramGB               Int?              // זיכרון
+  storageGB           Int?              // אחסון
+  hasTouchscreen      Boolean?          // מסך מגע
+  operatingSystem     String?           // מערכת הפעלה
+  
+  // Notes
+  notes               String?           @db.Text
+  
+  // Assignment history
+  assignments         EquipmentAssignment[]
+  
+  // Metadata
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+  createdById         String?
+  createdBy           User?             @relation("EquipmentCreatedBy", fields: [createdById], references: [id])
+  updatedById         String?
+  updatedBy           User?             @relation("EquipmentUpdatedBy", fields: [updatedById], references: [id])
+  
+  @@map("equipment")
+}
+
+model EquipmentAssignment {
+  id            String      @id @default(cuid())
+  
+  equipment     Equipment   @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  equipmentId   String
+  employee      Employee    @relation("EquipmentAssignments", fields: [employeeId], references: [id])
+  employeeId    String
+  
+  startDate     DateTime    @default(now())
+  endDate       DateTime?
+  notes         String?
+  
+  createdAt     DateTime    @default(now())
+  
+  @@index([equipmentId])
+  @@index([employeeId])
+  @@map("equipment_assignments")
 }
 
 // ============ VEHICLES MODULE ============
