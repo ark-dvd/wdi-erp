@@ -1,6 +1,6 @@
 // /home/user/wdi-erp/src/lib/duplicate-detection.ts
-// Version: 20260114-191000
-// Duplicate detection and merge utilities for Organizations and Contacts
+// Version: 20260114-220000
+// FIXED: Field names to match Prisma Schema (survivorId, mergedId, mergedSnapshot, relationsSnapshot)
 
 import { prisma } from './prisma'
 import { GoogleGenerativeAI } from '@google/generative-ai'
@@ -39,8 +39,8 @@ export interface FieldResolution {
 
 export interface MergeResult {
   success: boolean
-  masterId: string
-  deletedId: string
+  survivorId: string
+  mergedId: string
   mergeHistoryId: string
   transferredRelations: {
     contacts?: number
@@ -51,9 +51,6 @@ export interface MergeResult {
 
 // ============ TEXT UTILITIES ============
 
-/**
- * נרמול טקסט לזיהוי כפילויות
- */
 export function normalizeText(text: string): string {
   if (!text) return ''
   return text
@@ -66,17 +63,11 @@ export function normalizeText(text: string): string {
     .trim()
 }
 
-/**
- * נרמול מספר טלפון
- */
 export function normalizePhone(phone: string): string {
   if (!phone) return ''
   return phone.replace(/\D/g, '')
 }
 
-/**
- * חישוב דמיון Levenshtein
- */
 export function similarity(s1: string, s2: string): number {
   const n1 = normalizeText(s1)
   const n2 = normalizeText(s2)
@@ -127,9 +118,6 @@ interface OrganizationRecord {
   reviewCount: number
 }
 
-/**
- * מציאת מועמדים לכפילויות בארגונים
- */
 export async function findOrganizationCandidates(): Promise<DuplicateCandidate[]> {
   const organizations = await prisma.organization.findMany({
     select: {
@@ -170,9 +158,6 @@ export async function findOrganizationCandidates(): Promise<DuplicateCandidate[]
   return candidates
 }
 
-/**
- * בדיקת התאמה בין שני ארגונים
- */
 function checkOrganizationMatch(
   org1: OrganizationRecord, 
   org2: OrganizationRecord
@@ -265,9 +250,6 @@ interface ContactRecord {
   reviewCount: number
 }
 
-/**
- * מציאת מועמדים לכפילויות באנשי קשר
- */
 export async function findContactCandidates(): Promise<DuplicateCandidate[]> {
   const contacts = await prisma.contact.findMany({
     select: {
@@ -309,9 +291,6 @@ export async function findContactCandidates(): Promise<DuplicateCandidate[]> {
   return candidates
 }
 
-/**
- * בדיקת התאמה בין שני אנשי קשר
- */
 function checkContactMatch(
   c1: ContactRecord, 
   c2: ContactRecord
@@ -373,9 +352,6 @@ function checkContactMatch(
 
 // ============ GEMINI VALIDATION ============
 
-/**
- * אימות מועמד עם Gemini
- */
 export async function validateWithGemini(
   candidate: DuplicateCandidate,
   record1: any,
@@ -437,110 +413,98 @@ ${JSON.stringify(record2, null, 2)}
 
 // ============ MERGE OPERATIONS ============
 
-/**
- * מיזוג שני ארגונים
- */
 export async function mergeOrganizations(
-  masterId: string,
-  secondaryId: string,
+  survivorId: string,
+  mergedId: string,
   fieldResolutions: FieldResolution[],
   userId: string
 ): Promise<MergeResult> {
-  // שליפת הרשומות
-  const master = await prisma.organization.findUnique({
-    where: { id: masterId },
+  const survivor = await prisma.organization.findUnique({
+    where: { id: survivorId },
     include: { contacts: true }
   })
   
-  const secondary = await prisma.organization.findUnique({
-    where: { id: secondaryId },
+  const merged = await prisma.organization.findUnique({
+    where: { id: mergedId },
     include: { 
       contacts: { include: { individualReviews: true, projects: true } }
     }
   })
 
-  if (!master || !secondary) {
+  if (!survivor || !merged) {
     throw new Error('אחד הארגונים לא נמצא')
   }
 
-  // יצירת snapshot לפני מחיקה
-  const snapshot = {
-    organization: secondary,
-    contacts: secondary.contacts,
+  // Snapshots לשחזור - לפי Schema
+  const mergedSnapshot = { ...merged, contacts: undefined }
+  const relationsSnapshot = {
+    contacts: merged.contacts.map(c => ({ id: c.id, firstName: c.firstName, lastName: c.lastName })),
   }
 
-  // בניית אובייקט העדכון מתוך fieldResolutions
+  // בניית אובייקט העדכון
   const updateData: any = {}
+  const fieldResolutionsMap: Record<string, string> = {}
+  
   for (const resolution of fieldResolutions) {
+    fieldResolutionsMap[resolution.field] = resolution.source
+    
     if (resolution.field === 'contactTypes' || resolution.field === 'disciplines') {
-      // איחוד מערכים
-      const masterArr = (master as any)[resolution.field] || []
-      const secondaryArr = (secondary as any)[resolution.field] || []
-      updateData[resolution.field] = [...new Set([...masterArr, ...secondaryArr])]
+      const survivorArr = (survivor as any)[resolution.field] || []
+      const mergedArr = (merged as any)[resolution.field] || []
+      updateData[resolution.field] = [...new Set([...survivorArr, ...mergedArr])]
     } else if (resolution.field === 'notes') {
-      // שרשור הערות
-      const masterNotes = master.notes || ''
-      const secondaryNotes = secondary.notes || ''
-      if (secondaryNotes) {
-        updateData.notes = masterNotes 
-          ? `${masterNotes}\n\n--- מוזג מ-${secondary.name} (${new Date().toLocaleDateString('he-IL')}) ---\n${secondaryNotes}`
-          : secondaryNotes
+      const survivorNotes = survivor.notes || ''
+      const mergedNotes = merged.notes || ''
+      if (mergedNotes) {
+        updateData.notes = survivorNotes 
+          ? `${survivorNotes}\n\n--- מוזג מ-${merged.name} (${new Date().toLocaleDateString('he-IL')}) ---\n${mergedNotes}`
+          : mergedNotes
       }
     } else {
       updateData[resolution.field] = resolution.value
     }
   }
 
-  // עדכון updatedBy
   updateData.updatedById = userId
 
   return await prisma.$transaction(async (tx) => {
-    // 1. יצירת MergeHistory
+    // 1. יצירת MergeHistory - לפי Schema
     const mergeHistory = await tx.mergeHistory.create({
       data: {
         entityType: 'organization',
-        masterId,
-        deletedId: secondaryId,
-        deletedSnapshot: snapshot as any,
+        survivorId,
+        mergedId,
+        mergedSnapshot: mergedSnapshot as any,
+        relationsSnapshot: relationsSnapshot as any,
+        fieldResolutions: fieldResolutionsMap,
         mergedById: userId,
-        relationTransfers: {},
       }
     })
 
-    // 2. העברת אנשי קשר מהמשני ל-Master
+    // 2. העברת אנשי קשר
     const contactsTransferred = await tx.contact.updateMany({
-      where: { organizationId: secondaryId },
-      data: { organizationId: masterId }
+      where: { organizationId: mergedId },
+      data: { organizationId: survivorId }
     })
 
-    // 3. עדכון Master
+    // 3. עדכון Survivor
     await tx.organization.update({
-      where: { id: masterId },
+      where: { id: survivorId },
       data: updateData
     })
 
     // 4. חישוב דירוג מחדש
-    await recalculateOrganizationRating(tx, masterId)
+    await recalculateOrganizationRating(tx, survivorId)
 
-    // 5. מחיקת Secondary
+    // 5. מחיקת Merged
     await tx.organization.delete({
-      where: { id: secondaryId }
-    })
-
-    // 6. עדכון relationTransfers
-    await tx.mergeHistory.update({
-      where: { id: mergeHistory.id },
-      data: {
-        relationTransfers: {
-          contacts: contactsTransferred.count
-        }
-      }
+      where: { id: mergedId }
     })
 
     return {
       success: true,
-      masterId,
-      deletedId: secondaryId,
+      survivorId,
+      mergedId,
       mergeHistoryId: mergeHistory.id,
       transferredRelations: {
         contacts: contactsTransferred.count
@@ -549,18 +513,14 @@ export async function mergeOrganizations(
   })
 }
 
-/**
- * מיזוג שני אנשי קשר
- */
 export async function mergeContacts(
-  masterId: string,
-  secondaryId: string,
+  survivorId: string,
+  mergedId: string,
   fieldResolutions: FieldResolution[],
   userId: string
 ): Promise<MergeResult> {
-  // שליפת הרשומות
-  const master = await prisma.contact.findUnique({
-    where: { id: masterId },
+  const survivor = await prisma.contact.findUnique({
+    where: { id: survivorId },
     include: { 
       individualReviews: true, 
       projects: true,
@@ -568,8 +528,8 @@ export async function mergeContacts(
     }
   })
   
-  const secondary = await prisma.contact.findUnique({
-    where: { id: secondaryId },
+  const merged = await prisma.contact.findUnique({
+    where: { id: mergedId },
     include: { 
       individualReviews: true, 
       projects: true,
@@ -577,31 +537,40 @@ export async function mergeContacts(
     }
   })
 
-  if (!master || !secondary) {
+  if (!survivor || !merged) {
     throw new Error('אחד מאנשי הקשר לא נמצא')
   }
 
-  // יצירת snapshot
-  const snapshot = {
-    contact: secondary,
-    reviews: secondary.individualReviews,
-    projects: secondary.projects,
+  // Snapshots לשחזור
+  const mergedSnapshot = { 
+    ...merged, 
+    individualReviews: undefined, 
+    projects: undefined,
+    organization: undefined 
+  }
+  const relationsSnapshot = {
+    reviews: merged.individualReviews.map(r => ({ id: r.id, projectId: r.projectId })),
+    projects: merged.projects.map(p => ({ id: p.id, projectId: p.projectId, roleInProject: p.roleInProject })),
   }
 
   // בניית אובייקט העדכון
   const updateData: any = {}
+  const fieldResolutionsMap: Record<string, string> = {}
+  
   for (const resolution of fieldResolutions) {
+    fieldResolutionsMap[resolution.field] = resolution.source
+    
     if (resolution.field === 'contactTypes' || resolution.field === 'disciplines') {
-      const masterArr = (master as any)[resolution.field] || []
-      const secondaryArr = (secondary as any)[resolution.field] || []
-      updateData[resolution.field] = [...new Set([...masterArr, ...secondaryArr])]
+      const survivorArr = (survivor as any)[resolution.field] || []
+      const mergedArr = (merged as any)[resolution.field] || []
+      updateData[resolution.field] = [...new Set([...survivorArr, ...mergedArr])]
     } else if (resolution.field === 'notes') {
-      const masterNotes = master.notes || ''
-      const secondaryNotes = secondary.notes || ''
-      if (secondaryNotes) {
-        updateData.notes = masterNotes 
-          ? `${masterNotes}\n\n--- מוזג מ-${secondary.firstName} ${secondary.lastName} (${new Date().toLocaleDateString('he-IL')}) ---\n${secondaryNotes}`
-          : secondaryNotes
+      const survivorNotes = survivor.notes || ''
+      const mergedNotes = merged.notes || ''
+      if (mergedNotes) {
+        updateData.notes = survivorNotes 
+          ? `${survivorNotes}\n\n--- מוזג מ-${merged.firstName} ${merged.lastName} (${new Date().toLocaleDateString('he-IL')}) ---\n${mergedNotes}`
+          : mergedNotes
       }
     } else {
       updateData[resolution.field] = resolution.value
@@ -615,23 +584,24 @@ export async function mergeContacts(
     const mergeHistory = await tx.mergeHistory.create({
       data: {
         entityType: 'contact',
-        masterId,
-        deletedId: secondaryId,
-        deletedSnapshot: snapshot as any,
+        survivorId,
+        mergedId,
+        mergedSnapshot: mergedSnapshot as any,
+        relationsSnapshot: relationsSnapshot as any,
+        fieldResolutions: fieldResolutionsMap,
         mergedById: userId,
-        relationTransfers: {},
       }
     })
 
     // 2. העברת דירוגים
     const reviewsTransferred = await tx.individualReview.updateMany({
-      where: { contactId: secondaryId },
-      data: { contactId: masterId }
+      where: { contactId: mergedId },
+      data: { contactId: survivorId }
     })
 
     // 3. העברת שיוכי פרויקטים (בזהירות - בדיקת כפילויות)
-    const existingProjects = master.projects.map(p => p.projectId)
-    const projectsToTransfer = secondary.projects.filter(
+    const existingProjects = survivor.projects.map(p => p.projectId)
+    const projectsToTransfer = merged.projects.filter(
       p => !existingProjects.includes(p.projectId)
     )
     
@@ -639,48 +609,37 @@ export async function mergeContacts(
     for (const cp of projectsToTransfer) {
       await tx.contactProject.update({
         where: { id: cp.id },
-        data: { contactId: masterId }
+        data: { contactId: survivorId }
       })
       projectsTransferred++
     }
 
     // מחיקת שיוכים כפולים
-    const duplicateProjects = secondary.projects.filter(
+    const duplicateProjects = merged.projects.filter(
       p => existingProjects.includes(p.projectId)
     )
     for (const dp of duplicateProjects) {
       await tx.contactProject.delete({ where: { id: dp.id } })
     }
 
-    // 4. עדכון Master
+    // 4. עדכון Survivor
     await tx.contact.update({
-      where: { id: masterId },
+      where: { id: survivorId },
       data: updateData
     })
 
     // 5. חישוב דירוג מחדש
-    await recalculateContactRating(tx, masterId)
+    await recalculateContactRating(tx, survivorId)
 
-    // 6. מחיקת Secondary
+    // 6. מחיקת Merged
     await tx.contact.delete({
-      where: { id: secondaryId }
-    })
-
-    // 7. עדכון relationTransfers
-    await tx.mergeHistory.update({
-      where: { id: mergeHistory.id },
-      data: {
-        relationTransfers: {
-          reviews: reviewsTransferred.count,
-          projects: projectsTransferred
-        }
-      }
+      where: { id: mergedId }
     })
 
     return {
       success: true,
-      masterId,
-      deletedId: secondaryId,
+      survivorId,
+      mergedId,
       mergeHistoryId: mergeHistory.id,
       transferredRelations: {
         reviews: reviewsTransferred.count,
@@ -692,9 +651,6 @@ export async function mergeContacts(
 
 // ============ UNDO MERGE ============
 
-/**
- * ביטול מיזוג
- */
 export async function undoMerge(
   mergeHistoryId: string,
   userId: string
@@ -711,98 +667,93 @@ export async function undoMerge(
     throw new Error('מיזוג זה כבר בוטל')
   }
 
-  const snapshot = mergeHistory.deletedSnapshot as any
+  const mergedSnapshot = mergeHistory.mergedSnapshot as any
+  const relationsSnapshot = mergeHistory.relationsSnapshot as any
 
   return await prisma.$transaction(async (tx) => {
     let restoredId: string
 
     if (mergeHistory.entityType === 'organization') {
       // שחזור ארגון
-      const orgData = snapshot.organization
       const restored = await tx.organization.create({
         data: {
-          id: orgData.id,
-          name: orgData.name,
-          type: orgData.type,
-          phone: orgData.phone,
-          email: orgData.email,
-          website: orgData.website,
-          address: orgData.address,
-          businessId: orgData.businessId,
-          logoUrl: orgData.logoUrl,
-          notes: orgData.notes,
-          isVendor: orgData.isVendor,
-          contactTypes: orgData.contactTypes,
-          disciplines: orgData.disciplines,
-          averageRating: orgData.averageRating,
-          reviewCount: orgData.reviewCount,
+          id: mergedSnapshot.id,
+          name: mergedSnapshot.name,
+          type: mergedSnapshot.type,
+          phone: mergedSnapshot.phone,
+          email: mergedSnapshot.email,
+          website: mergedSnapshot.website,
+          address: mergedSnapshot.address,
+          businessId: mergedSnapshot.businessId,
+          logoUrl: mergedSnapshot.logoUrl,
+          notes: mergedSnapshot.notes,
+          isVendor: mergedSnapshot.isVendor,
+          contactTypes: mergedSnapshot.contactTypes,
+          disciplines: mergedSnapshot.disciplines,
+          averageRating: mergedSnapshot.averageRating,
+          reviewCount: mergedSnapshot.reviewCount,
         }
       })
       restoredId = restored.id
 
       // שחזור שיוך אנשי קשר
-      const transfers = mergeHistory.relationTransfers as any
-      if (transfers?.contacts > 0) {
-        // החזרת אנשי קשר שהועברו
-        for (const contact of snapshot.contacts || []) {
+      if (relationsSnapshot?.contacts?.length > 0) {
+        for (const contact of relationsSnapshot.contacts) {
           await tx.contact.update({
             where: { id: contact.id },
             data: { organizationId: restoredId }
-          }).catch(() => {
-            // איש קשר לא קיים - התעלם
-          })
+          }).catch(() => {})
         }
       }
     } else {
       // שחזור איש קשר
-      const contactData = snapshot.contact
       const restored = await tx.contact.create({
         data: {
-          id: contactData.id,
-          firstName: contactData.firstName,
-          lastName: contactData.lastName,
-          nickname: contactData.nickname,
-          phone: contactData.phone,
-          phoneAlt: contactData.phoneAlt,
-          email: contactData.email,
-          emailAlt: contactData.emailAlt,
-          linkedinUrl: contactData.linkedinUrl,
-          photoUrl: contactData.photoUrl,
-          organizationId: contactData.organizationId,
-          role: contactData.role,
-          department: contactData.department,
-          contactTypes: contactData.contactTypes,
-          disciplines: contactData.disciplines,
-          status: contactData.status,
-          notes: contactData.notes,
-          vendorId: contactData.vendorId,
-          averageRating: contactData.averageRating,
-          reviewCount: contactData.reviewCount,
+          id: mergedSnapshot.id,
+          firstName: mergedSnapshot.firstName,
+          lastName: mergedSnapshot.lastName,
+          nickname: mergedSnapshot.nickname,
+          phone: mergedSnapshot.phone,
+          phoneAlt: mergedSnapshot.phoneAlt,
+          email: mergedSnapshot.email,
+          emailAlt: mergedSnapshot.emailAlt,
+          linkedinUrl: mergedSnapshot.linkedinUrl,
+          photoUrl: mergedSnapshot.photoUrl,
+          organizationId: mergedSnapshot.organizationId,
+          role: mergedSnapshot.role,
+          department: mergedSnapshot.department,
+          contactTypes: mergedSnapshot.contactTypes,
+          disciplines: mergedSnapshot.disciplines,
+          status: mergedSnapshot.status,
+          notes: mergedSnapshot.notes,
+          vendorId: mergedSnapshot.vendorId,
+          averageRating: mergedSnapshot.averageRating,
+          reviewCount: mergedSnapshot.reviewCount,
         }
       })
       restoredId = restored.id
 
       // שחזור דירוגים
-      for (const review of snapshot.reviews || []) {
-        await tx.individualReview.update({
-          where: { id: review.id },
-          data: { contactId: restoredId }
-        }).catch(() => {})
+      if (relationsSnapshot?.reviews?.length > 0) {
+        for (const review of relationsSnapshot.reviews) {
+          await tx.individualReview.update({
+            where: { id: review.id },
+            data: { contactId: restoredId }
+          }).catch(() => {})
+        }
       }
 
       // שחזור שיוכי פרויקטים
-      for (const cp of snapshot.projects || []) {
-        await tx.contactProject.create({
-          data: {
-            contactId: restoredId,
-            projectId: cp.projectId,
-            roleInProject: cp.roleInProject,
-            status: cp.status,
-            startDate: cp.startDate,
-            endDate: cp.endDate,
-            notes: cp.notes,
-          }
-        }).catch(() => {})
+      if (relationsSnapshot?.projects?.length > 0) {
+        for (const cp of relationsSnapshot.projects) {
+          await tx.contactProject.create({
+            data: {
+              contactId: restoredId,
+              projectId: cp.projectId,
+              roleInProject: cp.roleInProject,
+            }
+          }).catch(() => {})
+        }
       }
 
       // חישוב דירוג מחדש

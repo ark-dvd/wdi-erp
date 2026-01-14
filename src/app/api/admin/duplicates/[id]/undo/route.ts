@@ -1,6 +1,6 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/[id]/undo/route.ts
-// Version: 20260114-191000
-// API for undoing a merge operation
+// Version: 20260114-220000
+// FIXED: Field names to match Schema (survivorId, mergedId)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -40,13 +40,13 @@ export async function POST(
       return NextResponse.json({ error: 'רק כפילויות שמוזגו ניתנות לביטול' }, { status: 400 })
     }
 
-    // מציאת MergeHistory הרלוונטי
+    // מציאת MergeHistory הרלוונטי - שמות שדות נכונים לפי Schema
     const mergeHistory = await prisma.mergeHistory.findFirst({
       where: {
         entityType: duplicateSet.entityType,
         OR: [
-          { masterId: duplicateSet.primaryId, deletedId: duplicateSet.secondaryId },
-          { masterId: duplicateSet.secondaryId, deletedId: duplicateSet.primaryId },
+          { survivorId: duplicateSet.primaryId, mergedId: duplicateSet.secondaryId },
+          { survivorId: duplicateSet.secondaryId, mergedId: duplicateSet.primaryId },
         ],
         undoneAt: null,
       },

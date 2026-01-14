@@ -1,6 +1,6 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/[id]/merge/route.ts
-// Version: 20260114-191000
-// API for merging duplicate records
+// Version: 20260114-220000
+// FIXED: Return values match new function signatures (survivorId, mergedId)
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -48,17 +48,18 @@ export async function POST(
       return NextResponse.json({ error: 'כפילות זו כבר מוזגה' }, { status: 400 })
     }
 
-    // זיהוי ה-secondary (זה שיימחק)
-    const secondaryId = masterId === duplicateSet.primaryId 
+    // masterId מה-UI הוא ה-survivor, השני הוא ה-merged
+    const survivorId = masterId
+    const mergedId = masterId === duplicateSet.primaryId 
       ? duplicateSet.secondaryId 
       : duplicateSet.primaryId
 
     // ביצוע המיזוג
     let result
     if (duplicateSet.entityType === 'organization') {
-      result = await mergeOrganizations(masterId, secondaryId, fieldResolutions, userId)
+      result = await mergeOrganizations(survivorId, mergedId, fieldResolutions, userId)
     } else {
-      result = await mergeContacts(masterId, secondaryId, fieldResolutions, userId)
+      result = await mergeContacts(survivorId, mergedId, fieldResolutions, userId)
     }
 
     // עדכון סטטוס DuplicateSet
@@ -77,12 +78,12 @@ export async function POST(
       category: 'data',
       module: 'admin',
       targetType: duplicateSet.entityType,
-      targetId: masterId,
-      targetName: `Merge: ${secondaryId} -> ${masterId}`,
+      targetId: survivorId,
+      targetName: `Merge: ${mergedId} -> ${survivorId}`,
       details: {
         action: 'merge',
-        masterId,
-        deletedId: secondaryId,
+        survivorId,
+        mergedId,
         mergeHistoryId: result.mergeHistoryId,
         transferredRelations: result.transferredRelations,
       }
@@ -90,8 +91,8 @@ export async function POST(
 
     return NextResponse.json({
       success: true,
-      masterId: result.masterId,
-      deletedId: result.deletedId,
+      survivorId: result.survivorId,
+      mergedId: result.mergedId,
       mergeHistoryId: result.mergeHistoryId,
       transferredRelations: result.transferredRelations,
       message: 'המיזוג בוצע בהצלחה'
