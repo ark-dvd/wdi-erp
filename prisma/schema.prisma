@@ -1,14 +1,10 @@
 // ================================================
 // WDI ERP - Prisma Schema
-// Version: 20260110-070000
+// Version: 20260114-163500
 // Changes: 
-//   - Added VehicleDocumentType enum
-//   - Added VehiclePhotoType enum
-//   - Added VehiclePhotoEvent enum
-//   - Added VehicleDocument model (רישיון, ביטוח, בדיקת חורף)
-//   - Added VehiclePhoto model (תמונות רכב וקבלה/מסירה)
-//   - Updated Vehicle with documents and photos relations
-//   - Updated VehicleAssignment with photos relation
+//   - Added DuplicateSet model for duplicate detection
+//   - Added MergeHistory model for merge tracking and undo
+//   - Added User relations for duplicate management
 // ================================================
 
 generator client {
@@ -43,6 +39,10 @@ model User {
   individualReviews IndividualReview[] @relation("IndividualReviewReviewer")
   createdEquipment Equipment[] @relation("EquipmentCreatedBy")
   updatedEquipment Equipment[] @relation("EquipmentUpdatedBy")
+  // Duplicate Management
+  reviewedDuplicates DuplicateSet[] @relation("DuplicateSetReviewer")
+  mergesMade        MergeHistory[] @relation("MergeHistoryMerger")
+  mergesUndone      MergeHistory[] @relation("MergeHistoryUndoer")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   activityLogs  ActivityLog[] @relation("UserActivityLogs")
@@ -834,4 +834,65 @@ model IndividualReview {
   updatedAt       DateTime @updatedAt
   
   @@unique([reviewerId, contactId, projectId])
+}
+
+// ============================================
+// DUPLICATE MANAGEMENT MODULE - 14.01.2026
+// ============================================
+
+// כפילויות מזוהות לסקירה
+model DuplicateSet {
+  id            String    @id @default(cuid())
+  entityType    String    // 'organization' | 'contact'
+  primaryId     String    // הרשומה הראשית (מועמד ל-Master)
+  secondaryId   String    // הרשומה המשנית (מועמד למיזוג)
+  
+  // ציון ונימוק מ-Gemini
+  score         Float     // ציון דמיון (0-100)
+  reason        String?   @db.Text  // נימוק מ-Gemini
+  matchType     String    // 'exact_email' | 'exact_phone' | 'exact_business_id' | 'name_similarity' | 'gemini_detected'
+  
+  // סטטוס
+  status        String    @default("pending") // 'pending' | 'approved' | 'rejected' | 'merged'
+  
+  // סקירה
+  reviewedById  String?
+  reviewedBy    User?     @relation("DuplicateSetReviewer", fields: [reviewedById], references: [id])
+  reviewedAt    DateTime?
+  reviewNotes   String?   @db.Text
+  
+  createdAt     DateTime  @default(now())
+  
+  @@unique([entityType, primaryId, secondaryId])
+  @@index([entityType, status])
+  @@index([status])
+}
+
+// היסטוריית מיזוגים (לשחזור)
+model MergeHistory {
+  id                String    @id @default(cuid())
+  entityType        String    // 'organization' | 'contact'
+  
+  // מזהים
+  survivorId        String    // הרשומה ששרדה (Master)
+  mergedId          String    // הרשומה שנמחקה
+  
+  // Snapshots לשחזור
+  mergedSnapshot    Json      // snapshot מלא של הרשומה שנמחקה
+  relationsSnapshot Json      // snapshot של קשרים (reviews, projects, contacts)
+  fieldResolutions  Json?     // איזה שדה נלקח מאיפה { phone: 'primary', email: 'secondary' }
+  
+  // מי ביצע
+  mergedById        String
+  mergedBy          User      @relation("MergeHistoryMerger", fields: [mergedById], references: [id])
+  
+  // Undo (אם בוצע)
+  undoneAt          DateTime?
+  undoneById        String?
+  undoneBy          User?     @relation("MergeHistoryUndoer", fields: [undoneById], references: [id])
+  
+  createdAt         DateTime  @default(now())
+  
+  @@index([entityType, survivorId])
+  @@index([entityType, mergedId])
 }
