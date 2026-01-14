@@ -1,4 +1,6 @@
-// Version: 20251217-230500
+// /home/user/wdi-erp/src/app/dashboard/admin/page.tsx
+// Version: 20260114-191500
+// Updated: Added Duplicate Management card
 'use client'
 
 import { useSession } from 'next-auth/react'
@@ -6,7 +8,7 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePageView } from '@/hooks/useActivityLog'
-import { Users, Activity, BarChart3, Shield, Upload } from 'lucide-react'
+import { Users, Activity, BarChart3, Shield, Upload, GitMerge } from 'lucide-react'
 
 export default function AdminConsolePage() {
   const { data: session, status } = useSession()
@@ -55,6 +57,14 @@ export default function AdminConsolePage() {
       ready: true,
     },
     {
+      title: 'ניהול כפילויות',
+      description: 'זיהוי ומיזוג רשומות כפולות בארגונים ואנשי קשר',
+      icon: GitMerge,
+      href: '/dashboard/admin/duplicates',
+      color: 'bg-orange-500',
+      ready: true,
+    },
+    {
       title: 'תפקידים והרשאות',
       description: 'הגדרת תפקידים והרשאות גישה',
       icon: Shield,
@@ -67,7 +77,7 @@ export default function AdminConsolePage() {
       description: 'סטטיסטיקות ודוחות שימוש',
       icon: BarChart3,
       href: '/dashboard/admin/analytics',
-      color: 'bg-orange-500',
+      color: 'bg-pink-500',
       ready: false,
     },
   ]
@@ -79,7 +89,7 @@ export default function AdminConsolePage() {
         <p className="text-gray-500">ניהול המערכת והרשאות</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {cards.map((card) => {
           const Icon = card.icon
           return card.ready ? (
