@@ -1,5 +1,5 @@
-// Version: 20260111-143500
-// Added: vehicles, organizations to ActivityModule
+// Version: 20260114-225500
+// Added: equipment to ActivityModule
 import { prisma } from './prisma'
 import { auth } from './auth'
 import { headers } from 'next/headers'
@@ -22,6 +22,7 @@ export type ActivityModule =
   | 'contacts' 
   | 'organizations'
   | 'vehicles'
+  | 'equipment'
   | 'vendor-rating' 
   | 'agent' 
   | 'admin' 
