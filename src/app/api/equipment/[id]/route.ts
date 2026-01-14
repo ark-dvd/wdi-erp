@@ -1,7 +1,8 @@
 // ============================================
 // src/app/api/equipment/[id]/route.ts
-// Version: 20260112-235000
+// Version: 20260114-225000
 // Equipment module - single item API
+// FIXED: Import labels from lib instead of route
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -9,7 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
-import { equipmentTypeLabels, equipmentStatusLabels } from '../route'
+import { equipmentTypeLabels, equipmentStatusLabels } from '@/lib/equipment-labels'
 
 export async function GET(
   request: NextRequest,
