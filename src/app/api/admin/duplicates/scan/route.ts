@@ -1,6 +1,6 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/scan/route.ts
-// Version: 20260114-191000
-// API for scanning and detecting duplicates
+// Version: 20260114-223000
+// FIXED: N+1 query issue - pre-fetch all records into Maps
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -39,6 +39,12 @@ export async function POST(request: NextRequest) {
       results.organizations.scanned = await prisma.organization.count()
       results.organizations.candidates = orgCandidates.length
 
+      // Pre-fetch all organizations into Map (N+1 fix)
+      const allOrgs = await prisma.organization.findMany({
+        select: { id: true, name: true, phone: true, email: true, businessId: true, website: true, address: true }
+      })
+      const orgMap = new Map(allOrgs.map(o => [o.id, o]))
+
       for (const candidate of orgCandidates) {
         // בדיקה אם כבר קיים DuplicateSet לזוג הזה
         const existing = await prisma.duplicateSet.findFirst({
@@ -59,14 +65,8 @@ export async function POST(request: NextRequest) {
         let geminiReason = null
 
         if (useGemini && candidate.algorithmScore < 100) {
-          const org1 = await prisma.organization.findUnique({ 
-            where: { id: candidate.primaryId },
-            select: { name: true, phone: true, email: true, businessId: true, website: true, address: true }
-          })
-          const org2 = await prisma.organization.findUnique({ 
-            where: { id: candidate.secondaryId },
-            select: { name: true, phone: true, email: true, businessId: true, website: true, address: true }
-          })
+          const org1 = orgMap.get(candidate.primaryId)
+          const org2 = orgMap.get(candidate.secondaryId)
 
           if (org1 && org2) {
             const geminiResult = await validateWithGemini(candidate, org1, org2)
@@ -106,6 +106,15 @@ export async function POST(request: NextRequest) {
       results.contacts.scanned = await prisma.contact.count()
       results.contacts.candidates = contactCandidates.length
 
+      // Pre-fetch all contacts into Map (N+1 fix)
+      const allContacts = await prisma.contact.findMany({
+        select: { 
+          id: true, firstName: true, lastName: true, phone: true, email: true, 
+          role: true, organization: { select: { name: true } } 
+        }
+      })
+      const contactMap = new Map(allContacts.map(c => [c.id, c]))
+
       for (const candidate of contactCandidates) {
         // בדיקה אם כבר קיים
         const existing = await prisma.duplicateSet.findFirst({
@@ -125,20 +134,8 @@ export async function POST(request: NextRequest) {
         let geminiReason = null
 
         if (useGemini && candidate.algorithmScore < 100) {
-          const c1 = await prisma.contact.findUnique({ 
-            where: { id: candidate.primaryId },
-            select: { 
-              firstName: true, lastName: true, phone: true, email: true, 
-              role: true, organization: { select: { name: true } } 
-            }
-          })
-          const c2 = await prisma.contact.findUnique({ 
-            where: { id: candidate.secondaryId },
-            select: { 
-              firstName: true, lastName: true, phone: true, email: true, 
-              role: true, organization: { select: { name: true } } 
-            }
-          })
+          const c1 = contactMap.get(candidate.primaryId)
+          const c2 = contactMap.get(candidate.secondaryId)
 
           if (c1 && c2) {
             const geminiResult = await validateWithGemini(candidate, c1, c2)
