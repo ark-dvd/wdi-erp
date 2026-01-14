@@ -1,7 +1,8 @@
 // ============================================
 // src/app/dashboard/equipment/[id]/edit/page.tsx
-// Version: 20260112-235000
+// Version: 20260114-230000
 // Equipment edit page
+// FIXED: Added null check for params
 // ============================================
 
 'use client'
@@ -71,9 +72,13 @@ export default function EditEquipmentPage() {
   const [invoiceFile, setInvoiceFile] = useState<File | null>(null)
   const [uploading, setUploading] = useState(false)
 
+  const id = params?.id as string
+
   useEffect(() => {
+    if (!id) return
+    
     Promise.all([
-      fetch(`/api/equipment/${params.id}`).then(r => r.json()),
+      fetch(`/api/equipment/${id}`).then(r => r.json()),
       fetch('/api/hr').then(r => r.json())
     ]).then(([equipData, empData]) => {
       setEquipment(equipData)
@@ -84,7 +89,7 @@ export default function EditEquipmentPage() {
     }).catch(() => {
       router.push('/dashboard/equipment')
     })
-  }, [params.id])
+  }, [id, router])
 
   const isScreenType = ['LAPTOP', 'MONITOR', 'MEETING_ROOM_TV'].includes(selectedType)
   const isLaptop = selectedType === 'LAPTOP'
@@ -115,6 +120,8 @@ export default function EditEquipmentPage() {
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
+    if (!id) return
+    
     setSaving(true)
     setError(null)
 
@@ -131,14 +138,14 @@ export default function EditEquipmentPage() {
     }
 
     try {
-      const res = await fetch(`/api/equipment/${params.id}`, {
+      const res = await fetch(`/api/equipment/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       })
 
       if (res.ok) {
-        router.push(`/dashboard/equipment/${params.id}`)
+        router.push(`/dashboard/equipment/${id}`)
       } else {
         const errorData = await res.json()
         setError(errorData.error || 'שגיאה בעדכון הציוד')
@@ -150,13 +157,13 @@ export default function EditEquipmentPage() {
     }
   }
 
-  if (loading || !equipment) {
+  if (!id || loading || !equipment) {
     return <div className="p-8 text-center">טוען...</div>
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto">
-      <Link href={`/dashboard/equipment/${params.id}`} className="text-[#0a3161] text-sm flex items-center gap-1 mb-4 hover:underline">
+      <Link href={`/dashboard/equipment/${id}`} className="text-[#0a3161] text-sm flex items-center gap-1 mb-4 hover:underline">
         <ArrowRight size={14} /> חזרה לפרטי הציוד
       </Link>
 
@@ -330,7 +337,7 @@ export default function EditEquipmentPage() {
 
         {/* Actions */}
         <div className="flex gap-4 justify-end">
-          <Link href={`/dashboard/equipment/${params.id}`} className="px-6 py-2 border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8]">ביטול</Link>
+          <Link href={`/dashboard/equipment/${id}`} className="px-6 py-2 border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8]">ביטול</Link>
           <button type="submit" disabled={saving || uploading} className="px-6 py-2 bg-[#0a3161] text-white rounded-lg hover:bg-[#0a3161]/90 disabled:opacity-50 flex items-center gap-2">
             <Save size={16} />{saving ? 'שומר...' : 'שמור שינויים'}
           </button>
