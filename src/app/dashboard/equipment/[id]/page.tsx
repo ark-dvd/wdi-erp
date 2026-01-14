@@ -1,7 +1,8 @@
 // ============================================
 // src/app/dashboard/equipment/[id]/page.tsx
-// Version: 20260112-235000
+// Version: 20260114-230500
 // Equipment detail page
+// FIXED: Added null check for params
 // ============================================
 
 'use client'
@@ -139,15 +140,17 @@ export default function EquipmentDetailPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
 
+  const id = params?.id as string
+
   useEffect(() => {
-    if (params.id) {
+    if (id) {
       fetchEquipment()
     }
-  }, [params.id])
+  }, [id])
 
   const fetchEquipment = async () => {
     try {
-      const res = await fetch(`/api/equipment/${params.id}`)
+      const res = await fetch(`/api/equipment/${id}`)
       if (res.ok) {
         setEquipment(await res.json())
       } else {
@@ -208,7 +211,7 @@ export default function EquipmentDetailPage() {
     }
   }
 
-  if (loading) {
+  if (!id || loading) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-[#0a3161]" /></div>
   }
 
