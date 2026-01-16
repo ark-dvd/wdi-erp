@@ -1,5 +1,6 @@
 // /home/user/wdi-erp/src/lib/duplicate-detection.ts
-// Version: 20260114-220000
+// Version: 20260115-000000
+// FIXED: Set spread for ES5 compatibility - using Array.from()
 // FIXED: Field names to match Prisma Schema (survivorId, mergedId, mergedSnapshot, relationsSnapshot)
 
 import { prisma } from './prisma'
@@ -451,7 +452,7 @@ export async function mergeOrganizations(
     if (resolution.field === 'contactTypes' || resolution.field === 'disciplines') {
       const survivorArr = (survivor as any)[resolution.field] || []
       const mergedArr = (merged as any)[resolution.field] || []
-      updateData[resolution.field] = [...new Set([...survivorArr, ...mergedArr])]
+      updateData[resolution.field] = Array.from(new Set([...survivorArr, ...mergedArr]))
     } else if (resolution.field === 'notes') {
       const survivorNotes = survivor.notes || ''
       const mergedNotes = merged.notes || ''
@@ -563,7 +564,7 @@ export async function mergeContacts(
     if (resolution.field === 'contactTypes' || resolution.field === 'disciplines') {
       const survivorArr = (survivor as any)[resolution.field] || []
       const mergedArr = (merged as any)[resolution.field] || []
-      updateData[resolution.field] = [...new Set([...survivorArr, ...mergedArr])]
+      updateData[resolution.field] = Array.from(new Set([...survivorArr, ...mergedArr]))
     } else if (resolution.field === 'notes') {
       const survivorNotes = survivor.notes || ''
       const mergedNotes = merged.notes || ''
