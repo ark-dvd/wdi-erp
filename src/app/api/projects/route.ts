@@ -1,4 +1,4 @@
-// Version: 20260114-234000
+// Version: 20260114-235500
 // FIXED: N+1 query in addManagersToProject - using createMany
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -69,9 +69,6 @@ async function addManagersToProject(projectId: string, managerIds: string[]) {
       employeeId,
     })),
   })
-}
-  if (!managerIds || managerIds.length === 0) return
-  
 }
 
 export async function GET(request: Request) {
