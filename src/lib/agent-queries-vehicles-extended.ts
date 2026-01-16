@@ -707,16 +707,4 @@ function formatDuration(minutes: number): string {
   return `${hours} שעות ו-${mins} דקות`;
 }
 
-// ============ EXPORTS ============
 
-export {
-  getVehicleDocuments,
-  getVehiclesWithExpiringDocuments,
-  getVehiclePhotos,
-  getVehicleHandoverPhotos,
-  getVehicleTollRoads,
-  getTollRoadStats,
-  getVehicleParkings,
-  getParkingStats,
-  getVehicleAssignments,
-};
