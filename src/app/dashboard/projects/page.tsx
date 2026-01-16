@@ -1,5 +1,8 @@
 'use client'
 
+// Version: 20260116-061500
+// Fix: Sticky table header (moved to sticky section), Pagination (50 per page)
+
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -31,6 +34,8 @@ interface Project {
 type SortField = 'projectNumber' | 'name' | 'startDate' | 'state' | 'lead' | 'updatedAt' | 'events'
 type SortDirection = 'asc' | 'desc'
 
+const ITEMS_PER_PAGE = 50
+
 export default function ProjectsPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
@@ -40,10 +45,16 @@ export default function ProjectsPage() {
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const [sortField, setSortField] = useState<SortField>('projectNumber')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
     fetchProjects()
   }, [])
+
+  // Reset page when filters change
+  useEffect(() => {
+    setPage(1)
+  }, [searchTerm, stateFilter])
 
   const fetchProjects = async () => {
     try {
@@ -147,6 +158,10 @@ export default function ProjectsPage() {
     return sortDirection === 'asc' ? comparison : -comparison
   })
 
+  // Pagination
+  const totalPages = Math.ceil(sortedProjects.length / ITEMS_PER_PAGE)
+  const paginatedProjects = sortedProjects.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
+
   const getStateClass = (state: string) => {
     switch (state) {
       case 'פעיל':
@@ -200,74 +215,54 @@ export default function ProjectsPage() {
           style={{ paddingRight: `${12 + depth * 24}px` }}
           onClick={() => router.push(`/dashboard/projects/${project.id}`)}
         >
-          {/* Expand button */}
-          <div>
-            {hasChildren && (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  toggleExpand(project.id)
-                }}
-                className="p-1 hover:bg-[#e2e4e8] rounded transition-colors"
-              >
-                {isExpanded ? (
-                  <ChevronDown size={16} className="text-[#3a3a3d]" />
-                ) : (
-                  <ChevronLeft size={16} className="text-[#3a3a3d]" />
-                )}
-              </button>
+          {/* Expand Button */}
+          <div onClick={(e) => { e.stopPropagation(); if (hasChildren) toggleExpand(project.id) }}>
+            {hasChildren ? (
+              isExpanded ? (
+                <ChevronDown size={18} className="text-[#a7a7b0] hover:text-[#0a3161]" />
+              ) : (
+                <ChevronLeft size={18} className="text-[#a7a7b0] hover:text-[#0a3161]" />
+              )
+            ) : (
+              <div className="w-[18px]" />
             )}
           </div>
 
           {/* Icon */}
           <div>{getIcon(project)}</div>
 
-          {/* Number & Name */}
+          {/* Project Name and Number */}
           <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-[#0a3161] font-semibold tabular-nums" dir="ltr">
-                {project.projectNumber}
-              </span>
-              <span className="font-medium text-[#3a3a3d] truncate">{project.name}</span>
-            </div>
+            <div className="font-medium text-[#3a3a3d] truncate">{project.name}</div>
+            <div className="text-sm text-[#8f8f96]">#{project.projectNumber}</div>
             {project.client && (
-              <p className="text-sm text-[#8f8f96] truncate">{project.client}</p>
+              <div className="text-xs text-[#a7a7b0]">{project.client}</div>
             )}
           </div>
 
           {/* Start Date */}
-          <div className="text-sm text-[#3a3a3d]">
-            {formatDate(project.startDate)}
-          </div>
+          <div className="text-sm text-[#3a3a3d]">{formatDate(project.startDate)}</div>
 
           {/* State */}
           <div>
-            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStateClass(project.state)}`}>
+            <span className={`state-badge ${getStateClass(project.state)}`}>
               {project.state}
             </span>
           </div>
 
           {/* Lead */}
           <div className="text-sm text-[#3a3a3d]">
-            {project.lead
-              ? `${project.lead.firstName} ${project.lead.lastName}`
-              : <span className="text-[#a7a7b0]">-</span>}
+            {project.lead ? `${project.lead.firstName} ${project.lead.lastName}` : '-'}
           </div>
 
           {/* Updated At */}
-          <div className="text-sm text-[#3a3a3d]">
-            {formatDateTime(project.updatedAt)}
-          </div>
+          <div className="text-sm text-[#8f8f96]">{formatDateTime(project.updatedAt)}</div>
 
           {/* Updated By */}
-          <div className="text-sm text-[#3a3a3d]">
-            {getUpdatedByName(project)}
-          </div>
+          <div className="text-sm text-[#8f8f96]">{getUpdatedByName(project)}</div>
 
-          {/* Events count */}
-          <div className="text-sm text-[#3a3a3d] text-center">
-            {project._count?.events || 0}
-          </div>
+          {/* Events Count */}
+          <div className="text-center text-sm text-[#3a3a3d]">{project._count?.events || 0}</div>
 
           {/* Actions */}
           <div className="flex items-center gap-1">
@@ -353,13 +348,10 @@ export default function ProjectsPage() {
             </select>
           </div>
         </div>
-      </div>
 
-      {/* Scrollable Table Section */}
-      <div className="flex-1 overflow-y-auto px-6 pb-6">
-        <div className="bg-white rounded-xl border border-[#e2e4e8] overflow-hidden">
-          {/* Table Header */}
-          <div className="grid grid-cols-[24px_20px_2fr_1fr_80px_1fr_1fr_1fr_80px_80px] items-center gap-3 p-3 bg-[#f5f6f8] border-b border-[#e2e4e8] text-sm text-[#3a3a3d] font-medium sticky top-0 z-10">
+        {/* Table Header - Sticky */}
+        <div className="bg-white rounded-t-xl border border-b-0 border-[#e2e4e8]">
+          <div className="grid grid-cols-[24px_20px_2fr_1fr_80px_1fr_1fr_1fr_80px_80px] items-center gap-3 p-3 bg-[#f5f6f8] text-sm text-[#3a3a3d] font-medium rounded-t-xl">
             <div></div>
             <div></div>
             <div
@@ -419,14 +411,40 @@ export default function ProjectsPage() {
             </div>
             <div>פעולות</div>
           </div>
+        </div>
+      </div>
 
+      {/* Scrollable Table Section */}
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <div className="bg-white rounded-b-xl border border-t-0 border-[#e2e4e8]">
           {/* Projects List */}
-          {sortedProjects.length === 0 ? (
+          {paginatedProjects.length === 0 ? (
             <div className="text-center py-12 text-[#8f8f96]">לא נמצאו פרויקטים</div>
           ) : (
-            sortedProjects.map((project) => renderProject(project))
+            paginatedProjects.map((project) => renderProject(project))
           )}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex justify-center items-center gap-2 mt-4">
+            <button
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="px-4 py-2 bg-white border border-[#e2e4e8] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              הקודם
+            </button>
+            <span className="px-4 py-2">עמוד {page} מתוך {totalPages}</span>
+            <button
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="px-4 py-2 bg-white border border-[#e2e4e8] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+            >
+              הבא
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )

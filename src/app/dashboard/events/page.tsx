@@ -1,12 +1,12 @@
 'use client'
 
-// Version: 20260111-180500
-// Fix: Filter params (project, type), Edit button (standard), File viewing (no download)
+// Version: 20260116-060000
+// Fix: Fetch all events, sticky table header, Pagination (50 per page)
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, FileText, ChevronDown, ChevronLeft, X, Upload, Trash2, Pencil, Eye, Download } from 'lucide-react'
+import { Plus, Search, FileText, ChevronDown, ChevronLeft, X, Upload, Trash2, Pencil } from 'lucide-react'
 
 const EVENT_TYPES = [
   { value: 'אתגר', color: 'bg-red-100 text-red-800' },
@@ -21,6 +21,8 @@ const EVENT_TYPES = [
   { value: 'אחר', color: 'bg-gray-100 text-gray-800' },
 ]
 
+const ITEMS_PER_PAGE = 50
+
 function EventsContent() {
   const searchParams = useSearchParams()
   
@@ -32,6 +34,9 @@ function EventsContent() {
   const [selectedProject, setSelectedProject] = useState(searchParams?.get('projectId') || '')
   const [selectedType, setSelectedType] = useState('')
   const [searchText, setSearchText] = useState('')
+  
+  // Pagination
+  const [page, setPage] = useState(1)
 
   const [showForm, setShowForm] = useState(false)
   const [formProject, setFormProject] = useState('')
@@ -44,6 +49,9 @@ function EventsContent() {
 
   useEffect(() => { fetchProjects() }, [])
   useEffect(() => { fetchEvents() }, [selectedProject, selectedType])
+  
+  // Reset page when filters change
+  useEffect(() => { setPage(1) }, [selectedProject, selectedType, searchText])
 
   const fetchProjects = async () => {
     const res = await fetch('/api/projects')
@@ -55,6 +63,7 @@ function EventsContent() {
     const params = new URLSearchParams()
     if (selectedProject) params.set('project', selectedProject)
     if (selectedType) params.set('type', selectedType)
+    params.set('limit', '1000')
     const res = await fetch('/api/events?' + params.toString())
     if (res.ok) {
       const data = await res.json()
@@ -125,6 +134,10 @@ function EventsContent() {
            event.project?.name?.includes(searchText) ||
            event.project?.projectNumber?.includes(searchText)
   })
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredEvents.length / ITEMS_PER_PAGE)
+  const paginatedEvents = filteredEvents.slice((page - 1) * ITEMS_PER_PAGE, page * ITEMS_PER_PAGE)
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
@@ -348,6 +361,20 @@ function EventsContent() {
             </div>
           </div>
         </div>
+        
+        {/* Table Header - Sticky */}
+        <div className="bg-white rounded-t-xl border border-b-0 border-[#e2e4e8]">
+          <div className="hidden md:grid grid-cols-[280px_130px_100px_1fr_100px_130px_100px_80px] gap-2 px-4 py-3 bg-[#f5f6f8] text-sm font-medium text-[#3a3a3d] rounded-t-xl">
+            <div>פרויקט</div>
+            <div>תאריך אירוע</div>
+            <div>סוג</div>
+            <div>תיאור</div>
+            <div>קבצים</div>
+            <div>הוזן בתאריך</div>
+            <div>הוזן ע"י</div>
+            <div>פעולות</div>
+          </div>
+        </div>
       </div>
 
       {/* Scrollable Table Section */}
@@ -357,90 +384,101 @@ function EventsContent() {
         ) : filteredEvents.length === 0 ? (
           <div className="bg-white rounded-xl border border-[#e2e4e8] text-center py-12 text-gray-500">לא נמצאו אירועים</div>
         ) : (
-          <div className="bg-white rounded-xl border border-[#e2e4e8]">
-            {/* Table Header */}
-            <div className="hidden md:grid grid-cols-[280px_130px_100px_1fr_100px_130px_100px_80px] gap-2 px-4 py-3 bg-[#f5f6f8] border-b border-[#e2e4e8] text-sm font-medium text-[#3a3a3d] sticky top-0 z-10">
-              <div>פרויקט</div>
-              <div>תאריך אירוע</div>
-              <div>סוג</div>
-              <div>תיאור</div>
-              <div>קבצים</div>
-              <div>הוזן בתאריך</div>
-              <div>הוזן ע"י</div>
-              <div>פעולות</div>
+          <>
+            <div className="bg-white rounded-b-xl border border-t-0 border-[#e2e4e8]">
+              {/* Events List */}
+              <div className="divide-y divide-[#e2e4e8]">
+                {paginatedEvents.map(event => {
+                  const isExpanded = expandedEvents[event.id]
+                  const { parts, number } = getFullProjectName(event.project)
+                  return (
+                    <div key={event.id}>
+                      <div className="grid grid-cols-1 md:grid-cols-[280px_130px_100px_1fr_100px_130px_100px_80px] gap-2 p-4 cursor-pointer hover:bg-[#f5f6f8] items-center transition-colors" onClick={() => toggleExpand(event.id)}>
+                        <div className="flex items-start gap-2">
+                          {isExpanded ? <ChevronDown size={16} className="mt-1 text-gray-400" /> : <ChevronLeft size={16} className="mt-1 text-gray-400" />}
+                          <Link href={'/dashboard/projects/' + event.project?.id} onClick={(e) => e.stopPropagation()} className="hover:underline">
+                            <div className="text-xs text-gray-500 text-right" dir="ltr">#{number}</div>
+                            <div className="font-semibold text-blue-600 text-right">{parts.join(' / ')}</div>
+                          </Link>
+                        </div>
+                        <div className="text-sm text-gray-600">{formatDateTime(event.eventDate)}</div>
+                        <div><span className={'px-2 py-1 rounded text-xs ' + getEventTypeColor(event.eventType)}>{event.eventType}</span></div>
+                        <div className="text-sm truncate">{event.description}</div>
+                        <div className="flex items-center gap-1">
+                          {event.files?.slice(0, 2).map((file: any) => {
+                            const fileUrl = '/api/file?url=' + encodeURIComponent(file.fileUrl)
+                            return file.fileType === 'image' ? (
+                              <img key={file.id} src={fileUrl} alt="" className="h-8 w-8 object-cover rounded" />
+                            ) : (
+                              <div key={file.id} className="h-8 w-8 bg-red-50 rounded flex items-center justify-center">
+                                <FileText size={14} className="text-red-500" />
+                              </div>
+                            )
+                          })}
+                          {event.files?.length > 2 && <span className="text-xs text-gray-400">+{event.files.length - 2}</span>}
+                        </div>
+                        <div className="text-sm text-gray-500">
+                          {formatDateTime(event.createdAt)}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {event.createdBy?.employee 
+                            ? event.createdBy.employee.firstName + ' ' + event.createdBy.employee.lastName
+                            : event.createdBy?.name || '-'}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <button onClick={(e) => { e.stopPropagation(); window.location.href = '/dashboard/events/' + event.id }} className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded" title="עריכה"><Pencil size={14} /></button>
+                          <button onClick={(e) => { e.stopPropagation(); if(confirm('האם למחוק את האירוע?')) handleDeleteEvent(event.id) }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="מחיקה"><Trash2 size={14} /></button>
+                        </div>
+                      </div>
+                      {isExpanded && (
+                        <div className="px-4 pb-4 pt-2 bg-gray-50 border-t">
+                          <p className="text-sm whitespace-pre-wrap mb-4">{event.description}</p>
+                          {event.files?.length > 0 && (
+                            <div className="flex flex-wrap gap-3">
+                              {event.files.map((file: any) => {
+                                const fileUrl = '/api/file?url=' + encodeURIComponent(file.fileUrl)
+                                return file.fileType === 'image' ? (
+                                  <a key={file.id} href={fileUrl} target="_blank" rel="noopener noreferrer">
+                                    <img src={fileUrl} alt="" className="h-32 w-32 object-cover rounded hover:opacity-80" />
+                                  </a>
+                                ) : (
+                                  <a key={file.id} href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-gray-100 rounded hover:bg-gray-200">
+                                    <FileText size={20} className="text-red-500" />
+                                    <span className="text-sm">{file.fileName || 'PDF'}</span>
+                                  </a>
+                                )
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
             </div>
             
-            {/* Events List */}
-            <div className="divide-y divide-[#e2e4e8]">
-              {filteredEvents.map(event => {
-                const isExpanded = expandedEvents[event.id]
-                const { parts, number } = getFullProjectName(event.project)
-                return (
-                  <div key={event.id}>
-                    <div className="grid grid-cols-1 md:grid-cols-[280px_130px_100px_1fr_100px_130px_100px_80px] gap-2 p-4 cursor-pointer hover:bg-[#f5f6f8] items-center transition-colors" onClick={() => toggleExpand(event.id)}>
-                      <div className="flex items-start gap-2">
-                        {isExpanded ? <ChevronDown size={16} className="mt-1 text-gray-400" /> : <ChevronLeft size={16} className="mt-1 text-gray-400" />}
-                        <Link href={'/dashboard/projects/' + event.project?.id} onClick={(e) => e.stopPropagation()} className="hover:underline">
-                          <div className="text-xs text-gray-500 text-right" dir="ltr">#{number}</div>
-                          <div className="font-semibold text-blue-600 text-right">{parts.join(' / ')}</div>
-                        </Link>
-                      </div>
-                      <div className="text-sm text-gray-600">{formatDateTime(event.eventDate)}</div>
-                      <div><span className={'px-2 py-1 rounded text-xs ' + getEventTypeColor(event.eventType)}>{event.eventType}</span></div>
-                      <div className="text-sm truncate">{event.description}</div>
-                      <div className="flex items-center gap-1">
-                        {event.files?.slice(0, 2).map((file: any) => {
-                          const fileUrl = '/api/file?url=' + encodeURIComponent(file.fileUrl)
-                          return file.fileType === 'image' ? (
-                            <img key={file.id} src={fileUrl} alt="" className="h-8 w-8 object-cover rounded" />
-                          ) : (
-                            <div key={file.id} className="h-8 w-8 bg-red-50 rounded flex items-center justify-center">
-                              <FileText size={14} className="text-red-500" />
-                            </div>
-                          )
-                        })}
-                        {event.files?.length > 2 && <span className="text-xs text-gray-400">+{event.files.length - 2}</span>}
-                      </div>
-                      <div className="text-sm text-gray-500">
-                        {formatDateTime(event.createdAt)}
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        {event.createdBy?.employee 
-                          ? event.createdBy.employee.firstName + ' ' + event.createdBy.employee.lastName
-                          : event.createdBy?.name || '-'}
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={(e) => { e.stopPropagation(); window.location.href = '/dashboard/events/' + event.id }} className="p-1.5 text-gray-500 hover:text-green-600 hover:bg-green-50 rounded" title="עריכה"><Pencil size={14} /></button>
-                        <button onClick={(e) => { e.stopPropagation(); if(confirm('האם למחוק את האירוע?')) handleDeleteEvent(event.id) }} className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded" title="מחיקה"><Trash2 size={14} /></button>
-                      </div>
-                    </div>
-                    {isExpanded && (
-                      <div className="px-4 pb-4 pt-2 bg-gray-50 border-t">
-                        <p className="text-sm whitespace-pre-wrap mb-4">{event.description}</p>
-                        {event.files?.length > 0 && (
-                          <div className="flex flex-wrap gap-3">
-                            {event.files.map((file: any) => {
-                              const fileUrl = '/api/file?url=' + encodeURIComponent(file.fileUrl)
-                              return file.fileType === 'image' ? (
-                                <a key={file.id} href={fileUrl} target="_blank" rel="noopener noreferrer">
-                                  <img src={fileUrl} alt="" className="h-32 w-32 object-cover rounded hover:opacity-80" />
-                                </a>
-                              ) : (
-                                <a key={file.id} href={fileUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 p-3 bg-gray-100 rounded hover:bg-gray-200">
-                                  <FileText size={20} className="text-red-500" />
-                                  <span className="text-sm">{file.fileName || 'PDF'}</span>
-                                </a>
-                              )
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </div>
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex justify-center items-center gap-2 mt-4">
+                <button
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                  className="px-4 py-2 bg-white border border-[#e2e4e8] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  הקודם
+                </button>
+                <span className="px-4 py-2">עמוד {page} מתוך {totalPages}</span>
+                <button
+                  onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  disabled={page === totalPages}
+                  className="px-4 py-2 bg-white border border-[#e2e4e8] rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                >
+                  הבא
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
