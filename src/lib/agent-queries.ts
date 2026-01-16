@@ -1,6 +1,10 @@
-// Version: 20260116-110000
-// SECURITY FIX: Removed idNumber, grossSalary from agent responses
-// Changes: Added Vehicles Extended imports, Normalizer imports
+// ================================================
+// WDI ERP - Agent Queries
+// Version: 20260116-150000
+// SECURITY: Sensitive fields redacted via agent-redaction.ts
+// MVP FINAL - Normalizer, Redaction, Data Dictionary. NORMALIZATION: All status/type fields normalized via agent-normalizer.ts
+// ================================================
+
 import { prisma } from './prisma';
 
 // ייבוא פונקציות רכבים
@@ -17,12 +21,10 @@ import {
   getVehiclesNeedingService,
 } from './agent-queries-vehicles';
 
-// ייבוא פונקציות רכבים מורחבות (חדש!)
+// ייבוא פונקציות רכבים מורחבות (ללא תמונות - Agent לשאילתות נתונים בלבד)
 import {
   getVehicleDocuments,
   getVehiclesWithExpiringDocuments,
-  getVehiclePhotos,
-  getVehicleHandoverPhotos,
   getVehicleTollRoads,
   getTollRoadStats,
   getVehicleParkings,
@@ -30,25 +32,28 @@ import {
   getVehicleAssignments,
 } from './agent-queries-vehicles-extended';
 
-// ייבוא Normalizer
+// ייבוא Normalizer - שימוש אמיתי בכל הפונקציות
 import {
   normalizeEmployeeStatus,
-  normalizeVehicleStatus,
-  normalizeEquipmentStatus,
   normalizeProjectState,
-  normalizeTicketStatus,
-  normalizeAccidentStatus,
-  normalizeEquipmentType,
-  normalizeVehicleDocumentType,
+  normalizeContactStatus,
 } from './agent-normalizer';
 
-// ================================================
-// WDI ERP - Agent Queries
-// Version: 20260111-180300
-// Changes: Added vehicles functions, searchFileContents, getFileSummary
-// ================================================
+// ייבוא Redaction - הסרת שדות רגישים
+import {
+  redactEmployeeData,
+  redactEmployeesData,
+} from './agent-redaction';
 
-// פונקציות לביצוע שאילתות בטוחות
+// ייבוא Data Dictionary
+import {
+  getSchemaCatalog,
+  getFieldInfo,
+  findFieldBySynonym,
+} from './agent-data-dictionary';
+
+
+// ============ EMPLOYEE FUNCTIONS ============
 
 export async function getEmployees(params: {
   status?: string;
@@ -57,8 +62,12 @@ export async function getEmployees(params: {
 }) {
   const where: any = {};
   
+  // **שימוש ב-normalizer**
   if (params.status && params.status !== 'all') {
-    where.status = params.status;
+    const normalizedStatus = normalizeEmployeeStatus(params.status);
+    if (normalizedStatus && normalizedStatus !== 'all') {
+      where.status = normalizedStatus;
+    }
   }
   if (params.department) {
     where.department = { contains: params.department, mode: 'insensitive' };
@@ -82,7 +91,7 @@ export async function getEmployees(params: {
       employmentPercent: true,
       startDate: true,
       birthDate: true,
-      // grossSalary: removed (sensitive)
+      // SECURITY: grossSalary, idNumber excluded
     },
     orderBy: { lastName: 'asc' },
   });
@@ -92,7 +101,6 @@ export async function getEmployees(params: {
     fullName: `${e.firstName} ${e.lastName}`,
   }));
 }
-
 export async function getEmployeeById(params: { searchTerm: string }) {
   const searchTerm = params.searchTerm.trim();
   const searchParts = searchTerm.split(/\s+/); // פיצול לפי רווחים
@@ -235,8 +243,12 @@ export async function getProjects(params: {
 }) {
   const where: any = {};
 
+  // **שימוש ב-normalizer**
   if (params.state && params.state !== 'all') {
-    where.state = params.state;
+    const normalizedState = normalizeProjectState(params.state);
+    if (normalizedState && normalizedState !== 'all') {
+      where.state = normalizedState;
+    }
   }
   if (params.category) {
     where.category = { contains: params.category, mode: 'insensitive' };
@@ -476,8 +488,12 @@ export async function countEmployees(params: {
 }) {
   const where: any = {};
   
+  // **שימוש ב-normalizer**
   if (params.status && params.status !== 'all') {
-    where.status = params.status;
+    const normalizedStatus = normalizeEmployeeStatus(params.status);
+    if (normalizedStatus && normalizedStatus !== 'all') {
+      where.status = normalizedStatus;
+    }
   }
 
   if (params.groupBy) {
@@ -502,8 +518,12 @@ export async function countProjects(params: {
 }) {
   const where: any = {};
   
+  // **שימוש ב-normalizer**
   if (params.state && params.state !== 'all') {
-    where.state = params.state;
+    const normalizedState = normalizeProjectState(params.state);
+    if (normalizedState && normalizedState !== 'all') {
+      where.state = normalizedState;
+    }
   }
 
   if (params.groupBy) {
@@ -865,8 +885,12 @@ export async function getContacts(params: {
 }) {
   const where: any = {};
   
+  // **שימוש ב-normalizer**
   if (params.status && params.status !== 'all') {
-    where.status = params.status;
+    const normalizedStatus = normalizeContactStatus(params.status);
+    if (normalizedStatus && normalizedStatus !== 'all') {
+      where.status = normalizedStatus;
+    }
   }
   if (params.discipline) {
     where.disciplines = { has: params.discipline };
@@ -1503,17 +1527,20 @@ export const functionMap: Record<string, Function> = {
   countVehicles,
   getVehiclesStats,
   getVehiclesNeedingService,
-  // Vehicles - Extended (NEW!)
+  // Vehicles - Extended
   getVehicleDocuments,
   getVehiclesWithExpiringDocuments,
-  getVehiclePhotos,
-  getVehicleHandoverPhotos,
+  // NOTE: Photo functions removed - Agent is for data queries, not file viewing
   getVehicleTollRoads,
   getTollRoadStats,
   getVehicleParkings,
   getParkingStats,
   getVehicleAssignments,
-  // File Content Search
+  // File Content Search (text extraction only, no URLs)
   searchFileContents,
   getFileSummary,
+  // Data Dictionary
+  getSchemaCatalog,
+  getFieldInfo,
+  findFieldBySynonym,
 };

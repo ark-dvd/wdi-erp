@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Agent Queries for Vehicles (Extended)
-// Version: 20260116-093000
-// Changes: Added VehicleDocument, VehiclePhoto, TollRoad, Parking functions
+// Version: 20260116-150000
+// Changes: VehicleDocument, TollRoad, Parking (NO photos), TollRoad, Parking functions
 // ================================================
 
 import { prisma } from './prisma';
@@ -155,159 +155,10 @@ export async function getVehiclesWithExpiringDocuments(params: {
  * @param eventType - סוג אירוע: HANDOVER_IN, HANDOVER_OUT, ACCIDENT, SERVICE, GENERAL
  * @param photoType - סוג תמונה: FRONT, REAR, RIGHT_SIDE, LEFT_SIDE, INTERIOR, OTHER
  */
-export async function getVehiclePhotos(params: {
-  licensePlate?: string;
-  eventType?: string;
-  photoType?: string;
-  assignmentId?: string;
-  limit?: number;
-}) {
-  const where: any = {};
-  
-  if (params.licensePlate) {
-    where.vehicle = { licensePlate: params.licensePlate };
-  }
-  
-  if (params.eventType) {
-    where.eventType = params.eventType;
-  }
-  
-  if (params.photoType) {
-    where.photoType = params.photoType;
-  }
-  
-  if (params.assignmentId) {
-    where.assignmentId = params.assignmentId;
-  }
 
-  const photos = await prisma.vehiclePhoto.findMany({
-    where,
-    include: {
-      vehicle: {
-        select: {
-          licensePlate: true,
-          manufacturer: true,
-          model: true,
-        }
-      },
-      assignment: {
-        select: {
-          employee: {
-            select: { firstName: true, lastName: true }
-          },
-          startDate: true,
-          endDate: true,
-        }
-      }
-    },
-    orderBy: { takenAt: 'desc' },
-    take: params.limit || 50,
-  });
+// NOTE: Photo functions (getVehiclePhotos, getVehicleHandoverPhotos) removed
+// Agent is for data queries, not file/image viewing
 
-  return photos.map(p => ({
-    id: p.id,
-    photoType: p.photoType,
-    photoTypeHeb: translatePhotoType(p.photoType),
-    eventType: p.eventType,
-    eventTypeHeb: translatePhotoEventType(p.eventType),
-    fileUrl: p.fileUrl,
-    fileName: p.fileName,
-    takenAt: p.takenAt,
-    notes: p.notes,
-    vehicle: {
-      licensePlate: p.vehicle.licensePlate,
-      description: `${p.vehicle.manufacturer} ${p.vehicle.model}`,
-    },
-    assignment: p.assignment ? {
-      employee: `${p.assignment.employee.firstName} ${p.assignment.employee.lastName}`,
-      startDate: p.assignment.startDate,
-      endDate: p.assignment.endDate,
-    } : null,
-  }));
-}
-
-/**
- * מחזיר תמונות מסירה/קבלה של רכב ספציפי
- */
-export async function getVehicleHandoverPhotos(params: {
-  licensePlate: string;
-  handoverType?: 'in' | 'out' | 'both';
-}) {
-  let eventTypes: ('HANDOVER_IN' | 'HANDOVER_OUT')[];
-  
-  if (!params.handoverType || params.handoverType === 'both') {
-    eventTypes = ['HANDOVER_IN', 'HANDOVER_OUT'];
-  } else if (params.handoverType === 'in') {
-    eventTypes = ['HANDOVER_IN'];
-  } else {
-    eventTypes = ['HANDOVER_OUT'];
-  }
-
-  const photos = await prisma.vehiclePhoto.findMany({
-    where: {
-      vehicle: { licensePlate: params.licensePlate },
-      eventType: { in: eventTypes }
-    },
-    include: {
-      assignment: {
-        select: {
-          employee: {
-            select: { firstName: true, lastName: true }
-          },
-          startDate: true,
-          endDate: true,
-        }
-      }
-    },
-    orderBy: { takenAt: 'desc' },
-  });
-
-  // קיבוץ לפי שיוך
-  const byAssignment = new Map<string, any>();
-  
-  for (const photo of photos) {
-    const key = photo.assignmentId || 'unassigned';
-    if (!byAssignment.has(key)) {
-      byAssignment.set(key, {
-        assignmentId: photo.assignmentId,
-        employee: photo.assignment 
-          ? `${photo.assignment.employee.firstName} ${photo.assignment.employee.lastName}`
-          : 'לא משויך',
-        startDate: photo.assignment?.startDate,
-        endDate: photo.assignment?.endDate,
-        handoverIn: [],
-        handoverOut: [],
-      });
-    }
-    
-    const group = byAssignment.get(key);
-    const photoData = {
-      id: photo.id,
-      photoType: photo.photoType,
-      photoTypeHeb: translatePhotoType(photo.photoType),
-      fileUrl: photo.fileUrl,
-      takenAt: photo.takenAt,
-      notes: photo.notes,
-    };
-    
-    if (photo.eventType === 'HANDOVER_IN') {
-      group.handoverIn.push(photoData);
-    } else {
-      group.handoverOut.push(photoData);
-    }
-  }
-
-  return Array.from(byAssignment.values());
-}
-
-// ============ TOLL ROADS ============
-
-/**
- * מחזיר נסיעות כביש אגרה
- * @param licensePlate - מספר רישוי (ריק = כל הרכבים)
- * @param daysBack - כמה ימים אחורה (ברירת מחדל: 30)
- * @param road - סינון לפי כביש (למשל: "כביש 6")
- */
 export async function getVehicleTollRoads(params: {
   licensePlate?: string;
   daysBack?: number;

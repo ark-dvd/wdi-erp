@@ -2,8 +2,8 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================
 // WDI ERP - Gemini Configuration
-// Version: 20260116-103000
-// Changes: Added Vehicles Extended (9 functions): Documents, Photos, TollRoads, Parking, Assignments
+// Version: 20260116-150000
+// Changes: MVP Final - No photos, Data Dictionary, Redaction (9 functions): Documents, Photos, TollRoads, Parking, Assignments
 // ================================================
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -59,40 +59,6 @@ export const agentFunctions: any[] = [
     name: 'getChildrenBirthdays',
     description: 'ימי הולדת ילדי עובדים קרובים',
     parameters: { type: 'OBJECT', properties: { days: { type: 'NUMBER', description: 'ימים קדימה (ברירת מחדל: 30)' } } },
-  },
-  {
-    name: 'countEmployeesByEducation',
-    description: 'ספירת עובדים לפי השכלה (תואר, מוסד, תחום)',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        degree: { type: 'STRING', description: 'סוג תואר' },
-        institution: { type: 'STRING', description: 'מוסד לימודים' },
-        field: { type: 'STRING', description: 'תחום לימוד' },
-      },
-    },
-  },
-  {
-    name: 'countEmployeesByCertification',
-    description: 'ספירת עובדים לפי הכשרות ותעודות',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        certification: { type: 'STRING', description: 'שם ההכשרה' },
-        issuer: { type: 'STRING', description: 'הגוף המנפיק' },
-      },
-    },
-  },
-  {
-    name: 'getEmployeesByClearance',
-    description: 'עובדים לפי סיווג ביטחוני',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        clearanceLevel: { type: 'NUMBER', description: 'רמה ספציפית (1-5)' },
-        minLevel: { type: 'NUMBER', description: 'רמה מינימלית' },
-      },
-    },
   },
   // ============ PROJECTS ============
   {
@@ -269,45 +235,6 @@ export const agentFunctions: any[] = [
     description: 'סטטיסטיקות דירוגים',
     parameters: { type: 'OBJECT', properties: {} },
   },
-  // ============ EQUIPMENT ============
-  {
-    name: 'getEquipment',
-    description: 'רשימת ציוד. סוג בעברית (מחשב נייד, מסך) או אנגלית (LAPTOP, MONITOR). סטטוס: פעיל/ACTIVE, בתיקון/IN_REPAIR',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        type: { type: 'STRING', description: 'סוג: מחשב נייד/LAPTOP, מסך/MONITOR, מטען/CHARGER וכו\'' },
-        status: { type: 'STRING', description: 'סטטוס: פעיל/ACTIVE, בתיקון/IN_REPAIR, נמכר/SOLD, אבד/LOST' },
-        employeeName: { type: 'STRING', description: 'עובד משויך' },
-        isOfficeEquipment: { type: 'BOOLEAN', description: 'ציוד משרדי בלבד' },
-      },
-    },
-  },
-  {
-    name: 'getEquipmentById',
-    description: 'פרטי ציוד לפי מספר סריאלי או דגם',
-    parameters: { type: 'OBJECT', properties: { searchTerm: { type: 'STRING' } }, required: ['searchTerm'] },
-  },
-  {
-    name: 'getEquipmentByEmployee',
-    description: 'ציוד של עובד',
-    parameters: { type: 'OBJECT', properties: { employeeName: { type: 'STRING' } }, required: ['employeeName'] },
-  },
-  {
-    name: 'countEquipment',
-    description: 'ספירת ציוד',
-    parameters: { type: 'OBJECT', properties: { groupBy: { type: 'STRING' }, status: { type: 'STRING' } } },
-  },
-  {
-    name: 'getEquipmentNeedingWarrantyRenewal',
-    description: 'ציוד שהאחריות עומדת לפוג',
-    parameters: { type: 'OBJECT', properties: { days: { type: 'NUMBER', description: 'ימים קדימה (ברירת מחדל: 30)' } } },
-  },
-  {
-    name: 'getEquipmentStats',
-    description: 'סטטיסטיקות ציוד',
-    parameters: { type: 'OBJECT', properties: {} },
-  },
   // ============ VEHICLES - BASIC ============
   {
     name: 'getVehicles',
@@ -423,31 +350,7 @@ export const agentFunctions: any[] = [
       },
     },
   },
-  {
-    name: 'getVehiclePhotos',
-    description: 'תמונות רכב. סוג אירוע: קבלה/HANDOVER_IN, מסירה/HANDOVER_OUT, תאונה/ACCIDENT',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        licensePlate: { type: 'STRING' },
-        eventType: { type: 'STRING', description: 'קבלה/HANDOVER_IN, מסירה/HANDOVER_OUT, תאונה/ACCIDENT, טיפול/SERVICE, כללי/GENERAL' },
-        photoType: { type: 'STRING', description: 'חזית/FRONT, אחור/REAR, ימין/RIGHT_SIDE, שמאל/LEFT_SIDE, פנים/INTERIOR' },
-        limit: { type: 'NUMBER' },
-      },
-    },
-  },
-  {
-    name: 'getVehicleHandoverPhotos',
-    description: 'תמונות מסירה/קבלה של רכב, מקובץ לפי עובד',
-    parameters: {
-      type: 'OBJECT',
-      properties: {
-        licensePlate: { type: 'STRING', description: 'מספר רישוי (חובה)' },
-        handoverType: { type: 'STRING', description: 'in (קבלה), out (מסירה), both (שניהם)' },
-      },
-      required: ['licensePlate'],
-    },
-  },
+  // NOTE: Photo functions removed - Agent is for data queries, not file viewing
   {
     name: 'getVehicleTollRoads',
     description: 'נסיעות כביש אגרה (כביש 6, מנהרות הכרמל)',
@@ -514,6 +417,35 @@ export const agentFunctions: any[] = [
     description: 'חיפוש חופשי בעובדים, פרויקטים ואירועים',
     parameters: { type: 'OBJECT', properties: { query: { type: 'STRING' } }, required: ['query'] },
   },
+  // ============ DATA DICTIONARY ============
+  {
+    name: 'getSchemaCatalog',
+    description: 'מחזיר את כל מבנה הסכמה - ישויות ושדות במערכת. לשימוש בשאלות כמו "מה השדות של עובד?" או "מה יש במערכת?"',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  {
+    name: 'getFieldInfo',
+    description: 'מידע על שדה ספציפי: סוג, ערכים אפשריים, תיאור. לשאלות כמו "מה זה status?" או "אילו סטטוסים יש?"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        entityName: { type: 'STRING', description: 'שם הישות: Employee, Project, Vehicle, Contact וכו\'' },
+        fieldName: { type: 'STRING', description: 'שם השדה' },
+      },
+      required: ['entityName', 'fieldName'],
+    },
+  },
+  {
+    name: 'findFieldBySynonym',
+    description: 'חיפוש שדה לפי מילה נרדפת. לשאלות כמו "מה זה משכורת?" או "איפה רואים ת.ז.?"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        synonym: { type: 'STRING', description: 'מילה לחיפוש: משכורת, ת.ז., טלפון וכו\'' },
+      },
+      required: ['synonym'],
+    },
+  },
 ];
 
 export function getGeminiModel() {
@@ -553,7 +485,6 @@ export function getGeminiModel() {
 ### עובדים:
 - getEmployees, getEmployeeById, countEmployees, getEmployeesStats
 - getUpcomingBirthdays, getChildrenBirthdays
-- countEmployeesByEducation, countEmployeesByCertification, getEmployeesByClearance
 
 ### פרויקטים:
 - getProjects, getProjectById, countProjects, getProjectsStats
@@ -566,9 +497,8 @@ export function getGeminiModel() {
 - getContacts, getContactById, getContactsByDiscipline, countContacts
 - getOrganizations, getOrganizationById
 
-### ציוד:
-- getEquipment, getEquipmentById, getEquipmentByEmployee
-- countEquipment, getEquipmentStats, getEquipmentNeedingWarrantyRenewal
+### דירוגי ספקים:
+- getVendorRatings, getTopRatedVendors, getVendorRatingStats
 
 ### רכבים - בסיסי:
 - getVehicles, getVehicleById, getVehicleByDriver
@@ -576,29 +506,42 @@ export function getGeminiModel() {
 - getVehicleAccidents, getVehicleTickets
 - countVehicles, getVehiclesStats, getVehiclesNeedingService
 
-### רכבים - מורחב (חדש!):
-- **getVehicleDocuments** - מסמכי רכב (רישיון, ביטוח, בדיקת חורף)
+### רכבים - מורחב:
+- **getVehicleDocuments** - מסמכי רכב (רישיון, ביטוח, בדיקת חורף) - סטטוס ותוקף בלבד
 - **getVehiclesWithExpiringDocuments** - רכבים עם מסמכים שפגו/עומדים לפוג
-- **getVehiclePhotos** - תמונות רכב
-- **getVehicleHandoverPhotos** - תמונות מסירה/קבלה
 - **getVehicleTollRoads** - נסיעות כביש אגרה
 - **getTollRoadStats** - סטטיסטיקות כביש אגרה
 - **getVehicleParkings** - חניות
 - **getParkingStats** - סטטיסטיקות חניה
 - **getVehicleAssignments** - היסטוריית שיוכי רכב
 
-### דירוגי ספקים:
-- getVendorRatings, getTopRatedVendors, getVendorRatingStats
+### מילון נתונים (Data Dictionary):
+- **getSchemaCatalog** - מבנה הסכמה (לשאלות "מה יש במערכת?")
+- **getFieldInfo** - מידע על שדה (לשאלות "מה זה status?")
+- **findFieldBySynonym** - חיפוש שדה לפי מילה נרדפת
 
 ### כללי:
 - searchAll
 
 ## כללים:
 - לשאלות על תוקף ביטוח/רישיון - השתמש ב-getVehicleDocuments או getVehiclesWithExpiringDocuments
-- לשאלות על תמונות רכב - השתמש ב-getVehiclePhotos או getVehicleHandoverPhotos
 - לשאלות על הוצאות כביש 6 - השתמש ב-getVehicleTollRoads או getTollRoadStats
 - לשאלות על הוצאות חניה - השתמש ב-getVehicleParkings או getParkingStats
+- לשאלות על שדות/סכמה - השתמש ב-getSchemaCatalog, getFieldInfo, findFieldBySynonym
 - אל תמציא מידע שלא קיבלת מהפונקציות!
+
+## קבצים ותמונות - חשוב!
+**האייג'נט אינו משמש לצפייה בקבצים או תמונות.**
+אם המשתמש מבקש לראות קובץ, תמונה, מסמך או URL:
+- ענה: "צפייה בקבצים ותמונות מתבצעת דרך המודול הייעודי במערכת."
+- לא מחזירים URLs לקבצים
+- לא מציגים תמונות
+- החריג: חילוץ תוכן טקסטואלי מאירועי פרויקט (searchFileContents)
+
+## שדות רגישים - לעולם לא להציג:
+- idNumber (תעודת זהות)
+- grossSalary (שכר)
+- URLs למסמכים אישיים (חוזים, רישיונות, תעודות זהות)
 `,
   });
 }
