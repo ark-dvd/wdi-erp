@@ -1,6 +1,6 @@
 // ================================================
 // WDI ERP - Agent Redaction Layer
-// Version: 20260116-130000
+// Version: 20260116-151500
 // Purpose: Central security layer - removes sensitive fields from all Agent responses
 // ================================================
 
@@ -78,7 +78,7 @@ export function redactSensitiveFieldsArray<T extends Record<string, any>>(arr: T
 export function redactEmployeeData<T extends Record<string, any>>(employee: T): any {
   if (!employee) return employee;
   
-  const result = redactSensitiveFields(employee);
+  const result: any = redactSensitiveFields(employee);
   
   // טיפול ב-spouse מקונן
   if (result.spouse && typeof result.spouse === 'object') {
