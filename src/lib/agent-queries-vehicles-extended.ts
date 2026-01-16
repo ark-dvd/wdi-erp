@@ -233,14 +233,14 @@ export async function getVehicleHandoverPhotos(params: {
   licensePlate: string;
   handoverType?: 'in' | 'out' | 'both';
 }) {
-  const eventTypes: string[] = [];
+  let eventTypes: ('HANDOVER_IN' | 'HANDOVER_OUT')[];
   
   if (!params.handoverType || params.handoverType === 'both') {
-    eventTypes.push('HANDOVER_IN', 'HANDOVER_OUT');
+    eventTypes = ['HANDOVER_IN', 'HANDOVER_OUT'];
   } else if (params.handoverType === 'in') {
-    eventTypes.push('HANDOVER_IN');
+    eventTypes = ['HANDOVER_IN'];
   } else {
-    eventTypes.push('HANDOVER_OUT');
+    eventTypes = ['HANDOVER_OUT'];
   }
 
   const photos = await prisma.vehiclePhoto.findMany({
