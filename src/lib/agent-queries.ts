@@ -1,5 +1,6 @@
-// Version: 20260114-233500
+// Version: 20260116-110000
 // SECURITY FIX: Removed idNumber, grossSalary from agent responses
+// Changes: Added Vehicles Extended imports, Normalizer imports
 import { prisma } from './prisma';
 
 // ייבוא פונקציות רכבים
@@ -15,6 +16,31 @@ import {
   getVehiclesStats,
   getVehiclesNeedingService,
 } from './agent-queries-vehicles';
+
+// ייבוא פונקציות רכבים מורחבות (חדש!)
+import {
+  getVehicleDocuments,
+  getVehiclesWithExpiringDocuments,
+  getVehiclePhotos,
+  getVehicleHandoverPhotos,
+  getVehicleTollRoads,
+  getTollRoadStats,
+  getVehicleParkings,
+  getParkingStats,
+  getVehicleAssignments,
+} from './agent-queries-vehicles-extended';
+
+// ייבוא Normalizer
+import {
+  normalizeEmployeeStatus,
+  normalizeVehicleStatus,
+  normalizeEquipmentStatus,
+  normalizeProjectState,
+  normalizeTicketStatus,
+  normalizeAccidentStatus,
+  normalizeEquipmentType,
+  normalizeVehicleDocumentType,
+} from './agent-normalizer';
 
 // ================================================
 // WDI ERP - Agent Queries
@@ -1438,6 +1464,7 @@ export async function getFileSummary(params: { fileId: string }) {
   };
 }
 
+
 // מיפוי שמות פונקציות לפונקציות בפועל
 export const functionMap: Record<string, Function> = {
   getEmployees,
@@ -1465,7 +1492,7 @@ export const functionMap: Record<string, Function> = {
   getVendorRatings,
   getTopRatedVendors,
   getVendorRatingStats,
-  // Vehicles
+  // Vehicles - Basic
   getVehicles,
   getVehicleById,
   getVehicleByDriver,
@@ -1476,6 +1503,16 @@ export const functionMap: Record<string, Function> = {
   countVehicles,
   getVehiclesStats,
   getVehiclesNeedingService,
+  // Vehicles - Extended (NEW!)
+  getVehicleDocuments,
+  getVehiclesWithExpiringDocuments,
+  getVehiclePhotos,
+  getVehicleHandoverPhotos,
+  getVehicleTollRoads,
+  getTollRoadStats,
+  getVehicleParkings,
+  getParkingStats,
+  getVehicleAssignments,
   // File Content Search
   searchFileContents,
   getFileSummary,
