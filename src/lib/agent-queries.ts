@@ -1,3 +1,5 @@
+// Version: 20260114-233500
+// SECURITY FIX: Removed idNumber, grossSalary from agent responses
 import { prisma } from './prisma';
 
 // ייבוא פונקציות רכבים
@@ -54,7 +56,7 @@ export async function getEmployees(params: {
       employmentPercent: true,
       startDate: true,
       birthDate: true,
-      grossSalary: true,
+      // grossSalary: removed (sensitive)
     },
     orderBy: { lastName: 'asc' },
   });
@@ -163,7 +165,7 @@ export async function getEmployeeById(params: { searchTerm: string }) {
   return {
     id: employee.id,
     fullName: `${employee.firstName} ${employee.lastName}`,
-    idNumber: employee.idNumber,
+    // idNumber: removed (PII)
     role: employee.role,
     department: employee.department,
     phone: employee.phone,
@@ -179,10 +181,10 @@ export async function getEmployeeById(params: { searchTerm: string }) {
     startDate: employee.startDate,
     endDate: employee.endDate,
     birthDate: employee.birthDate,
-    salary: employee.grossSalary,
+    // salary: removed (sensitive)
     spouse: employee.spouseFirstName ? {
       name: `${employee.spouseFirstName} ${employee.spouseLastName || ''}`.trim(),
-      idNumber: employee.spouseIdNumber,
+      // spouseIdNumber: removed (PII)
       birthDate: employee.spouseBirthDate,
       phone: employee.spousePhone,
       email: employee.spouseEmail,
@@ -730,7 +732,7 @@ export async function getEmployeesStats(params: {
       birthDate: true,
       role: true,
       department: true,
-      grossSalary: true,
+      // grossSalary: removed (sensitive)
       employmentType: true,
       startDate: true,
     },
@@ -760,7 +762,7 @@ export async function getEmployeesStats(params: {
     byDepartment[dept] = (byDepartment[dept] || 0) + 1;
   });
 
-  const totalSalary = employees.reduce((sum, e) => sum + (e.grossSalary || 0), 0);
+  // const totalSalary = removed (sensitive calculation)
 
   return {
     totalEmployees: employees.length,
@@ -769,8 +771,8 @@ export async function getEmployeesStats(params: {
     maxAge,
     byRole,
     byDepartment,
-    totalMonthlySalary: totalSalary,
-    averageSalary: employees.length > 0 ? Math.round(totalSalary / employees.length) : 0,
+    // totalMonthlySalary: removed (sensitive)
+    // averageSalary: removed (sensitive)
   };
 }
 

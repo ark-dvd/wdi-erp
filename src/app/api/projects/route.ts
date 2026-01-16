@@ -1,3 +1,5 @@
+// Version: 20260114-234000
+// FIXED: N+1 query in addManagersToProject - using createMany
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -60,14 +62,16 @@ async function generateBuildingNumber(parentNumber: string): Promise<string> {
 async function addManagersToProject(projectId: string, managerIds: string[]) {
   if (!managerIds || managerIds.length === 0) return
   
-  for (const managerId of managerIds) {
-    await prisma.projectManager.create({
-      data: {
-        projectId,
-        employeeId: managerId,
-      },
-    })
-  }
+  // FIXED: Use createMany instead of loop (N+1 fix)
+  await prisma.projectManager.createMany({
+    data: managerIds.map(employeeId => ({
+      projectId,
+      employeeId,
+    })),
+  })
+}
+  if (!managerIds || managerIds.length === 0) return
+  
 }
 
 export async function GET(request: Request) {

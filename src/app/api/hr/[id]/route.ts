@@ -1,13 +1,17 @@
 // ================================================
 // WDI ERP - HR [id] API Route
-// Version: 20251211-160100
-// Added: personalEmail, certifications fields
+// Version: 20260114-233000
+// SECURITY FIX: Removed idNumber/grossSalary from GET response
+// SECURITY FIX: Added role-based access for sensitive data
 // ================================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can see sensitive employee data
+const SENSITIVE_DATA_ROLES = ['founder', 'admin', 'hr_manager']
 
 export async function GET(
   request: Request,
@@ -20,6 +24,7 @@ export async function GET(
     }
 
     const { id } = await params
+    const userRole = (session.user as any)?.role
 
     const employee = await prisma.employee.findUnique({
       where: { id },
@@ -60,11 +65,20 @@ export async function GET(
       return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
     }
 
-    const response = {
-      ...employee,
+    // Build response without sensitive fields by default
+    const { idNumber, grossSalary, ...safeEmployee } = employee
+
+    const response: any = {
+      ...safeEmployee,
       children: employee.children ? JSON.parse(employee.children) : [],
       education: employee.education ? JSON.parse(employee.education) : [],
-      certifications: employee.certifications ? JSON.parse(employee.certifications) : [], // #10: הכשרות
+      certifications: employee.certifications ? JSON.parse(employee.certifications) : [],
+    }
+
+    // Only include sensitive data for authorized roles
+    if (SENSITIVE_DATA_ROLES.includes(userRole)) {
+      response.idNumber = idNumber
+      response.grossSalary = grossSalary
     }
 
     return NextResponse.json(response)
@@ -114,6 +128,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const userRole = (session.user as any)?.role
+    
+    // Only authorized roles can update employee data
+    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לעדכן נתוני עובדים' }, { status: 403 })
+    }
+
     const { id } = await params
     const data = await request.json()
 
@@ -145,7 +166,7 @@ export async function PUT(
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
       phone: data.phone || null,
       email: data.email || null,
-      personalEmail: data.personalEmail || null, // #8: אימייל אישי
+      personalEmail: data.personalEmail || null,
       address: data.address || null,
       linkedinUrl: data.linkedinUrl || null,
       spouseFirstName: data.spouseFirstName || null,
@@ -157,7 +178,7 @@ export async function PUT(
       marriageDate: data.marriageDate ? new Date(data.marriageDate) : null,
       children: data.children ? JSON.stringify(data.children) : null,
       education: data.education ? JSON.stringify(data.education) : null,
-      certifications: data.certifications ? JSON.stringify(data.certifications) : null, // #10: הכשרות
+      certifications: data.certifications ? JSON.stringify(data.certifications) : null,
       role: data.role,
       department: data.department || null,
       employmentType: data.employmentType || 'אורגני',
@@ -204,6 +225,13 @@ export async function DELETE(
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+    
+    // Only authorized roles can delete employees
+    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה למחוק עובדים' }, { status: 403 })
     }
 
     const { id } = await params
