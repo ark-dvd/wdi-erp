@@ -2,7 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================
 // WDI ERP - Gemini Configuration
-// Version: 20260116-150000
+// Version: 20260116-164000
 // Changes: MVP Final - No photos, Data Dictionary, Redaction (9 functions): Documents, Photos, TollRoads, Parking, Assignments
 // ================================================
 
@@ -446,6 +446,20 @@ export const agentFunctions: any[] = [
       required: ['synonym'],
     },
   },
+  // ============ EDUCATION & CERTIFICATIONS ============
+  {
+    name: 'getEmployeesWithEducation',
+    description: 'רשימת עובדים עם פרטי השכלה והכשרות. לשאלות על מהנדסים, הנדסאים, תארים, הכשרות, תעודות מקצועיות.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        degreeType: { type: 'STRING', description: 'סוג תואר: מהנדס, הנדסאי, תואר ראשון, תואר שני, MBA, B.Sc, M.Sc' },
+        institution: { type: 'STRING', description: 'מוסד לימודים: טכניון, אוניברסיטה, מכללה' },
+        certification: { type: 'STRING', description: 'הכשרה או תעודה מקצועית' },
+        status: { type: 'STRING', description: 'סטטוס עובד (ברירת מחדל: פעיל)' },
+      },
+    },
+  },
 ];
 
 export function getGeminiModel() {
@@ -485,6 +499,7 @@ export function getGeminiModel() {
 ### עובדים:
 - getEmployees, getEmployeeById, countEmployees, getEmployeesStats
 - getUpcomingBirthdays, getChildrenBirthdays
+- **getEmployeesWithEducation** - לשאלות על מהנדסים, הנדסאים, תארים, הכשרות
 
 ### פרויקטים:
 - getProjects, getProjectById, countProjects, getProjectsStats

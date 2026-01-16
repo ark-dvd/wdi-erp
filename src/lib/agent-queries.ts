@@ -1,6 +1,6 @@
 // ================================================
 // WDI ERP - Agent Queries
-// Version: 20260116-150000
+// Version: 20260116-164000
 // SECURITY: Sensitive fields redacted via agent-redaction.ts
 // MVP FINAL - Normalizer, Redaction, Data Dictionary. NORMALIZATION: All status/type fields normalized via agent-normalizer.ts
 // ================================================
@@ -1488,6 +1488,118 @@ export async function getFileSummary(params: { fileId: string }) {
   };
 }
 
+// ============ EDUCATION & CERTIFICATIONS ============
+
+/**
+ * מחזיר רשימת עובדים עם פרטי השכלה והכשרות
+ * מאפשר סינון לפי סוג תואר, מוסד, או הכשרה
+ */
+export async function getEmployeesWithEducation(params: {
+  degreeType?: string;      // סוג תואר: מהנדס, הנדסאי, תואר ראשון, תואר שני, MBA
+  institution?: string;     // מוסד לימודים
+  certification?: string;   // הכשרה/תעודה
+  status?: string;          // סטטוס עובד
+}) {
+  const where: any = { status: 'פעיל' };
+  
+  // סינון לפי סטטוס
+  if (params.status) {
+    const normalizedStatus = normalizeEmployeeStatus(params.status);
+    if (normalizedStatus && normalizedStatus !== 'all') {
+      where.status = normalizedStatus;
+    }
+  }
+  
+  const employees = await prisma.employee.findMany({
+    where,
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      role: true,
+      department: true,
+      education: true,
+      certifications: true,
+    },
+    orderBy: { lastName: 'asc' },
+  });
+  
+  // עיבוד התוצאות
+  const results: any[] = [];
+  
+  for (const emp of employees) {
+    let education: any[] = [];
+    let certifications: any[] = [];
+    
+    // פרסור JSON
+    if (emp.education) {
+      try { education = JSON.parse(emp.education); } catch { education = []; }
+    }
+    if (emp.certifications) {
+      try { certifications = JSON.parse(emp.certifications); } catch { certifications = []; }
+    }
+    
+    // סינון לפי סוג תואר
+    if (params.degreeType) {
+      const searchTerm = params.degreeType.toLowerCase();
+      const hasMatch = education.some((edu: any) => {
+        const degree = (edu.degree || edu.type || '').toLowerCase();
+        const field = (edu.field || edu.major || '').toLowerCase();
+        return degree.includes(searchTerm) || 
+               field.includes(searchTerm) ||
+               degree.includes('מהנדס') && searchTerm.includes('מהנדס') ||
+               degree.includes('הנדסאי') && searchTerm.includes('הנדסאי') ||
+               degree.includes('b.sc') && searchTerm.includes('תואר ראשון') ||
+               degree.includes('m.sc') && searchTerm.includes('תואר שני') ||
+               degree.includes('mba') && searchTerm.includes('mba');
+      });
+      if (!hasMatch) continue;
+    }
+    
+    // סינון לפי מוסד
+    if (params.institution) {
+      const searchTerm = params.institution.toLowerCase();
+      const hasMatch = education.some((edu: any) => {
+        const inst = (edu.institution || edu.school || '').toLowerCase();
+        return inst.includes(searchTerm);
+      });
+      if (!hasMatch) continue;
+    }
+    
+    // סינון לפי הכשרה
+    if (params.certification) {
+      const searchTerm = params.certification.toLowerCase();
+      const hasMatch = certifications.some((cert: any) => {
+        const name = (cert.name || cert.title || '').toLowerCase();
+        return name.includes(searchTerm);
+      });
+      if (!hasMatch) continue;
+    }
+    
+    results.push({
+      fullName: `${emp.firstName} ${emp.lastName}`,
+      role: emp.role,
+      department: emp.department,
+      education: education.map((edu: any) => ({
+        degree: edu.degree || edu.type,
+        field: edu.field || edu.major,
+        institution: edu.institution || edu.school,
+        year: edu.year || edu.graduationYear,
+      })),
+      certifications: certifications.map((cert: any) => ({
+        name: cert.name || cert.title,
+        issuer: cert.issuer || cert.organization,
+        year: cert.year,
+      })),
+    });
+  }
+  
+  return {
+    total: results.length,
+    employees: results,
+  };
+}
+
 
 // מיפוי שמות פונקציות לפונקציות בפועל
 export const functionMap: Record<string, Function> = {
@@ -1543,4 +1655,6 @@ export const functionMap: Record<string, Function> = {
   getSchemaCatalog,
   getFieldInfo,
   findFieldBySynonym,
+  // Education & Certifications
+  getEmployeesWithEducation,
 };
