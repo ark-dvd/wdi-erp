@@ -1,5 +1,5 @@
 // /home/user/wdi-erp/src/app/dashboard/admin/duplicates/[id]/page.tsx
-// Version: 20260117-224500
+// Version: 20260117-225500
 // Duplicate comparison and merge page
 // Fix: Changed from use(params) to useParams() for client component
 
@@ -39,7 +39,7 @@ interface DuplicateData {
 
 export default function DuplicateDetailPage() {
   const params = useParams()
-  const id = params.id as string
+  const id = (params?.id as string) || ''
   const { data: session, status: sessionStatus } = useSession()
   const router = useRouter()
   usePageView('admin')
