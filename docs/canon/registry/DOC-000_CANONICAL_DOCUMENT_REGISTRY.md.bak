@@ -1,0 +1,89 @@
+# DOC-000 — Canonical Document Registry
+
+Status: ACTIVE  
+Version: v1.0  
+Issued At: 2026-01-22.08-30 (CST)  
+Prepared by: Arik Davidi
+
+---
+
+## 1. Purpose (LOCKED)
+
+This document constitutes the sole authoritative registry of all constitutional,
+foundational, and binding documents governing the WDI ERP system.
+
+No document shall be considered canonical, binding, or enforceable unless it is
+explicitly listed and maintained in this registry.
+
+This registry is the entry point, index, and authority map of the system’s
+constitutional framework.
+
+---
+
+## 2. Scope & Authority (LOCKED)
+
+This registry governs:
+- The existence of constitutional documents
+- Their authoritative status
+- Their versioning and lifecycle
+- Their amendment, supersession, or retirement
+
+If a conflict exists between code and a registered document, the document prevails.
+If a conflict exists between two documents, the registry prevails.
+
+---
+
+## 3. Document Registry Table (LOCKED)
+
+| Document ID | Title | Status | Version | Issued At (CST) | Authority | Notes |
+|------------|-------|--------|---------|----------------|-----------|-------|
+| DOC-000 | Canonical Document Registry | ACTIVE | v1.0 | 2026-01-22.08-30 | Arik Davidi | Initial issuance |
+
+---
+
+## 4. Document Status Definitions (LOCKED)
+
+- DRAFT
+- ACTIVE
+- SUPERSEDED
+- RETIRED
+
+---
+
+## 5. Versioning Rules (LOCKED)
+
+All versions are immutable. Silent updates are forbidden.
+
+---
+
+## 6. Amendment & Change Control (LOCKED)
+
+All changes require:
+- New version
+- New timestamp (CST)
+- Registry update
+- Explicit authorization
+
+---
+
+## 7. Immutability Doctrine (LOCKED)
+
+History is preserved by design. Supersession is not erasure.
+
+---
+
+## 8. Enforcement Clause (LOCKED)
+
+All system participants are bound by this registry.
+
+---
+
+## 9. Canonical Change Log (LOCKED)
+
+| Version | Date (CST) | Change Type | Description | Authorized By |
+|--------|------------|-------------|-------------|----------------|
+| v1.0 | 2026-01-22.08-30 | Initial Issuance | First canonical issuance | Arik Davidi |
+
+---
+
+End of Document
