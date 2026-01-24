@@ -2,6 +2,7 @@
 // WDI ERP - HR API Route
 // Version: 20260124
 // FIXED: Wrap POST in transaction for atomicity
+// SECURITY: Added role-based authorization for POST
 // Security: Removed idNumber from GET response (PII)
 // ================================================
 
@@ -9,6 +10,9 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can create/modify employee data
+const SENSITIVE_DATA_ROLES = ['founder', 'admin', 'hr_manager']
 
 export async function GET() {
   try {
@@ -77,6 +81,13 @@ export async function POST(request: Request) {
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can create employees
+    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה ליצור עובדים' }, { status: 403 })
     }
 
     const data = await request.json()
