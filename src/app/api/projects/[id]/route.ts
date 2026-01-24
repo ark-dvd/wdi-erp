@@ -1,9 +1,13 @@
 // Version: 20260124
 // FIXED: Wrap PUT/DELETE in transaction for atomicity
+// SECURITY: Added role-based authorization for PUT, DELETE
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can modify/delete project data
+const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: Request,
@@ -128,6 +132,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can update projects
+    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לעדכן פרויקטים' }, { status: 403 })
+    }
+
     const { id } = await params
     const data = await request.json()
     const { managerIds, ...projectData } = data
@@ -210,6 +221,13 @@ export async function DELETE(
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can delete projects
+    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה למחוק פרויקטים' }, { status: 403 })
     }
 
     const { id } = await params

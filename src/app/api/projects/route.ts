@@ -1,10 +1,14 @@
-// Version: 20260114-235500
+// Version: 20260124
 // FIXED: N+1 query in addManagersToProject - using createMany
 // FIXED: Wrap POST in transaction to prevent orphaned records
+// SECURITY: Added role-based authorization for POST
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can create/modify project data
+const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 async function generateProjectNumber(): Promise<string> {
   let attempts = 0
@@ -158,6 +162,13 @@ export async function POST(request: Request) {
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can create projects
+    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה ליצור פרויקטים' }, { status: 403 })
     }
 
     const data = await request.json()

@@ -1,10 +1,14 @@
-// Version: 20260111-180200
+// Version: 20260124
 // Added: logCrud for CREATE, async text extraction trigger
+// SECURITY: Added role-based authorization for POST
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { supportsTextExtraction } from '@/lib/text-extraction'
+
+// Roles that can create events on projects
+const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: NextRequest,
@@ -69,6 +73,13 @@ export async function POST(
     const session = await auth()
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can create events
+    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה ליצור אירועים' }, { status: 403 })
     }
 
     const data = await request.json()
