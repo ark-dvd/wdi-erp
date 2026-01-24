@@ -1,9 +1,13 @@
-// Version: 20260111-140200
+// Version: 20260124
 // Added: logCrud for CREATE
+// SECURITY: Added role-based authorization for POST
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can create/modify organization data
+const ORGS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(request: Request) {
   try {
@@ -39,6 +43,14 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can create organizations
+    if (!ORGS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה ליצור ארגונים' }, { status: 403 })
+    }
+
     const userId = (session.user as any)?.id || null
     const data = await request.json()
     const organization = await prisma.organization.create({

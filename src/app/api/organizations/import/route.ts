@@ -1,11 +1,15 @@
 // src/app/api/organizations/import/route.ts
-// Version: 20260111-143200
+// Version: 20260124
 // Added: logCrud for bulk import
+// SECURITY: Added role-based authorization for bulk import
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Elevated roles for bulk import operations
+const ORGS_IMPORT_ROLES = ['founder', 'ceo', 'office_manager']
 
 interface OrganizationImport {
   name: string
@@ -24,6 +28,13 @@ export async function POST(request: Request) {
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only elevated roles can perform bulk imports
+    if (!ORGS_IMPORT_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לייבוא ארגונים' }, { status: 403 })
     }
 
     const userId = (session.user as any)?.id || null
