@@ -1,7 +1,6 @@
 import NextAuth from "next-auth"
 import Google from "next-auth/providers/google"
 import { prisma } from "./prisma"
-const ALLOWED_DOMAINS = ["wdi.one", "wdiglobal.com"]
 // פונקציה פנימית לתיעוד - לא תלויה ב-auth()
 async function logLogin(email: string, success: boolean, reason?: string) {
   try {
@@ -38,14 +37,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         await logLogin('unknown', false, 'no_email')
         return false
       }
-      
-      const domain = user.email.split("@")[1]
-      
-      if (!ALLOWED_DOMAINS.includes(domain)) {
-        await logLogin(user.email, false, 'domain_not_allowed')
-        return false
-      }
-      
+
       const existingUser = await prisma.user.findUnique({
         where: { email: user.email },
       })
