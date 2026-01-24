@@ -1,11 +1,15 @@
 // /home/user/wdi-erp/src/app/api/organizations/[id]/route.ts
-// Version: 20260111-140300
+// Version: 20260124
 // Added: logCrud for UPDATE, DELETE
+// SECURITY: Added role-based authorization for PUT, DELETE
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can modify/delete organization data
+const ORGS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: NextRequest,
@@ -76,6 +80,14 @@ export async function PUT(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can update organizations
+    if (!ORGS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לעדכן ארגונים' }, { status: 403 })
+    }
+
     const userId = (session.user as any)?.id || null
     const data = await request.json()
     const organization = await prisma.organization.update({
@@ -118,6 +130,13 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can delete organizations
+    if (!ORGS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה למחוק ארגונים' }, { status: 403 })
+    }
 
     // Get org info before delete for logging
     const org = await prisma.organization.findUnique({
