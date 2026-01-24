@@ -90,6 +90,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'עובד עם תעודת זהות זו כבר קיים במערכת' }, { status: 400 })
     }
 
+    // Stage 2: User must exist before Employee creation
+    if (normalizedEmail) {
+      const existingUser = await prisma.user.findUnique({
+        where: { email: normalizedEmail },
+      })
+      if (!existingUser) {
+        return NextResponse.json({ error: 'משתמש לא קיים במערכת. יש ליצור משתמש לפני יצירת עובד' }, { status: 400 })
+      }
+    }
+
     const employee = await prisma.employee.create({
       data: {
         firstName: data.firstName,
@@ -136,37 +146,12 @@ export async function POST(request: Request) {
       department: data.department
     })
 
-    // קישור ל-User
+    // Link to existing User (Stage 2: pre-existence verified above)
     if (normalizedEmail) {
-      const domain = normalizedEmail.split('@')[1]
-      
-      if (['wdi.one', 'wdiglobal.com'].includes(domain)) {
-        const existingUser = await prisma.user.findUnique({
-          where: { email: normalizedEmail },
-        })
-
-        if (existingUser) {
-          await prisma.user.update({
-            where: { email: normalizedEmail },
-            data: { employeeId: employee.id },
-          })
-        } else {
-          const defaultRole = await prisma.role.findFirst({
-            where: { name: 'employee' },
-          })
-
-          if (defaultRole) {
-            await prisma.user.create({
-              data: {
-                email: normalizedEmail,
-                name: `${data.firstName} ${data.lastName}`,
-                roleId: defaultRole.id,
-                employeeId: employee.id,
-              },
-            })
-          }
-        }
-      }
+      await prisma.user.update({
+        where: { email: normalizedEmail },
+        data: { employeeId: employee.id },
+      })
     }
 
     return NextResponse.json(employee)
