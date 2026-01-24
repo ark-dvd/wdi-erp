@@ -1,5 +1,6 @@
 // Version: 20260114-235500
 // FIXED: N+1 query in addManagersToProject - using createMany
+// FIXED: Wrap POST in transaction to prevent orphaned records
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -59,11 +60,12 @@ async function generateBuildingNumber(parentNumber: string): Promise<string> {
   return `${parentNumber}-${String(nextNum).padStart(2, '0')}`
 }
 
-async function addManagersToProject(projectId: string, managerIds: string[]) {
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function addManagersToProject(projectId: string, managerIds: string[], tx: TxClient) {
   if (!managerIds || managerIds.length === 0) return
-  
-  // FIXED: Use createMany instead of loop (N+1 fix)
-  await prisma.projectManager.createMany({
+
+  await tx.projectManager.createMany({
     data: managerIds.map(employeeId => ({
       projectId,
       employeeId,
@@ -184,144 +186,147 @@ export async function POST(request: Request) {
       projectNumber = await generateProjectNumber()
     }
 
-    const project = await prisma.project.create({
-      data: {
+    const project = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.create({
+        data: {
+          projectNumber,
+          name: projectData.name,
+          address: projectData.address || null,
+          category: projectData.category || null,
+          client: projectData.client || null,
+          phase: projectData.phase || null,
+          state: projectData.state || 'פעיל',
+          area: projectData.area ? parseFloat(String(projectData.area)) : null,
+          estimatedCost: projectData.estimatedCost ? parseFloat(String(projectData.estimatedCost)) : null,
+          startDate: projectData.startDate ? new Date(projectData.startDate) : null,
+          description: projectData.description || null,
+          projectType: projectData.projectType || 'single',
+          level: projectData.level || 'project',
+          parentId: projectData.parentId || null,
+          leadId: projectData.leadId || null,
+          services: projectData.services || [],
+          buildingTypes: projectData.buildingTypes || [],
+          deliveryMethods: projectData.deliveryMethods || [],
+        },
+      })
+
+      await logCrud('CREATE', 'projects', 'project', project.id, `${projectNumber} - ${projectData.name}`, {
         projectNumber,
-        name: projectData.name,
-        address: projectData.address || null,
-        category: projectData.category || null,
-        client: projectData.client || null,
-        phase: projectData.phase || null,
-        state: projectData.state || 'פעיל',
-        area: projectData.area ? parseFloat(String(projectData.area)) : null,
-        estimatedCost: projectData.estimatedCost ? parseFloat(String(projectData.estimatedCost)) : null,
-        startDate: projectData.startDate ? new Date(projectData.startDate) : null,
-        description: projectData.description || null,
         projectType: projectData.projectType || 'single',
         level: projectData.level || 'project',
-        parentId: projectData.parentId || null,
-        leadId: projectData.leadId || null,
-        services: projectData.services || [],
-        buildingTypes: projectData.buildingTypes || [],
-        deliveryMethods: projectData.deliveryMethods || [],
-      },
-    })
+        category: projectData.category,
+        client: projectData.client
+      })
 
-    // תיעוד יצירת פרויקט
-    await logCrud('CREATE', 'projects', 'project', project.id, `${projectNumber} - ${projectData.name}`, {
-      projectNumber,
-      projectType: projectData.projectType || 'single',
-      level: projectData.level || 'project',
-      category: projectData.category,
-      client: projectData.client
-    })
+      await addManagersToProject(project.id, managerIds, tx)
 
-    await addManagersToProject(project.id, managerIds)
+      if (projectData.projectType === 'multi' && !projectData.parentId && buildings?.length > 0) {
+        for (let i = 0; i < buildings.length; i++) {
+          const building = buildings[i]
+          const buildingNumber = `${projectNumber}-${String(i + 1).padStart(2, '0')}`
 
-    if (projectData.projectType === 'multi' && !projectData.parentId && buildings?.length > 0) {
-      for (let i = 0; i < buildings.length; i++) {
-        const building = buildings[i]
-        const buildingNumber = `${projectNumber}-${String(i + 1).padStart(2, '0')}`
-        
-        const createdBuilding = await prisma.project.create({
-          data: {
-            projectNumber: buildingNumber,
-            name: building.name || `מבנה ${i + 1}`,
-            address: building.address || projectData.address || null,
-            category: projectData.category || null,
-            client: projectData.client || null,
-            phase: projectData.phase || null,
-            state: projectData.state || 'פעיל',
-            area: building.area ? parseFloat(String(building.area)) : null,
-            estimatedCost: building.estimatedCost ? parseFloat(String(building.estimatedCost)) : null,
-            startDate: projectData.startDate ? new Date(projectData.startDate) : null,
-            description: building.description || null,
-            projectType: 'multi',
-            level: 'building',
-            parentId: project.id,
-            leadId: building.leadId || projectData.leadId || null,
-            services: building.services || projectData.services || [],
-            buildingTypes: building.buildingTypes || projectData.buildingTypes || [],
-            deliveryMethods: building.deliveryMethods || projectData.deliveryMethods || [],
-          },
-        })
+          const createdBuilding = await tx.project.create({
+            data: {
+              projectNumber: buildingNumber,
+              name: building.name || `מבנה ${i + 1}`,
+              address: building.address || projectData.address || null,
+              category: projectData.category || null,
+              client: projectData.client || null,
+              phase: projectData.phase || null,
+              state: projectData.state || 'פעיל',
+              area: building.area ? parseFloat(String(building.area)) : null,
+              estimatedCost: building.estimatedCost ? parseFloat(String(building.estimatedCost)) : null,
+              startDate: projectData.startDate ? new Date(projectData.startDate) : null,
+              description: building.description || null,
+              projectType: 'multi',
+              level: 'building',
+              parentId: project.id,
+              leadId: building.leadId || projectData.leadId || null,
+              services: building.services || projectData.services || [],
+              buildingTypes: building.buildingTypes || projectData.buildingTypes || [],
+              deliveryMethods: building.deliveryMethods || projectData.deliveryMethods || [],
+            },
+          })
 
-        await logCrud('CREATE', 'projects', 'building', createdBuilding.id, `${buildingNumber} - ${building.name || `מבנה ${i + 1}`}`, {
-          parentProject: projectNumber,
-          buildingNumber
-        })
+          await logCrud('CREATE', 'projects', 'building', createdBuilding.id, `${buildingNumber} - ${building.name || `מבנה ${i + 1}`}`, {
+            parentProject: projectNumber,
+            buildingNumber
+          })
 
-        await addManagersToProject(createdBuilding.id, building.managerIds)
+          await addManagersToProject(createdBuilding.id, building.managerIds, tx)
+        }
       }
-    }
 
-    if (projectData.projectType === 'mega' && !projectData.parentId && quarters?.length > 0) {
-      for (let qIndex = 0; qIndex < quarters.length; qIndex++) {
-        const quarter = quarters[qIndex]
-        const quarterLetter = String.fromCharCode(65 + qIndex)
-        const quarterNumber = `${projectNumber}-${quarterLetter}`
+      if (projectData.projectType === 'mega' && !projectData.parentId && quarters?.length > 0) {
+        for (let qIndex = 0; qIndex < quarters.length; qIndex++) {
+          const quarter = quarters[qIndex]
+          const quarterLetter = String.fromCharCode(65 + qIndex)
+          const quarterNumber = `${projectNumber}-${quarterLetter}`
 
-        const createdQuarter = await prisma.project.create({
-          data: {
-            projectNumber: quarterNumber,
-            name: quarter.name || `אזור ${quarterLetter}`,
-            address: quarter.address || projectData.address || null,
-            category: projectData.category || null,
-            client: projectData.client || null,
-            phase: projectData.phase || null,
-            state: projectData.state || 'פעיל',
-            estimatedCost: quarter.estimatedCost ? parseFloat(String(quarter.estimatedCost)) : null,
-            projectType: 'mega',
-            level: 'quarter',
-            parentId: project.id,
-            leadId: quarter.leadId || projectData.leadId || null,
-          },
-        })
+          const createdQuarter = await tx.project.create({
+            data: {
+              projectNumber: quarterNumber,
+              name: quarter.name || `אזור ${quarterLetter}`,
+              address: quarter.address || projectData.address || null,
+              category: projectData.category || null,
+              client: projectData.client || null,
+              phase: projectData.phase || null,
+              state: projectData.state || 'פעיל',
+              estimatedCost: quarter.estimatedCost ? parseFloat(String(quarter.estimatedCost)) : null,
+              projectType: 'mega',
+              level: 'quarter',
+              parentId: project.id,
+              leadId: quarter.leadId || projectData.leadId || null,
+            },
+          })
 
-        await logCrud('CREATE', 'projects', 'quarter', createdQuarter.id, `${quarterNumber} - ${quarter.name || `אזור ${quarterLetter}`}`, {
-          parentProject: projectNumber,
-          quarterNumber
-        })
+          await logCrud('CREATE', 'projects', 'quarter', createdQuarter.id, `${quarterNumber} - ${quarter.name || `אזור ${quarterLetter}`}`, {
+            parentProject: projectNumber,
+            quarterNumber
+          })
 
-        await addManagersToProject(createdQuarter.id, quarter.managerIds)
+          await addManagersToProject(createdQuarter.id, quarter.managerIds, tx)
 
-        if (quarter.buildings?.length > 0) {
-          for (let bIndex = 0; bIndex < quarter.buildings.length; bIndex++) {
-            const building = quarter.buildings[bIndex]
-            const buildingNumber = `${quarterNumber}-${String(bIndex + 1).padStart(2, '0')}`
+          if (quarter.buildings?.length > 0) {
+            for (let bIndex = 0; bIndex < quarter.buildings.length; bIndex++) {
+              const building = quarter.buildings[bIndex]
+              const buildingNumber = `${quarterNumber}-${String(bIndex + 1).padStart(2, '0')}`
 
-            const createdBuilding = await prisma.project.create({
-              data: {
-                projectNumber: buildingNumber,
-                name: building.name || `מבנה ${bIndex + 1}`,
-                address: building.address || quarter.address || projectData.address || null,
-                category: projectData.category || null,
-                client: projectData.client || null,
-                phase: projectData.phase || null,
-                state: projectData.state || 'פעיל',
-                area: building.area ? parseFloat(String(building.area)) : null,
-                estimatedCost: building.estimatedCost ? parseFloat(String(building.estimatedCost)) : null,
-                description: building.description || null,
-                projectType: 'mega',
-                level: 'building',
-                parentId: createdQuarter.id,
-                leadId: building.leadId || quarter.leadId || projectData.leadId || null,
-                services: building.services || projectData.services || [],
-                buildingTypes: building.buildingTypes || [],
-                deliveryMethods: building.deliveryMethods || [],
-              },
-            })
+              const createdBuilding = await tx.project.create({
+                data: {
+                  projectNumber: buildingNumber,
+                  name: building.name || `מבנה ${bIndex + 1}`,
+                  address: building.address || quarter.address || projectData.address || null,
+                  category: projectData.category || null,
+                  client: projectData.client || null,
+                  phase: projectData.phase || null,
+                  state: projectData.state || 'פעיל',
+                  area: building.area ? parseFloat(String(building.area)) : null,
+                  estimatedCost: building.estimatedCost ? parseFloat(String(building.estimatedCost)) : null,
+                  description: building.description || null,
+                  projectType: 'mega',
+                  level: 'building',
+                  parentId: createdQuarter.id,
+                  leadId: building.leadId || quarter.leadId || projectData.leadId || null,
+                  services: building.services || projectData.services || [],
+                  buildingTypes: building.buildingTypes || [],
+                  deliveryMethods: building.deliveryMethods || [],
+                },
+              })
 
-            await logCrud('CREATE', 'projects', 'building', createdBuilding.id, `${buildingNumber} - ${building.name || `מבנה ${bIndex + 1}`}`, {
-              parentQuarter: quarterNumber,
-              buildingNumber
-            })
+              await logCrud('CREATE', 'projects', 'building', createdBuilding.id, `${buildingNumber} - ${building.name || `מבנה ${bIndex + 1}`}`, {
+                parentQuarter: quarterNumber,
+                buildingNumber
+              })
 
-            await addManagersToProject(createdBuilding.id, building.managerIds)
+              await addManagersToProject(createdBuilding.id, building.managerIds, tx)
+            }
           }
         }
       }
-    }
+
+      return project
+    })
 
     return NextResponse.json(project)
   } catch (error) {
