@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260111-211000
-// Added: updatedAt, updatedBy for list view
+// Version: 20260124
+// FIXED: Wrap POST in transaction for atomicity
 // Security: Removed idNumber from GET response (PII)
 // ================================================
 
@@ -100,44 +100,56 @@ export async function POST(request: Request) {
       }
     }
 
-    const employee = await prisma.employee.create({
-      data: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        idNumber: data.idNumber,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
-        phone: data.phone || null,
-        email: normalizedEmail,
-        personalEmail: data.personalEmail || null, // #8: אימייל אישי
-        address: data.address || null,
-        linkedinUrl: data.linkedinUrl || null,
-        spouseFirstName: data.spouseFirstName || null,
-        spouseLastName: data.spouseLastName || null,
-        spouseIdNumber: data.spouseIdNumber || null,
-        spouseBirthDate: data.spouseBirthDate ? new Date(data.spouseBirthDate) : null,
-        spousePhone: data.spousePhone || null,
-        spouseEmail: data.spouseEmail || null,
-        marriageDate: data.marriageDate ? new Date(data.marriageDate) : null,
-        children: data.children ? JSON.stringify(data.children) : null,
-        education: data.education ? JSON.stringify(data.education) : null,
-        certifications: data.certifications ? JSON.stringify(data.certifications) : null, // #10: הכשרות
-        role: data.role,
-        department: data.department || null,
-        employmentType: data.employmentType || 'אורגני',
-        employeeCategory: data.employeeCategory || null,
-        employmentPercent: data.employmentPercent || null,
-        startDate: data.startDate ? new Date(data.startDate) : null,
-        endDate: data.endDate ? new Date(data.endDate) : null,
-        grossSalary: data.grossSalary || null,
-        status: data.status || 'פעיל',
-        securityClearance: data.securityClearance || null,
-        photoUrl: data.photoUrl || null,
-        idCardFileUrl: data.idCardFileUrl || null,
-        idCardSpouseFileUrl: data.idCardSpouseFileUrl || null,
-        driversLicenseFileUrl: data.driversLicenseFileUrl || null,
-        contractFileUrl: data.contractFileUrl || null,
-        // Note: Employee model doesn't have updatedById in schema
-      },
+    const employee = await prisma.$transaction(async (tx) => {
+      const employee = await tx.employee.create({
+        data: {
+          firstName: data.firstName,
+          lastName: data.lastName,
+          idNumber: data.idNumber,
+          birthDate: data.birthDate ? new Date(data.birthDate) : null,
+          phone: data.phone || null,
+          email: normalizedEmail,
+          personalEmail: data.personalEmail || null, // #8: אימייל אישי
+          address: data.address || null,
+          linkedinUrl: data.linkedinUrl || null,
+          spouseFirstName: data.spouseFirstName || null,
+          spouseLastName: data.spouseLastName || null,
+          spouseIdNumber: data.spouseIdNumber || null,
+          spouseBirthDate: data.spouseBirthDate ? new Date(data.spouseBirthDate) : null,
+          spousePhone: data.spousePhone || null,
+          spouseEmail: data.spouseEmail || null,
+          marriageDate: data.marriageDate ? new Date(data.marriageDate) : null,
+          children: data.children ? JSON.stringify(data.children) : null,
+          education: data.education ? JSON.stringify(data.education) : null,
+          certifications: data.certifications ? JSON.stringify(data.certifications) : null, // #10: הכשרות
+          role: data.role,
+          department: data.department || null,
+          employmentType: data.employmentType || 'אורגני',
+          employeeCategory: data.employeeCategory || null,
+          employmentPercent: data.employmentPercent || null,
+          startDate: data.startDate ? new Date(data.startDate) : null,
+          endDate: data.endDate ? new Date(data.endDate) : null,
+          grossSalary: data.grossSalary || null,
+          status: data.status || 'פעיל',
+          securityClearance: data.securityClearance || null,
+          photoUrl: data.photoUrl || null,
+          idCardFileUrl: data.idCardFileUrl || null,
+          idCardSpouseFileUrl: data.idCardSpouseFileUrl || null,
+          driversLicenseFileUrl: data.driversLicenseFileUrl || null,
+          contractFileUrl: data.contractFileUrl || null,
+          // Note: Employee model doesn't have updatedById in schema
+        },
+      })
+
+      // Link to existing User (Stage 2: pre-existence verified above)
+      if (normalizedEmail) {
+        await tx.user.update({
+          where: { email: normalizedEmail },
+          data: { employeeId: employee.id },
+        })
+      }
+
+      return employee
     })
 
     // תיעוד הפעולה
@@ -145,14 +157,6 @@ export async function POST(request: Request) {
       role: data.role,
       department: data.department
     })
-
-    // Link to existing User (Stage 2: pre-existence verified above)
-    if (normalizedEmail) {
-      await prisma.user.update({
-        where: { email: normalizedEmail },
-        data: { employeeId: employee.id },
-      })
-    }
 
     return NextResponse.json(employee)
   } catch (error) {
