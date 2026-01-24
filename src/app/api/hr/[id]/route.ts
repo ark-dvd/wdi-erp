@@ -247,14 +247,16 @@ export async function DELETE(
 
     const employeeName = `${existingEmployee.firstName} ${existingEmployee.lastName}`
 
-    if (existingEmployee.user) {
-      await prisma.user.delete({
-        where: { id: existingEmployee.user.id },
-      })
-    }
+    await prisma.$transaction(async (tx) => {
+      if (existingEmployee.user) {
+        await tx.user.delete({
+          where: { id: existingEmployee.user.id },
+        })
+      }
 
-    await prisma.employee.delete({
-      where: { id },
+      await tx.employee.delete({
+        where: { id },
+      })
     })
 
     await logCrud('DELETE', 'hr', 'employee', id, employeeName, {
