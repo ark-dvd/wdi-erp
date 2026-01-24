@@ -1,0 +1,5 @@
+Stage: 0
+Status: BASELINE LOCKED
+Commit: 9b16226e2eebf4c85ab5558a663aab2fe0722cdd
+Tag: baseline-stage0-20260124
+Date: 2026-01-24
