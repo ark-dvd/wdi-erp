@@ -1,9 +1,13 @@
-// Version: 20260111-143000
+// Version: 20260124
 // Added: logCrud for CREATE
+// SECURITY: Added role-based authorization for POST
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can link contacts to projects
+const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: NextRequest,
@@ -72,6 +76,13 @@ export async function POST(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can link contacts to projects
+    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לשייך אנשי קשר לפרויקט' }, { status: 403 })
+    }
 
     const userId = (session.user as any)?.id || null
     const data = await request.json()
