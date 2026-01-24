@@ -1,5 +1,6 @@
 // /app/api/individual-reviews/[id]/route.ts
 // Version: 20260111-140700
+// FIXED: Wrap PUT/DELETE in transaction for atomicity
 // Added: logCrud for UPDATE, DELETE
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -17,6 +18,8 @@ function calcAvgRating(ratings: number[]): number {
   const valid = ratings.filter(r => r > 0);
   return valid.length > 0 ? valid.reduce((a, b) => a + b, 0) / valid.length : 0;
 }
+
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
 
 export async function GET(
   request: NextRequest,
@@ -108,29 +111,32 @@ export async function PUT(
 
     const avgRating = calcAvgRating(Object.values(ratings));
 
-    const updatedReview = await prisma.individualReview.update({
-      where: { id: params.id },
-      data: {
-        ...ratings,
-        ...notes,
-        generalNotes: data.generalNotes || null,
-        avgRating,
-      },
-    });
+    const updatedReview = await prisma.$transaction(async (tx) => {
+      const updatedReview = await tx.individualReview.update({
+        where: { id: params.id },
+        data: {
+          ...ratings,
+          ...notes,
+          generalNotes: data.generalNotes || null,
+          avgRating,
+        },
+      })
 
-    await updateContactAvgRating(review.contactId);
+      await updateContactAvgRating(review.contactId, tx)
 
-    if (review.contact.organizationId) {
-      await updateOrganizationAvgRating(review.contact.organizationId);
-    }
+      if (review.contact.organizationId) {
+        await updateOrganizationAvgRating(review.contact.organizationId, tx)
+      }
 
-    // Logging - added
-    await logCrud('UPDATE', 'vendor-rating', 'individual-review', params.id,
-      `דירוג ${review.contact.firstName} ${review.contact.lastName} - ${review.project?.name}`, {
-      contactName: `${review.contact.firstName} ${review.contact.lastName}`,
-      projectName: review.project?.name,
-      avgRating: avgRating.toFixed(2),
-    });
+      await logCrud('UPDATE', 'vendor-rating', 'individual-review', params.id,
+        `דירוג ${review.contact.firstName} ${review.contact.lastName} - ${review.project?.name}`, {
+        contactName: `${review.contact.firstName} ${review.contact.lastName}`,
+        projectName: review.project?.name,
+        avgRating: avgRating.toFixed(2),
+      })
+
+      return updatedReview
+    })
 
     return NextResponse.json(updatedReview);
   } catch (error) {
@@ -177,22 +183,23 @@ export async function DELETE(
     const contactName = `${review.contact.firstName} ${review.contact.lastName}`;
     const projectName = review.project?.name;
 
-    await prisma.individualReview.delete({
-      where: { id: params.id },
-    });
+    await prisma.$transaction(async (tx) => {
+      await tx.individualReview.delete({
+        where: { id: params.id },
+      })
 
-    await updateContactAvgRating(contactId);
+      await updateContactAvgRating(contactId, tx)
 
-    if (organizationId) {
-      await updateOrganizationAvgRating(organizationId);
-    }
+      if (organizationId) {
+        await updateOrganizationAvgRating(organizationId, tx)
+      }
 
-    // Logging - added
-    await logCrud('DELETE', 'vendor-rating', 'individual-review', params.id,
-      `דירוג ${contactName} - ${projectName}`, {
-      contactName,
-      projectName,
-    });
+      await logCrud('DELETE', 'vendor-rating', 'individual-review', params.id,
+        `דירוג ${contactName} - ${projectName}`, {
+        contactName,
+        projectName,
+      })
+    })
 
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -201,8 +208,8 @@ export async function DELETE(
   }
 }
 
-async function updateContactAvgRating(contactId: string) {
-  const reviews = await prisma.individualReview.findMany({
+async function updateContactAvgRating(contactId: string, tx: TxClient) {
+  const reviews = await tx.individualReview.findMany({
     where: { contactId },
     select: { avgRating: true },
   });
@@ -211,7 +218,7 @@ async function updateContactAvgRating(contactId: string) {
     ? reviews.reduce((sum, r) => sum + r.avgRating, 0) / reviews.length
     : null;
 
-  await prisma.contact.update({
+  await tx.contact.update({
     where: { id: contactId },
     data: {
       averageRating: avgRating,
@@ -220,9 +227,9 @@ async function updateContactAvgRating(contactId: string) {
   });
 }
 
-async function updateOrganizationAvgRating(organizationId: string) {
-  const contacts = await prisma.contact.findMany({
-    where: { 
+async function updateOrganizationAvgRating(organizationId: string, tx: TxClient) {
+  const contacts = await tx.contact.findMany({
+    where: {
       organizationId,
       reviewCount: { gt: 0 },
     },
@@ -230,7 +237,7 @@ async function updateOrganizationAvgRating(organizationId: string) {
   });
 
   if (contacts.length === 0) {
-    await prisma.organization.update({
+    await tx.organization.update({
       where: { id: organizationId },
       data: { averageRating: null, reviewCount: 0 },
     });
@@ -239,7 +246,7 @@ async function updateOrganizationAvgRating(organizationId: string) {
 
   let totalWeight = 0;
   let weightedSum = 0;
-  
+
   for (const contact of contacts) {
     if (contact.averageRating !== null) {
       weightedSum += contact.averageRating * contact.reviewCount;
@@ -249,7 +256,7 @@ async function updateOrganizationAvgRating(organizationId: string) {
 
   const avgRating = totalWeight > 0 ? weightedSum / totalWeight : null;
 
-  await prisma.organization.update({
+  await tx.organization.update({
     where: { id: organizationId },
     data: {
       averageRating: avgRating,
