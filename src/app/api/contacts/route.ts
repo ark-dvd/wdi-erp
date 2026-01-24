@@ -1,10 +1,14 @@
-// Version: 20260111-140000
+// Version: 20260124
 // FIXED: Wrap POST in transaction for atomicity
+// SECURITY: Added role-based authorization for POST
 // Added: logCrud for CREATE
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can create/modify contact data
+const CONTACTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(request: Request) {
   try {
@@ -71,6 +75,13 @@ export async function POST(request: Request) {
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can create contacts
+    if (!CONTACTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה ליצור אנשי קשר' }, { status: 403 })
     }
 
     const userId = (session.user as any)?.id || null

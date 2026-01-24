@@ -1,11 +1,15 @@
 // /home/user/wdi-erp/src/app/api/contacts/[id]/route.ts
-// Version: 20260111-140100
+// Version: 20260124
+// SECURITY: Added role-based authorization for PUT, DELETE
 // Added: logCrud for UPDATE, DELETE
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can modify/delete contact data
+const CONTACTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: NextRequest,
@@ -81,6 +85,14 @@ export async function PUT(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can update contacts
+    if (!CONTACTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לעדכן אנשי קשר' }, { status: 403 })
+    }
+
     const userId = (session.user as any)?.id || null
     const data = await request.json()
     const contact = await prisma.contact.update({
@@ -128,6 +140,13 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const userRole = (session.user as any)?.role
+
+    // Only authorized roles can delete contacts
+    if (!CONTACTS_WRITE_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה למחוק אנשי קשר' }, { status: 403 })
+    }
 
     // Get contact info before delete for logging
     const contact = await prisma.contact.findUnique({

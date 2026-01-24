@@ -1,10 +1,14 @@
 // src/app/api/contacts/import/route.ts
 // Version: 20260124
 // FIXED: Wrap entire import in transaction - all or nothing
+// SECURITY: Added role-based authorization for bulk import
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+
+// Elevated roles for bulk import operations (matches admin/import-contacts/save)
+const CONTACTS_IMPORT_ROLES = ['founder', 'ceo', 'office_manager']
 
 interface ContactImport {
   firstName: string
@@ -24,6 +28,13 @@ export async function POST(request: Request) {
     const session = await auth()
     if (!session) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const userRole = (session.user as any)?.role
+
+    // Only elevated roles can perform bulk imports
+    if (!CONTACTS_IMPORT_ROLES.includes(userRole)) {
+      return NextResponse.json({ error: 'אין הרשאה לייבוא אנשי קשר' }, { status: 403 })
     }
 
     const userId = (session.user as any)?.id || null
