@@ -1,3 +1,5 @@
+// Version: 20260124
+// FIXED: Wrap PUT/DELETE in transaction for atomicity
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -150,46 +152,48 @@ export async function PUT(
     // Get current user ID for updatedById
     const userId = (session.user as any)?.id
 
-    const project = await prisma.project.update({
-      where: { id },
-      data: {
-        name: projectData.name,
-        address: projectData.address || null,
-        category: projectData.category || null,
-        client: projectData.client || null,
-        phase: projectData.phase || null,
-        state: projectData.state || 'פעיל',
-        area: projectData.area ? parseFloat(String(projectData.area)) : null,
-        estimatedCost: projectData.estimatedCost ? parseFloat(String(projectData.estimatedCost)) : null,
-        startDate: projectData.startDate ? new Date(projectData.startDate) : null,
-        endDate: projectData.endDate ? new Date(projectData.endDate) : null,
-        description: projectData.description || null,
-        leadId: projectData.leadId || null,
-        services: projectData.services || undefined,
-        buildingTypes: projectData.buildingTypes || undefined,
-        deliveryMethods: projectData.deliveryMethods || undefined,
-        updatedById: (session.user as any).id || null,
-      },
-    })
-
-    await logCrud('UPDATE', 'projects', 'project', id, `${existingProject.projectNumber} - ${projectData.name}`, { changes })
-
-    if (managerIds !== undefined) {
-      await prisma.projectManager.deleteMany({
-        where: { projectId: id },
+    const project = await prisma.$transaction(async (tx) => {
+      const project = await tx.project.update({
+        where: { id },
+        data: {
+          name: projectData.name,
+          address: projectData.address || null,
+          category: projectData.category || null,
+          client: projectData.client || null,
+          phase: projectData.phase || null,
+          state: projectData.state || 'פעיל',
+          area: projectData.area ? parseFloat(String(projectData.area)) : null,
+          estimatedCost: projectData.estimatedCost ? parseFloat(String(projectData.estimatedCost)) : null,
+          startDate: projectData.startDate ? new Date(projectData.startDate) : null,
+          endDate: projectData.endDate ? new Date(projectData.endDate) : null,
+          description: projectData.description || null,
+          leadId: projectData.leadId || null,
+          services: projectData.services || undefined,
+          buildingTypes: projectData.buildingTypes || undefined,
+          deliveryMethods: projectData.deliveryMethods || undefined,
+          updatedById: (session.user as any).id || null,
+        },
       })
 
-      if (managerIds && managerIds.length > 0) {
-        for (const managerId of managerIds) {
-          await prisma.projectManager.create({
-            data: {
+      if (managerIds !== undefined) {
+        await tx.projectManager.deleteMany({
+          where: { projectId: id },
+        })
+
+        if (managerIds && managerIds.length > 0) {
+          await tx.projectManager.createMany({
+            data: managerIds.map((managerId: string) => ({
               projectId: id,
               employeeId: managerId,
-            },
+            })),
           })
         }
       }
-    }
+
+      return project
+    })
+
+    await logCrud('UPDATE', 'projects', 'project', id, `${existingProject.projectNumber} - ${projectData.name}`, { changes })
 
     return NextResponse.json(project)
   } catch (error) {
@@ -230,12 +234,14 @@ export async function DELETE(
       )
     }
 
-    await prisma.projectManager.deleteMany({
-      where: { projectId: id },
-    })
+    await prisma.$transaction(async (tx) => {
+      await tx.projectManager.deleteMany({
+        where: { projectId: id },
+      })
 
-    await prisma.project.delete({
-      where: { id },
+      await tx.project.delete({
+        where: { id },
+      })
     })
 
     await logCrud('DELETE', 'projects', 'project', id, `${existingProject.projectNumber} - ${existingProject.name}`, {

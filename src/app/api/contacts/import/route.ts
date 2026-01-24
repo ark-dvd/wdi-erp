@@ -1,5 +1,6 @@
 // src/app/api/contacts/import/route.ts
-// גרסה: v20251217-201000
+// Version: 20260124
+// FIXED: Wrap entire import in transaction - all or nothing
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -33,23 +34,21 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'נדרש מערך של אנשי קשר' }, { status: 400 })
     }
 
-    const results = {
-      created: 0,
-      skipped: 0,
-      errors: [] as string[],
-      createdIds: [] as string[]
-    }
+    const result = await prisma.$transaction(async (tx) => {
+      const results = {
+        created: 0,
+        skipped: 0,
+        createdIds: [] as string[]
+      }
 
-    const orgCache: Record<string, string | null> = {}
+      const orgCache: Record<string, string | null> = {}
 
-    for (const contact of contacts) {
-      try {
+      for (const contact of contacts) {
         if (!contact.firstName || !contact.phone) {
-          results.errors.push(`חסר שם פרטי או טלפון: ${contact.firstName || 'ללא שם'}`)
-          continue
+          throw new Error(`חסר שם פרטי או טלפון: ${contact.firstName || 'ללא שם'}`)
         }
 
-        const existingByPhone = await prisma.contact.findFirst({
+        const existingByPhone = await tx.contact.findFirst({
           where: { phone: contact.phone }
         })
 
@@ -59,7 +58,7 @@ export async function POST(request: Request) {
         }
 
         if (contact.email) {
-          const existingByEmail = await prisma.contact.findFirst({
+          const existingByEmail = await tx.contact.findFirst({
             where: { email: { equals: contact.email, mode: 'insensitive' } }
           })
           if (existingByEmail) {
@@ -74,7 +73,7 @@ export async function POST(request: Request) {
           if (contact.organizationName in orgCache) {
             organizationId = orgCache[contact.organizationName]
           } else {
-            const org = await prisma.organization.findFirst({
+            const org = await tx.organization.findFirst({
               where: { name: { equals: contact.organizationName, mode: 'insensitive' } }
             })
             organizationId = org?.id || null
@@ -82,7 +81,7 @@ export async function POST(request: Request) {
           }
         }
 
-        const created = await prisma.contact.create({
+        const created = await tx.contact.create({
           data: {
             firstName: contact.firstName,
             lastName: contact.lastName || '',
@@ -100,19 +99,19 @@ export async function POST(request: Request) {
 
         results.created++
         results.createdIds.push(created.id)
-      } catch (err) {
-        const error = err as Error
-        results.errors.push(`${contact.firstName} ${contact.lastName}: ${error.message}`)
       }
-    }
+
+      return results
+    })
 
     return NextResponse.json({
       success: true,
-      message: `נוצרו ${results.created} אנשי קשר, דולגו ${results.skipped} קיימים`,
-      ...results
+      message: `נוצרו ${result.created} אנשי קשר, דולגו ${result.skipped} קיימים`,
+      ...result
     })
   } catch (error) {
     console.error('Import contacts error:', error)
-    return NextResponse.json({ error: 'שגיאה בייבוא אנשי הקשר' }, { status: 500 })
+    const message = error instanceof Error ? error.message : 'שגיאה בייבוא אנשי הקשר'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
