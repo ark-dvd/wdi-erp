@@ -1,4 +1,5 @@
-// Version: 20251218-095500
+// Version: 20260124
+// FIXED: Wrap entire import in transaction - all or nothing
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
@@ -21,15 +22,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'לא התקבלו נתונים לייבוא' }, { status: 400 })
     }
 
-    let organizationsCreated = 0
-    let organizationsUpdated = 0
-    let contactsCreated = 0
-    let contactsUpdated = 0
-    let skipped = 0
-    const details: any[] = []
+    const result = await prisma.$transaction(async (tx) => {
+      let organizationsCreated = 0
+      let organizationsUpdated = 0
+      let contactsCreated = 0
+      let contactsUpdated = 0
+      let skipped = 0
+      const details: any[] = []
 
-    for (const item of contacts) {
-      try {
+      for (const item of contacts) {
         let organizationId: string | null = null
         const enrichedOrg = item.enriched?.organization
         const enrichedContacts = item.enriched?.contacts || []
@@ -38,7 +39,7 @@ export async function POST(request: Request) {
         if (item.organization?.name || enrichedOrg?.name) {
           const orgName = enrichedOrg?.name || item.organization?.name
 
-          const existingOrg = await prisma.organization.findFirst({
+          const existingOrg = await tx.organization.findFirst({
             where: {
               OR: [
                 { name: { equals: orgName, mode: 'insensitive' } },
@@ -49,9 +50,8 @@ export async function POST(request: Request) {
 
           if (existingOrg) {
             organizationId = existingOrg.id
-            
-            // עדכון ארגון קיים עם כל המידע המועשר
-            await prisma.organization.update({
+
+            await tx.organization.update({
               where: { id: existingOrg.id },
               data: {
                 name: enrichedOrg?.name || existingOrg.name,
@@ -71,8 +71,7 @@ export async function POST(request: Request) {
               status: 'updated'
             })
           } else {
-            // יצירת ארגון חדש
-            const newOrg = await prisma.organization.create({
+            const newOrg = await tx.organization.create({
               data: {
                 name: enrichedOrg?.name || item.organization?.name || '',
                 type: enrichedOrg?.type || null,
@@ -98,7 +97,7 @@ export async function POST(request: Request) {
 
         // יצירת/עדכון איש קשר מהקלט המקורי
         if (item.contact?.firstName && item.contact.firstName.trim()) {
-          const result = await createOrUpdateContact({
+          const contactResult = await createOrUpdateContact(tx, {
             firstName: item.contact.firstName,
             lastName: item.contact.lastName || '',
             phone: item.contact.phone,
@@ -108,22 +107,22 @@ export async function POST(request: Request) {
             disciplines: item.contact.disciplines || [],
             organizationId
           })
-          
-          if (result.created) {
+
+          if (contactResult.created) {
             contactsCreated++
             details.push({
               name: `${item.contact.firstName} ${item.contact.lastName}`,
               type: 'contact',
               status: 'created',
-              id: result.id
+              id: contactResult.id
             })
-          } else if (result.updated) {
+          } else if (contactResult.updated) {
             contactsUpdated++
             details.push({
               name: `${item.contact.firstName} ${item.contact.lastName}`,
               type: 'contact',
               status: 'updated',
-              id: result.id
+              id: contactResult.id
             })
           } else {
             skipped++
@@ -134,7 +133,7 @@ export async function POST(request: Request) {
         for (const ec of enrichedContacts) {
           if (!ec.firstName) continue
 
-          const result = await createOrUpdateContact({
+          const contactResult = await createOrUpdateContact(tx, {
             firstName: ec.firstName,
             lastName: ec.lastName || '',
             phone: ec.phone,
@@ -146,50 +145,43 @@ export async function POST(request: Request) {
             organizationId
           })
 
-          if (result.created) {
+          if (contactResult.created) {
             contactsCreated++
             details.push({
               name: `${ec.firstName} ${ec.lastName || ''}`,
               type: 'contact',
               status: 'created',
               source: 'enriched',
-              id: result.id
+              id: contactResult.id
             })
-          } else if (result.updated) {
+          } else if (contactResult.updated) {
             contactsUpdated++
             details.push({
               name: `${ec.firstName} ${ec.lastName || ''}`,
               type: 'contact',
               status: 'updated',
               source: 'enriched',
-              id: result.id
+              id: contactResult.id
             })
           }
         }
-
-      } catch (err) {
-        const errorMsg = err instanceof Error ? err.message : 'שגיאה'
-        details.push({
-          name: item.organization?.name || item.contact?.firstName || 'לא ידוע',
-          status: 'error',
-          reason: errorMsg
-        })
-        skipped++
       }
-    }
 
-    // שמירת לוג
+      return { organizationsCreated, organizationsUpdated, contactsCreated, contactsUpdated, skipped, details }
+    })
+
+    // שמירת לוג - outside transaction
     try {
       await prisma.importLog.create({
         data: {
           importType: 'contacts',
           sourceContext: sourceContext || null,
           totalRecords: contacts.length,
-          newRecords: contactsCreated,
-          mergedRecords: organizationsCreated + organizationsUpdated + contactsUpdated,
-          skippedRecords: skipped,
-          details: details,
-          status: skipped > 0 && contactsCreated === 0 ? 'failed' : skipped > 0 ? 'partial' : 'completed',
+          newRecords: result.contactsCreated,
+          mergedRecords: result.organizationsCreated + result.organizationsUpdated + result.contactsUpdated,
+          skippedRecords: result.skipped,
+          details: result.details,
+          status: 'completed',
           importedById: (session.user as any).id
         }
       })
@@ -199,12 +191,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      organizationsCreated,
-      organizationsUpdated,
-      contactsCreated,
-      contactsUpdated,
-      skipped,
-      details
+      ...result
     })
 
   } catch (error) {
@@ -216,7 +203,9 @@ export async function POST(request: Request) {
   }
 }
 
-async function createOrUpdateContact(data: {
+type TxClient = Parameters<Parameters<typeof prisma.$transaction>[0]>[0]
+
+async function createOrUpdateContact(tx: TxClient, data: {
   firstName: string
   lastName: string
   phone?: string | null
@@ -227,9 +216,9 @@ async function createOrUpdateContact(data: {
   notes?: string | null
   organizationId: string | null
 }): Promise<{ id: string; created: boolean; updated: boolean }> {
-  
+
   // חיפוש איש קשר קיים
-  const existing = await prisma.contact.findFirst({
+  const existing = await tx.contact.findFirst({
     where: {
       OR: [
         data.phone ? { phone: data.phone } : {},
@@ -274,18 +263,18 @@ async function createOrUpdateContact(data: {
     }
 
     if (Object.keys(updateData).length > 0) {
-      await prisma.contact.update({
+      await tx.contact.update({
         where: { id: existing.id },
         data: updateData
       })
       return { id: existing.id, created: false, updated: true }
     }
-    
+
     return { id: existing.id, created: false, updated: false }
   }
 
   // יצירת איש קשר חדש
-  const newContact = await prisma.contact.create({
+  const newContact = await tx.contact.create({
     data: {
       firstName: data.firstName,
       lastName: data.lastName,

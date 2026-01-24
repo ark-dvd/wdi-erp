@@ -1,4 +1,5 @@
 // Version: 20260111-140000
+// FIXED: Wrap POST in transaction for atomicity
 // Added: logCrud for CREATE
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -75,49 +76,52 @@ export async function POST(request: Request) {
     const userId = (session.user as any)?.id || null
     const data = await request.json()
 
-    let organizationId = data.organizationId
-    
-    if (!organizationId) {
-      const fullName = `${data.firstName} ${data.lastName}`
-      const org = await prisma.organization.create({
+    const contact = await prisma.$transaction(async (tx) => {
+      let organizationId = data.organizationId
+
+      if (!organizationId) {
+        const fullName = `${data.firstName} ${data.lastName}`
+        const org = await tx.organization.create({
+          data: {
+            name: fullName,
+            type: 'עצמאי',
+            phone: data.phone || null,
+            email: data.email || null,
+            updatedById: userId,
+          }
+        })
+        organizationId = org.id
+      }
+
+      const contact = await tx.contact.create({
         data: {
-          name: fullName,
-          type: 'עצמאי',
-          phone: data.phone || null,
+          firstName: data.firstName,
+          lastName: data.lastName,
+          nickname: data.nickname || null,
+          phone: data.phone,
+          phoneAlt: data.phoneAlt || null,
           email: data.email || null,
+          emailAlt: data.emailAlt || null,
+          linkedinUrl: data.linkedinUrl || null,
+          photoUrl: data.photoUrl || null,
+          organizationId,
+          role: data.role || null,
+          department: data.department || null,
+          contactTypes: data.contactTypes || [],
+          disciplines: data.disciplines || [],
+          status: data.status || 'פעיל',
+          notes: data.notes || null,
+          vendorId: data.vendorId || null,
           updatedById: userId,
+        },
+        include: {
+          organization: { select: { id: true, name: true, type: true } },
         }
       })
-      organizationId = org.id
-    }
 
-    const contact = await prisma.contact.create({
-      data: {
-        firstName: data.firstName,
-        lastName: data.lastName,
-        nickname: data.nickname || null,
-        phone: data.phone,
-        phoneAlt: data.phoneAlt || null,
-        email: data.email || null,
-        emailAlt: data.emailAlt || null,
-        linkedinUrl: data.linkedinUrl || null,
-        photoUrl: data.photoUrl || null,
-        organizationId,
-        role: data.role || null,
-        department: data.department || null,
-        contactTypes: data.contactTypes || [],
-        disciplines: data.disciplines || [],
-        status: data.status || 'פעיל',
-        notes: data.notes || null,
-        vendorId: data.vendorId || null,
-        updatedById: userId,
-      },
-      include: {
-        organization: { select: { id: true, name: true, type: true } },
-      }
+      return contact
     })
 
-    // Logging - added
     await logCrud('CREATE', 'contacts', 'contact', contact.id, `${data.firstName} ${data.lastName}`, {
       organizationName: contact.organization?.name,
     })
