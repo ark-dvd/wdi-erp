@@ -2,14 +2,19 @@
 
 // ================================================
 // WDI ERP - Employee Form Component
-// Version: 20251211-143200
+// Version: 20260124
 // Fixes: #6 education degrees + certificate upload, #7 departments list,
 //        #8 email fields, #10 certifications section, #12 dates, #17 validations
+// UI-015: Added dirty state warning
+// UI-025, UI-016, UI-017, UI-024: Added success toast
+// UI-013: Added error clearing on form change
 // ================================================
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { Save, X, Plus, Trash2, Upload, FileText, Linkedin, Eye, Award } from 'lucide-react'
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
+import { useToast } from '@/components/Toast'
 
 interface Child {
   name: string
@@ -111,9 +116,14 @@ const degreeTypes = ['הנדסאי', 'מהנדס', 'תואר ראשון', 'תו�
 
 export default function EmployeeForm({ initialData, isEdit, employeeId }: EmployeeFormProps) {
   const router = useRouter()
+  const { showSuccess, showError: showErrorToast } = useToast()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  
+
+  // UI-015: Track original data for dirty state detection
+  const originalDataRef = useRef<string>('')
+  const [isDirty, setIsDirty] = useState(false)
+
   const [formData, setFormData] = useState<EmployeeFormData>({
     firstName: initialData?.firstName || '',
     lastName: initialData?.lastName || '',
@@ -151,6 +161,13 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
     contractFileUrl: initialData?.contractFileUrl || '',
   })
 
+  // UI-015: Store original data on mount and warn on navigation
+  useEffect(() => {
+    originalDataRef.current = JSON.stringify(formData)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useUnsavedChangesWarning(isDirty)
+
   // #17: וולידציית ת.ז. - 9 ספרות בדיוק
   const validateIdNumber = (id: string): boolean => {
     const digitsOnly = id.replace(/\D/g, '')
@@ -172,18 +189,30 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
+    // UI-015: Mark as dirty
+    if (!isDirty) setIsDirty(true)
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   // #17: טיפול בשינוי טלפון עם נרמול
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
+    // UI-015: Mark as dirty
+    if (!isDirty) setIsDirty(true)
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
   // #17: טיפול בשינוי ת.ז. עם וולידציה
   const handleIdChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
+    // UI-015: Mark as dirty
+    if (!isDirty) setIsDirty(true)
     // אפשר רק ספרות
     const digitsOnly = value.replace(/\D/g, '').substring(0, 9)
     setFormData(prev => ({ ...prev, [name]: digitsOnly }))
@@ -367,11 +396,16 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
         throw new Error(data.error || 'שגיאה בשמירת העובד')
       }
 
+      // UI-015: Clear dirty state before navigation
+      setIsDirty(false)
+      // UI-025, UI-016, UI-017, UI-024: Show success confirmation
+      showSuccess(isEdit ? 'העובד עודכן בהצלחה' : 'העובד נוסף בהצלחה')
       // #5: חזרה למסך הראשי
       router.push('/dashboard/hr')
       router.refresh()
     } catch (err: any) {
       setError(err.message)
+      showErrorToast(err.message)
     } finally {
       setLoading(false)
     }

@@ -1,3 +1,11 @@
+// ============================================
+// src/app/dashboard/contacts/new/page.tsx
+// Version: 20260124
+// UI-015: Added dirty state warning
+// UI-025, UI-016, UI-017, UI-024: Added success toast
+// UI-013: Added error clearing on form change
+// ============================================
+
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -5,6 +13,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Save, Building2, Loader2, User, Upload } from 'lucide-react'
 import { ORG_TYPES, CONTACT_TYPES, DISCIPLINES } from '@/lib/contact-constants'
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
+import { useToast } from '@/components/Toast'
 
 interface Organization { id: string; name: string; type: string | null }
 
@@ -12,12 +22,19 @@ interface Organization { id: string; name: string; type: string | null }
 export default function NewContactPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const { showSuccess, showError: showErrorToast } = useToast()
   const projectId = searchParams?.get('projectId')
-  
+
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [orgMode, setOrgMode] = useState<'existing' | 'new' | 'independent'>('existing')
+
+  // UI-015: Track if form has been modified
+  const [isDirty, setIsDirty] = useState(false)
+
+  // UI-015: Warn before navigating away from unsaved changes
+  useUnsavedChangesWarning(isDirty)
   
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', phone: '', phoneAlt: '',
@@ -79,20 +96,37 @@ export default function NewContactPage() {
 
       if (!contactRes.ok) throw new Error('Failed to create contact')
       const contact = await contactRes.json()
-      
+
+      // UI-015: Clear dirty state before navigation
+      setIsDirty(false)
+      // UI-025, UI-016, UI-017, UI-024: Show success confirmation
+      showSuccess('איש הקשר נוצר בהצלחה')
+
       if (projectId) router.push(`/dashboard/projects/${projectId}?tab=contacts`)
       else router.push(`/dashboard/contacts/${contact.id}`)
     } catch (err) {
       setError('שגיאה ביצירת איש הקשר')
+      showErrorToast('שגיאה ביצירת איש הקשר')
       console.error(err)
     } finally { setSaving(false) }
   }
 
   const toggleArrayField = (field: 'contactTypes' | 'disciplines', value: string) => {
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
+    // UI-015: Mark as dirty
+    if (!isDirty) setIsDirty(true)
     setFormData(prev => ({
       ...prev,
       [field]: prev[field].includes(value) ? prev[field].filter(v => v !== value) : [...prev[field], value]
     }))
+  }
+
+  // UI-013, UI-015: Helper for updating form data with dirty tracking
+  const updateFormData = (updates: Partial<typeof formData>) => {
+    if (error) setError('')
+    if (!isDirty) setIsDirty(true)
+    setFormData(prev => ({ ...prev, ...updates }))
   }
 
   return (
