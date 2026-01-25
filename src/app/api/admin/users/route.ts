@@ -1,18 +1,45 @@
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import {
+  parsePagination,
+  calculateSkip,
+  paginatedResponse,
+  parseAndValidateSort,
+  sortValidationError,
+  toPrismaOrderBy,
+  versionedResponse,
+  SORT_DEFINITIONS,
+} from '@/lib/api-contracts'
 
-export async function GET() {
+// Version: 20260124-MAYBACH
+// MAYBACH: R1-Pagination, R4-Sorting, R5-Versioning
+
+export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const userRole = (session.user as any)?.role
     if (userRole !== 'founder') {
-      return NextResponse.json({ error: 'אין הרשאה לניהול משתמשים' }, { status: 403 })
+      return versionedResponse({ error: 'אין הרשאה לניהול משתמשים' }, { status: 403 })
     }
+
+    const { searchParams } = new URL(request.url)
+
+    // R1: Parse pagination
+    const { page, limit } = parsePagination(searchParams)
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.users)
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error)
+    }
+
+    // R1: Count total for pagination
+    const total = await prisma.user.count()
 
     const users = await prisma.user.findMany({
       select: {
@@ -34,12 +61,17 @@ export async function GET() {
           }
         }
       },
-      orderBy: { email: 'asc' }
+      // R4: Client-configurable sorting
+      orderBy: toPrismaOrderBy(sortResult.sort),
+      // R1: Apply pagination
+      skip: calculateSkip(page, limit),
+      take: limit,
     })
 
-    return NextResponse.json(users)
+    // R1 + R5: Return paginated response with versioning
+    return versionedResponse(paginatedResponse(users, page, limit, total))
   } catch (error) {
     console.error('Error fetching users:', error)
-    return NextResponse.json({ error: 'Failed to fetch users' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to fetch users' }, { status: 500 })
   }
 }

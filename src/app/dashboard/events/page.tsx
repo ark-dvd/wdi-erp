@@ -55,7 +55,11 @@ function EventsContent() {
 
   const fetchProjects = async () => {
     const res = await fetch('/api/projects')
-    if (res.ok) setProjects(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      setProjects(data.items || data)
+    }
   }
 
   const fetchEvents = async () => {
@@ -67,7 +71,8 @@ function EventsContent() {
     const res = await fetch('/api/events?' + params.toString())
     if (res.ok) {
       const data = await res.json()
-      setEvents(Array.isArray(data) ? data : data.events || [])
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      setEvents(data.items || (Array.isArray(data) ? data : []))
     }
     setLoading(false)
   }

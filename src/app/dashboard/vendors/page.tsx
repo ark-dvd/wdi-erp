@@ -87,7 +87,8 @@ export default function VendorsPage() {
     try {
       const res = await fetch('/api/projects?state=פעיל');
       const data = await res.json();
-      setProjects(Array.isArray(data) ? data : data.projects || []);
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      setProjects(data.items || (Array.isArray(data) ? data : []));
     } catch (err) {
       setError('שגיאה בטעינת פרויקטים');
     } finally {
@@ -99,7 +100,8 @@ export default function VendorsPage() {
     try {
       const res = await fetch('/api/organizations');
       const data = await res.json();
-      setOrganizations(Array.isArray(data) ? data : data.organizations || []);
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      setOrganizations(data.items || (Array.isArray(data) ? data : []));
     } catch (err) {
       console.error('שגיאה בטעינת ארגונים:', err);
     }
@@ -110,7 +112,8 @@ export default function VendorsPage() {
     try {
       const res = await fetch(`/api/contacts?organizationId=${orgId}`);
       const data = await res.json();
-      setContacts(Array.isArray(data) ? data : data.contacts || []);
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      setContacts(data.items || (Array.isArray(data) ? data : []));
     } catch (err) {
       setError('שגיאה בטעינת אנשי קשר');
     } finally {

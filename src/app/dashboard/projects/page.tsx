@@ -61,7 +61,8 @@ export default function ProjectsPage() {
       const res = await fetch('/api/projects?level=main')
       if (res.ok) {
         const data = await res.json()
-        setProjects(data)
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setProjects(data.items || data)
       }
     } catch (error) {
       console.error('Error fetching projects:', error)

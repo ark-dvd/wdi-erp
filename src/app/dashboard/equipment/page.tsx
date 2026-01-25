@@ -127,7 +127,8 @@ export default function EquipmentPage() {
       const res = await fetch('/api/equipment')
       if (res.ok) {
         const data = await res.json()
-        setEquipment(Array.isArray(data) ? data : [])
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setEquipment(data.items || (Array.isArray(data) ? data : []))
       }
     } catch (error) {
       console.error('Error fetching equipment:', error)
