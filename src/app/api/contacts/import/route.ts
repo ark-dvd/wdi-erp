@@ -2,10 +2,12 @@
 // Version: 20260124
 // FIXED: Wrap entire import in transaction - all or nothing
 // SECURITY: Added role-based authorization for bulk import
+// OBSERVABILITY: Added logCrud for bulk import
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
+import { logCrud } from '@/lib/activity'
 
 // Elevated roles for bulk import operations (matches admin/import-contacts/save)
 const CONTACTS_IMPORT_ROLES = ['founder', 'ceo', 'office_manager']
@@ -114,6 +116,16 @@ export async function POST(request: Request) {
 
       return results
     })
+
+    // Logging - outside transaction (non-critical)
+    if (result.created > 0) {
+      await logCrud('CREATE', 'contacts', 'import', 'bulk',
+        `ייבוא ${result.created} אנשי קשר`, {
+        totalContacts: contacts.length,
+        created: result.created,
+        skipped: result.skipped,
+      })
+    }
 
     return NextResponse.json({
       success: true,
