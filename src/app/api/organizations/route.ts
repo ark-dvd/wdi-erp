@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       isVendor: data.isVendor,
     })
 
-    return NextResponse.json(organization)
+    return NextResponse.json(organization, { status: 201 })
   } catch (error) {
     console.error('Error creating organization:', error)
     return NextResponse.json({ error: 'Failed to create organization' }, { status: 500 })

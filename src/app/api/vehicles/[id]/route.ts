@@ -98,7 +98,7 @@ export async function GET(
     })
     
     if (!vehicle) {
-      return NextResponse.json({ error: 'Vehicle not found' }, { status: 404 })
+      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
     
     // חישוב סטטיסטיקות
@@ -166,7 +166,7 @@ export async function PUT(
         where: { licensePlate: data.licensePlate, NOT: { id: params.id } }
       })
       if (existing) {
-        return NextResponse.json({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 400 })
+        return NextResponse.json({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 409 })
       }
     }
     
@@ -226,15 +226,19 @@ export async function DELETE(
   try {
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
-      select: { 
+      select: {
         currentDriverId: true,
         licensePlate: true,
         manufacturer: true,
         model: true,
       }
     })
-    
-    if (vehicle?.currentDriverId) {
+
+    if (!vehicle) {
+      return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
+    }
+
+    if (vehicle.currentDriverId) {
       return NextResponse.json(
         { error: 'לא ניתן למחוק רכב שמשויך לעובד. יש לבטל את השיוך קודם.' },
         { status: 400 }

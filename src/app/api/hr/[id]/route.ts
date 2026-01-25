@@ -62,7 +62,7 @@ export async function GET(
     })
 
     if (!employee) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+      return NextResponse.json({ error: 'עובד לא נמצא' }, { status: 404 })
     }
 
     // Build response without sensitive fields by default
@@ -143,7 +143,7 @@ export async function PUT(
     })
 
     if (!existingEmployee) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+      return NextResponse.json({ error: 'עובד לא נמצא' }, { status: 404 })
     }
 
     if (data.idNumber !== existingEmployee.idNumber) {
@@ -155,7 +155,7 @@ export async function PUT(
       })
 
       if (duplicateIdNumber) {
-        return NextResponse.json({ error: 'תעודת זהות זו משויכת לעובד אחר' }, { status: 400 })
+        return NextResponse.json({ error: 'תעודת זהות זו משויכת לעובד אחר' }, { status: 409 })
       }
     }
 
@@ -242,7 +242,7 @@ export async function DELETE(
     })
 
     if (!existingEmployee) {
-      return NextResponse.json({ error: 'Employee not found' }, { status: 404 })
+      return NextResponse.json({ error: 'עובד לא נמצא' }, { status: 404 })
     }
 
     const employeeName = `${existingEmployee.firstName} ${existingEmployee.lastName}`

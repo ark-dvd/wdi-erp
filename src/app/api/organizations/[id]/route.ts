@@ -144,6 +144,10 @@ export async function DELETE(
       select: { name: true, type: true }
     })
 
+    if (!org) {
+      return NextResponse.json({ error: 'ארגון לא נמצא' }, { status: 404 })
+    }
+
     await prisma.organization.delete({ where: { id } })
 
     // Logging - added

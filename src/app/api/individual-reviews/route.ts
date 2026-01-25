@@ -103,9 +103,9 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingReview) {
-      return NextResponse.json({ 
-        error: 'כבר דירגת את איש הקשר הזה בפרויקט זה' 
-      }, { status: 400 });
+      return NextResponse.json({
+        error: 'כבר דירגת את איש הקשר הזה בפרויקט זה'
+      }, { status: 409 });
     }
 
     const ratings: Record<string, number> = {};
