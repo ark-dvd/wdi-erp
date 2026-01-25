@@ -1,8 +1,9 @@
 // ============================================
 // src/app/api/equipment/[id]/route.ts
-// Version: 20260114-225000
+// Version: 20260124
 // Equipment module - single item API
 // FIXED: Import labels from lib instead of route
+// SECURITY: Added role-based authorization for PUT, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,6 +12,9 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
 import { equipmentTypeLabels, equipmentStatusLabels } from '@/lib/equipment-labels'
+
+// Roles that can manage equipment data
+const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 export async function GET(
   request: NextRequest,
@@ -84,6 +88,13 @@ export async function PUT(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can update equipment
+  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לעדכן ציוד' }, { status: 403 })
   }
 
   try {
@@ -219,6 +230,13 @@ export async function DELETE(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can delete equipment
+  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה למחוק ציוד' }, { status: 403 })
   }
 
   try {

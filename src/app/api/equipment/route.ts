@@ -1,8 +1,9 @@
 // ============================================
 // src/app/api/equipment/route.ts
-// Version: 20260114-224500
+// Version: 20260124
 // Equipment module - main API
 // FIXED: Moved labels to separate file (Next.js route export restriction)
+// SECURITY: Added role-based authorization for POST
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,6 +12,9 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
 import { equipmentTypeLabels } from '@/lib/equipment-labels'
+
+// Roles that can manage equipment data
+const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -83,6 +87,13 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can create equipment
+  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה להוסיף ציוד' }, { status: 403 })
   }
 
   try {
