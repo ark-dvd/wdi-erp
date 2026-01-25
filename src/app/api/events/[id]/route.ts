@@ -1,9 +1,17 @@
-// Version: 20260111-140400
+// ============================================
+// src/app/api/events/[id]/route.ts
+// Version: 20260124
 // Added: logCrud for UPDATE, DELETE
+// SECURITY: Added role-based authorization for PUT, DELETE
+// ============================================
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+
+// Roles that can manage events (same as projects)
+const EVENTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
 
 export async function GET(
   request: NextRequest,
@@ -37,10 +45,17 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can update events
+  if (!EVENTS_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לעדכן אירועים' }, { status: 403 })
+  }
+
+  try {
     const { id } = await params
     const data = await request.json()
 
@@ -77,10 +92,17 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  try {
-    const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const session = await auth()
+  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can delete events
+  if (!EVENTS_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה למחוק אירועים' }, { status: 403 })
+  }
+
+  try {
     const { id } = await params
 
     // Get event info before delete for logging
