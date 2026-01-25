@@ -1,14 +1,18 @@
 // ============================================
 // src/app/api/vehicles/[id]/assign/route.ts
-// Version: 20260112-000000
+// Version: 20260124
 // Added: auth check for all functions
 // Added: logCrud for ASSIGN, UNASSIGN
+// SECURITY: Added role-based authorization for POST, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
+
+// Roles that can manage vehicle assignments
+const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 export async function POST(
   request: NextRequest,
@@ -17,6 +21,13 @@ export async function POST(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can assign vehicles
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לשייך רכבים' }, { status: 403 })
   }
 
   try {
@@ -110,6 +121,13 @@ export async function DELETE(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can unassign vehicles
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לבטל שיוך רכבים' }, { status: 403 })
   }
 
   try {

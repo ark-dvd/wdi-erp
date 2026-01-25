@@ -1,8 +1,9 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260112-000000
+// Version: 20260124
 // Added: auth check for all functions
 // Added: logCrud for CREATE, UPDATE, DELETE
+// SECURITY: Added role-based authorization for POST, PUT, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -10,6 +11,9 @@ import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { TicketStatus } from '@prisma/client'
+
+// Roles that can manage vehicle tickets
+const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -52,6 +56,13 @@ export async function POST(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can create tickets
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה להוסיף דוחות' }, { status: 403 })
   }
 
   try {
@@ -114,6 +125,13 @@ export async function PUT(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can update tickets
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לעדכן דוחות' }, { status: 403 })
   }
 
   try {
@@ -179,6 +197,13 @@ export async function DELETE(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can delete tickets
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה למחוק דוחות' }, { status: 403 })
   }
 
   try {

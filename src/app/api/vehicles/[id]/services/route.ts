@@ -1,14 +1,18 @@
 // ============================================
 // src/app/api/vehicles/[id]/services/route.ts
-// Version: 20260112-000000
+// Version: 20260124
 // Added: auth check for all functions
 // Added: logCrud for CREATE, UPDATE, DELETE
+// SECURITY: Added role-based authorization for POST, PUT, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
+
+// Roles that can manage vehicle services
+const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 export async function GET(
   request: NextRequest,
@@ -38,6 +42,13 @@ export async function POST(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can create services
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה להוסיף טיפולים' }, { status: 403 })
   }
 
   try {
@@ -102,6 +113,13 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can update services
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לעדכן טיפולים' }, { status: 403 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const serviceId = searchParams.get('serviceId')
@@ -153,6 +171,13 @@ export async function DELETE(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can delete services
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה למחוק טיפולים' }, { status: 403 })
   }
 
   try {

@@ -1,14 +1,18 @@
 // ============================================
 // src/app/api/vehicles/[id]/accidents/route.ts
-// Version: 20260112-000000
+// Version: 20260124
 // Added: auth check for all functions
 // Added: logCrud for CREATE, UPDATE, DELETE
+// SECURITY: Added role-based authorization for POST, PUT, DELETE
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
+
+// Roles that can manage vehicle accidents
+const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
@@ -52,6 +56,13 @@ export async function POST(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can create accidents
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה להוסיף תאונות' }, { status: 403 })
   }
 
   try {
@@ -116,6 +127,13 @@ export async function PUT(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can update accidents
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה לעדכן תאונות' }, { status: 403 })
+  }
+
   try {
     const { searchParams } = new URL(request.url)
     const accidentId = searchParams.get('accidentId')
@@ -174,6 +192,13 @@ export async function DELETE(
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can delete accidents
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה למחוק תאונות' }, { status: 403 })
   }
 
   try {
