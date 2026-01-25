@@ -1,12 +1,11 @@
 // ============================================
 // src/app/api/agent/route.ts
-// Version: 20260124-STAGE63
-// Stage 6.3 Remediation: Maybach Grade Security
-// R1: Permission vs Data Distinction
-// R2: Guarded Analysis with Explicit Hedging
-// R3: Anti-Manipulation Detection
-// R4: Activity Log Integration
-// R5: Explicit Uncertainty & Refusal Framework
+// Version: 20260124-STAGE63b
+// Stage 6.3b Remediation: Authorization Truthfulness
+// R1: Deterministic Authorization Truthfulness
+// R2: LLM Must Not Control Security Flow
+// R3: Refusal Semantics Completion
+// R4: Logging Requirements (unchanged)
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -19,6 +18,9 @@ import {
   createNoPermissionResponse,
   createQueryFailedResponse,
   createManipulationResponse,
+  createNotAuthorizedResponse,
+  createPartialResponse,
+  createNoResultsResponse,
   type AgentResponseMetadata,
 } from '@/lib/agent-response';
 import {
@@ -215,6 +217,7 @@ export async function POST(request: NextRequest) {
 
     const calledFunctions: string[] = [];
     const permissionDeniedModules: string[] = [];
+    let successfulDataCount = 0; // Track if we got any real data
     let iterations = 0;
 
     while (functionCalls && functionCalls.length > 0 && iterations < MAX_ITERATIONS) {
@@ -229,7 +232,7 @@ export async function POST(request: NextRequest) {
       // R1: Permission check before function execution
       const requiredModule = FUNCTION_MODULE_MAP[functionName];
       if (requiredModule && !hasModuleAccess(userRole, requiredModule, 'read')) {
-        // Log permission denial
+        // Log permission denial (internal only - do not expose details to client)
         await logActivity({
           action: 'AGENT_PERMISSION_DENIED',
           category: 'SECURITY',
@@ -244,27 +247,21 @@ export async function POST(request: NextRequest) {
           },
           targetType: 'PERMISSION_CHECK',
           targetId: functionName,
-          targetName: `Permission denied: ${requiredModule}`,
         });
 
         permissionDeniedModules.push(requiredModule);
 
-        // Send permission denied response to LLM
-        const permissionResponse = createNoPermissionResponse({
-          userId,
-          userRole,
-          module: requiredModule,
-        });
-
+        // Stage 6.3b: Send NEUTRAL response to LLM - do NOT reveal permission issue
+        // LLM must not be able to distinguish "no permission" from "no data"
+        // The final state will be determined by server code, not LLM
         result = await chat.sendMessage([
           {
             functionResponse: {
               name: functionName,
               response: {
                 result: null,
-                error: 'PERMISSION_DENIED',
-                message: permissionResponse.message,
-                meta: permissionResponse.meta,
+                data: null,
+                _meta: { querySucceeded: true, recordCount: 0 },
               },
             },
           },
@@ -305,6 +302,9 @@ export async function POST(request: NextRequest) {
             },
             data: [],
           };
+        } else {
+          // Stage 6.3b: Track successful data retrieval
+          successfulDataCount++;
         }
       } catch (err) {
         console.error(`[Agent] Error in function ${functionName}:`, err);
@@ -346,24 +346,52 @@ export async function POST(request: NextRequest) {
     const duration = Date.now() - startTime;
     await logAgentQuery(questionText, answerText, duration, true);
 
-    // Build response with metadata
+    // Stage 6.3b: Deterministic Final State Selection
+    // CODE determines state - LLM has no influence on security flow
+    const hasPermissionDenials = permissionDeniedModules.length > 0;
+    const hasData = successfulDataCount > 0;
+
+    let finalState: string;
+    let finalMessage: string;
+    let httpStatus: number = 200;
+
+    if (hasPermissionDenials && !hasData) {
+      // ALL requested intents were blocked by permissions
+      finalState = 'NOT_AUTHORIZED';
+      finalMessage = 'אין לי הרשאה להציג את המידע שביקשת.';
+      httpStatus = 403;
+    } else if (hasPermissionDenials && hasData) {
+      // Some data returned, some blocked by permissions
+      finalState = 'PARTIAL';
+      finalMessage = 'בחלק מהבקשה אין לי הרשאה להציג מידע.';
+    } else if (!hasPermissionDenials && !hasData) {
+      // No permissions issues, but no data found
+      finalState = 'NO_RESULTS';
+      finalMessage = 'לא נמצאו תוצאות בהתאם לקריטריונים שביקשת.';
+    } else {
+      // Data found, no permission issues
+      finalState = 'ANSWER_WITH_DATA';
+      finalMessage = textResponse;
+    }
+
+    // Build final response - do NOT leak internal module names
     const finalResponse: any = {
-      response: textResponse,
+      response: finalState === 'ANSWER_WITH_DATA' ? textResponse : finalMessage,
       meta: {
-        state: 'ANSWER_WITH_DATA',
+        state: finalState,
         ...responseMetadata,
         functions: calledFunctions,
         duration,
       },
     };
 
-    // R1: Include permission info if any were denied
-    if (permissionDeniedModules.length > 0) {
-      finalResponse.meta.permissionDenied = permissionDeniedModules;
-      finalResponse.meta.note = 'חלק מהנתונים אינם זמינים עקב הרשאות';
+    // For PARTIAL state, include the LLM response for the permitted data
+    if (finalState === 'PARTIAL') {
+      finalResponse.response = textResponse;
+      finalResponse.meta.partialNote = finalMessage;
     }
 
-    return NextResponse.json(finalResponse);
+    return NextResponse.json(finalResponse, { status: httpStatus });
   } catch (error) {
     console.error('[Agent] Error:', error);
     answerText = String(error);
