@@ -15,8 +15,11 @@
 export type AgentResponseState =
   | 'ANSWER_WITH_DATA'        // Data found, verified, response grounded
   | 'ANSWER_WITH_ESTIMATION'  // Analysis/estimation, explicitly labeled
-  | 'REFUSE_NO_PERMISSION'    // User lacks access rights
-  | 'REFUSE_NO_DATA'          // Query succeeded but no records found
+  | 'NO_RESULTS'              // Query succeeded, authorized, but no records found
+  | 'NOT_AUTHORIZED'          // User lacks access rights for ALL requested data
+  | 'PARTIAL'                 // Some data returned, some blocked by permissions
+  | 'REFUSE_NO_PERMISSION'    // (internal) Function-level denial during execution
+  | 'REFUSE_NO_DATA'          // (internal) Query succeeded but no records
   | 'REFUSE_UNCERTAIN'        // Cannot determine answer with confidence
   | 'REFUSE_QUERY_FAILED'     // Technical failure during query
   | 'REFUSE_MANIPULATION'     // Detected attempt to bypass safety
@@ -226,6 +229,56 @@ export function createManipulationResponse(options: {
     },
     data: null,
     message: 'הבקשה נדחתה מסיבות אבטחה.',
+  }
+}
+
+// ============================================================================
+// Stage 6.3b: Deterministic Final Response States
+// ============================================================================
+
+/**
+ * NOT_AUTHORIZED - All requested data was blocked by permissions.
+ * Does NOT reveal which modules or functions were attempted.
+ */
+export function createNotAuthorizedResponse(options: {
+  userId: string
+  userRole: string
+}): { state: 'NOT_AUTHORIZED'; message: string; httpStatus: 403 } {
+  return {
+    state: 'NOT_AUTHORIZED',
+    message: 'אין לי הרשאה להציג את המידע שביקשת.',
+    httpStatus: 403,
+  }
+}
+
+/**
+ * PARTIAL - Some data returned, some blocked by permissions.
+ * Does NOT reveal which modules were blocked.
+ */
+export function createPartialResponse(options: {
+  userId: string
+  userRole: string
+  textResponse: string
+}): { state: 'PARTIAL'; message: string; response: string; httpStatus: 200 } {
+  return {
+    state: 'PARTIAL',
+    message: 'בחלק מהבקשה אין לי הרשאה להציג מידע.',
+    response: options.textResponse,
+    httpStatus: 200,
+  }
+}
+
+/**
+ * NO_RESULTS - Query authorized and succeeded, but no matching records.
+ */
+export function createNoResultsResponse(options: {
+  userId: string
+  userRole: string
+}): { state: 'NO_RESULTS'; message: string; httpStatus: 200 } {
+  return {
+    state: 'NO_RESULTS',
+    message: 'לא נמצאו תוצאות בהתאם להרשאות שלך ולקריטריונים שביקשת.',
+    httpStatus: 200,
   }
 }
 
