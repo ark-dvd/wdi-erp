@@ -1,6 +1,7 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260124-MAYBACH
+// Version: 20260125-RBAC-V1
+// RBAC v1: Canonical roles per DOC-013
 // FIXED: Wrap POST in transaction for atomicity
 // SECURITY: Added role-based authorization for POST
 // Security: Removed idNumber from GET response (PII)
@@ -26,9 +27,14 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
+import { hasAnyRole, type CanonicalRole } from '@/lib/authorization'
 
-// Roles that can create/modify employee data
-const SENSITIVE_DATA_ROLES = ['founder', 'admin', 'hr_manager']
+// RBAC v1: Canonical roles that can create/modify employee data (DOC-014 §4.2)
+const HR_WRITE_ROLES: CanonicalRole[] = ['owner', 'trust_officer']
+
+// RBAC v1: Canonical roles that can read sensitive HR data (DOC-014 §4.2)
+const HR_SENSITIVE_READ_ROLES: CanonicalRole[] = ['owner', 'executive', 'trust_officer']
+
 
 export async function GET(request: Request) {
   try {
@@ -139,10 +145,13 @@ export async function POST(request: Request) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = (session.user as any)?.role
+    // RBAC v1: Check multi-role authorization
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
-    // Only authorized roles can create employees
-    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+    // RBAC v1: Only authorized roles can create employees (DOC-014 §4.2)
+    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
+    if (!canWrite) {
       return versionedResponse({ error: 'אין הרשאה ליצור עובדים' }, { status: 403 })
     }
 

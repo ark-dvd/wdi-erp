@@ -1,64 +1,93 @@
+// ================================================
+// WDI ERP - Admin Users Management Page
+// Version: 20260125-MAYBACH
+// Maybach-grade UI per Design Document
+// ================================================
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
-import Link from 'next/link'
 import { usePageView } from '@/hooks/useActivityLog'
-import { ArrowRight, Search } from 'lucide-react'
+import { Search, Filter, Users, Loader2 } from 'lucide-react'
+import { AdminPageHeader, UserCard } from '@/components/admin'
+
+// ================================================
+// TYPES
+// ================================================
+
+interface Role {
+  id: string
+  name: string
+  displayName: string
+  level: number
+  userCount?: number
+}
 
 interface User {
   id: string
   email: string
   name: string | null
   lastLogin: string | null
-  role: {
-    name: string
-    displayName: string
-  }
+  isActive: boolean
+  roles: Role[]
   employee: {
     firstName: string
     lastName: string
     role: string
+    photoUrl?: string | null
   } | null
 }
 
-const roleColors: Record<string, string> = {
-  founder: 'bg-purple-100 text-purple-800',
-  admin: 'bg-red-100 text-red-800',
-  manager: 'bg-blue-100 text-blue-800',
-  employee: 'bg-green-100 text-green-800',
-}
+// ================================================
+// CONSTANTS
+// ================================================
+
+// RBAC admin roles that can access this page (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
+
+// ================================================
+// COMPONENT
+// ================================================
 
 export default function AdminUsersPage() {
   const { data: session, status } = useSession()
   usePageView('admin')
   const router = useRouter()
-  
+
+  // State
   const [users, setUsers] = useState<User[]>([])
+  const [allRoles, setAllRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  
-  const userRole = (session?.user as any)?.role
+  const [selectedRoleFilter, setSelectedRoleFilter] = useState<string>('all')
 
+  // Authorization check
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
+  const canManageRoles = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
+
+  // Redirect if not authorized
   useEffect(() => {
-    if (status === 'authenticated' && userRole !== 'founder') {
+    if (status === 'authenticated' && !canManageRoles) {
       router.push('/dashboard')
     }
-  }, [status, userRole, router])
+  }, [status, canManageRoles, router])
 
+  // Fetch data
   useEffect(() => {
-    if (userRole === 'founder') {
+    if (canManageRoles) {
       fetchUsers()
+      fetchRoles()
     }
-  }, [userRole])
+  }, [canManageRoles])
 
   const fetchUsers = async () => {
     try {
       const res = await fetch('/api/admin/users')
       if (res.ok) {
         const data = await res.json()
-        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
         setUsers(data.items || data)
       }
     } catch (err) {
@@ -68,100 +97,185 @@ export default function AdminUsersPage() {
     }
   }
 
-  const formatDateTime = (dateStr: string | null) => {
-    if (!dateStr) return 'טרם התחבר'
-    const date = new Date(dateStr)
-    return date.toLocaleString('he-IL', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      timeZone: 'Asia/Jerusalem'
+  const fetchRoles = async () => {
+    try {
+      const res = await fetch('/api/admin/roles')
+      if (res.ok) {
+        const data = await res.json()
+        setAllRoles(data.roles || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch roles')
+    }
+  }
+
+  // Filtered users
+  const filteredUsers = useMemo(() => {
+    return users.filter((user) => {
+      // Search filter
+      const searchLower = search.toLowerCase()
+      const matchesSearch =
+        !search ||
+        user.email.toLowerCase().includes(searchLower) ||
+        user.name?.toLowerCase().includes(searchLower) ||
+        user.employee?.firstName.toLowerCase().includes(searchLower) ||
+        user.employee?.lastName.toLowerCase().includes(searchLower)
+
+      // Role filter
+      const matchesRole =
+        selectedRoleFilter === 'all' ||
+        user.roles.some((r) => r.name === selectedRoleFilter)
+
+      return matchesSearch && matchesRole
     })
-  }
+  }, [users, search, selectedRoleFilter])
 
-  const filteredUsers = users.filter(user => {
-    const searchLower = search.toLowerCase()
-    return (
-      user.email.toLowerCase().includes(searchLower) ||
-      user.name?.toLowerCase().includes(searchLower) ||
-      user.employee?.firstName.toLowerCase().includes(searchLower) ||
-      user.employee?.lastName.toLowerCase().includes(searchLower)
-    )
-  })
+  // Stats
+  const activeUsersCount = users.filter((u) => u.isActive).length
+  const rolesInUseCount = new Set(users.flatMap((u) => u.roles.map((r) => r.name))).size
 
+  // Loading state
   if (status === 'loading' || loading) {
-    return <div className="p-8 text-center">טוען...</div>
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500">טוען נתונים...</p>
+        </div>
+      </div>
+    )
   }
 
-  if (userRole !== 'founder') {
-    return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
+  // Unauthorized state
+  if (!canManageRoles) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">אין הרשאה</h2>
+          <p className="text-gray-500">אין לך הרשאה לגשת לדף זה</p>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center gap-4">
-        <Link href="/dashboard/admin" className="text-gray-500 hover:text-gray-700">
-          <ArrowRight size={24} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold">ניהול משתמשים</h1>
-          <p className="text-gray-500">{users.length} משתמשים במערכת</p>
+    <div className="p-6 max-w-7xl mx-auto">
+      {/* Header */}
+      <AdminPageHeader
+        title="ניהול משתמשים"
+        description="ניהול גישה והרשאות משתמשי המערכת"
+        backHref="/dashboard/admin"
+        backLabel="חזרה לניהול מערכת"
+      />
+
+      {/* Stats Bar */}
+      <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="text-3xl font-bold text-gray-900">{users.length}</div>
+          <div className="text-sm text-gray-500">משתמשים במערכת</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="text-3xl font-bold text-emerald-600">{activeUsersCount}</div>
+          <div className="text-sm text-gray-500">משתמשים פעילים</div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-100 p-4">
+          <div className="text-3xl font-bold text-blue-600">{rolesInUseCount}</div>
+          <div className="text-sm text-gray-500">תפקידים בשימוש</div>
         </div>
       </div>
 
-      <div className="card p-4">
-        <div className="relative max-w-md">
-          <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="חיפוש לפי שם או אימייל..."
-            className="input pr-10 w-full"
-          />
+      {/* Filters Bar */}
+      <div className="bg-white rounded-xl border border-gray-100 p-4 mb-6">
+        <div className="flex flex-col sm:flex-row gap-4">
+          {/* Search */}
+          <div className="flex-1 relative">
+            <Search className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="חיפוש משתמש..."
+              className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          {/* Role Filter */}
+          <div className="relative min-w-[200px]">
+            <Filter className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
+            <select
+              value={selectedRoleFilter}
+              onChange={(e) => setSelectedRoleFilter(e.target.value)}
+              className="w-full pr-10 pl-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent appearance-none cursor-pointer transition-all"
+            >
+              <option value="all">כל התפקידים</option>
+              {allRoles
+                .filter((r) => r.name !== 'all_employees')
+                .map((role) => (
+                  <option key={role.id} value={role.name}>
+                    {role.displayName}
+                  </option>
+                ))}
+            </select>
+            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+              <svg
+                className="w-4 h-4 text-gray-400"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </div>
+          </div>
         </div>
+
+        {/* Active filters indicator */}
+        {(search || selectedRoleFilter !== 'all') && (
+          <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
+            <span className="text-xs text-gray-500">מציג {filteredUsers.length} מתוך {users.length} משתמשים</span>
+            {(search || selectedRoleFilter !== 'all') && (
+              <button
+                onClick={() => {
+                  setSearch('')
+                  setSelectedRoleFilter('all')
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                נקה סינון
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
-      <div className="card overflow-hidden">
-        <table className="w-full">
-          <thead className="bg-gray-50 text-right">
-            <tr>
-              <th className="p-3 font-medium text-gray-600">שם</th>
-              <th className="p-3 font-medium text-gray-600">אימייל</th>
-              <th className="p-3 font-medium text-gray-600">הרשאה</th>
-              <th className="p-3 font-medium text-gray-600">תפקיד בחברה</th>
-              <th className="p-3 font-medium text-gray-600">כניסה אחרונה</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {filteredUsers.map((user) => (
-              <tr key={user.id} className="hover:bg-gray-50">
-                <td className="p-3 font-medium">
-                  {user.employee 
-                    ? `${user.employee.firstName} ${user.employee.lastName}`
-                    : user.name || '-'
-                  }
-                </td>
-                <td className="p-3 text-gray-600">{user.email}</td>
-                <td className="p-3">
-                  <span className={`px-2 py-1 rounded text-xs font-medium ${roleColors[user.role.name] || 'bg-gray-100'}`}>
-                    {user.role.displayName}
-                  </span>
-                </td>
-                <td className="p-3 text-gray-600">
-                  {user.employee?.role || '-'}
-                </td>
-                <td className="p-3 text-sm text-gray-500" dir="ltr">
-                  {formatDateTime(user.lastLogin)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      {/* Users Grid */}
+      {filteredUsers.length > 0 ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredUsers.map((user) => (
+            <UserCard key={user.id} user={user} />
+          ))}
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-gray-100 p-12 text-center">
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Users className="w-8 h-8 text-gray-400" />
+          </div>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">לא נמצאו משתמשים</h3>
+          <p className="text-gray-500 text-sm">
+            {search || selectedRoleFilter !== 'all'
+              ? 'נסה לשנות את הסינון או החיפוש'
+              : 'אין משתמשים במערכת'}
+          </p>
+        </div>
+      )}
     </div>
   )
 }

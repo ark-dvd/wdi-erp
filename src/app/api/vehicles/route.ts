@@ -1,11 +1,9 @@
-// ============================================
-// src/app/api/vehicles/route.ts
-// Version: 20260124-MAYBACH
-// Added: auth check for all functions
-// Added: logCrud for CREATE
-// SECURITY: Added role-based authorization for POST
+// ================================================
+// WDI ERP - Vehicles API Route
+// Version: 20260125-RBAC-V1-CENTRAL
+// RBAC v1: Central authorization via loadUserAuthContext + evaluateAuthorization
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
-// ============================================
+// ================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -27,9 +25,7 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-
-// Roles that can manage vehicle data
-const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+import { loadUserAuthContext, evaluateAuthorization } from '@/lib/authorization'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -37,7 +33,32 @@ export async function GET(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const userId = (session.user as any)?.id
+  if (!userId) {
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
+    // RBAC v1: Central authorization
+    const ctx = await loadUserAuthContext(userId)
+    if (!ctx) {
+      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+    }
+
+    const authResult = await evaluateAuthorization(ctx, {
+      module: 'vehicles',
+      operation: 'READ',
+    })
+
+    if (!authResult.authorized) {
+      return versionedResponse({ error: 'אין הרשאה לצפות ברכבים' }, { status: 403 })
+    }
+
+    // RBAC v1: This module is ALL-scope only
+    if (authResult.effectiveScope !== 'ALL') {
+      return versionedResponse({ error: 'אין הרשאה לצפות ברכבים (נדרש ALL)' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     // R1: Parse pagination
@@ -60,6 +81,8 @@ export async function GET(request: NextRequest) {
     if (status && status !== 'all') {
       where.status = status
     }
+
+    // RBAC v1: This module is ALL-scope only (enforced above)
 
     // R1: Count total for pagination
     const total = await prisma.vehicle.count({ where })
@@ -109,11 +132,29 @@ export async function POST(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const userRole = (session.user as any)?.role
+  const userId = (session.user as any)?.id
+  if (!userId) {
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-  // Only authorized roles can create vehicles
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+  // RBAC v1: Central authorization
+  const ctx = await loadUserAuthContext(userId)
+  if (!ctx) {
+    return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+  }
+
+  const authResult = await evaluateAuthorization(ctx, {
+    module: 'vehicles',
+    operation: 'CREATE',
+  })
+
+  if (!authResult.authorized) {
     return versionedResponse({ error: 'אין הרשאה ליצור רכבים' }, { status: 403 })
+  }
+
+  // RBAC v1: This module is ALL-scope only
+  if (authResult.effectiveScope !== 'ALL') {
+    return versionedResponse({ error: 'אין הרשאה ליצור רכבים (נדרש ALL)' }, { status: 403 })
   }
 
   try {
@@ -135,7 +176,7 @@ export async function POST(request: NextRequest) {
     if (existing) {
       return versionedResponse({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 409 })
     }
-    
+
     const vehicle = await prisma.vehicle.create({
       data: {
         licensePlate: data.licensePlate,
@@ -155,7 +196,7 @@ export async function POST(request: NextRequest) {
         notes: data.notes || null,
       }
     })
-    
+
     if (data.currentDriverId) {
       await prisma.$transaction([
         prisma.vehicle.update({
@@ -172,13 +213,13 @@ export async function POST(request: NextRequest) {
         })
       ])
     }
-    
-    // Logging - added
+
+    // Logging
     await logCrud('CREATE', 'vehicles', 'vehicle', vehicle.id,
       `${data.manufacturer} ${data.model} (${data.licensePlate})`, {
-      licensePlate: data.licensePlate,
-      status: data.status || VehicleStatus.ACTIVE,
-    })
+        licensePlate: data.licensePlate,
+        status: data.status || VehicleStatus.ACTIVE,
+      })
 
     // R5: Versioned response with 201 status
     return versionedResponse(vehicle, { status: 201 })

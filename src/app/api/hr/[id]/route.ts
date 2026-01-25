@@ -1,6 +1,7 @@
 // ================================================
 // WDI ERP - HR [id] API Route
-// Version: 20260114-233000
+// Version: 20260125-RBAC-V1
+// RBAC v1: Canonical roles per DOC-013
 // SECURITY FIX: Removed idNumber/grossSalary from GET response
 // SECURITY FIX: Added role-based access for sensitive data
 // ================================================
@@ -9,9 +10,17 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import type { CanonicalRole } from '@/lib/authorization'
 
-// Roles that can see sensitive employee data
-const SENSITIVE_DATA_ROLES = ['founder', 'admin', 'hr_manager']
+// RBAC v1: Canonical roles that can write HR data (DOC-014 §4.2)
+const HR_WRITE_ROLES: CanonicalRole[] = ['owner', 'trust_officer']
+
+// RBAC v1: Canonical roles that can read sensitive HR data (DOC-014 §4.2)
+const HR_SENSITIVE_READ_ROLES: CanonicalRole[] = ['owner', 'executive', 'trust_officer']
+
+// Finance Officer can see compensation fields only (DOC-014 §4.2)
+const HR_COMPENSATION_READ_ROLES: CanonicalRole[] = ['finance_officer']
+
 
 export async function GET(
   request: Request,
@@ -24,7 +33,9 @@ export async function GET(
     }
 
     const { id } = await params
-    const userRole = (session.user as any)?.role
+    // RBAC v1: Check multi-role authorization
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
     const employee = await prisma.employee.findUnique({
       where: { id },
@@ -75,9 +86,15 @@ export async function GET(
       certifications: employee.certifications ? JSON.parse(employee.certifications) : [],
     }
 
-    // Only include sensitive data for authorized roles
-    if (SENSITIVE_DATA_ROLES.includes(userRole)) {
+    // RBAC v1: Only include sensitive data for authorized roles (DOC-014 §4.2)
+    const canReadSensitive = userRoleNames.some(r => HR_SENSITIVE_READ_ROLES.includes(r))
+    const canReadCompensation = userRoleNames.some(r => HR_COMPENSATION_READ_ROLES.includes(r))
+
+    if (canReadSensitive) {
       response.idNumber = idNumber
+      response.grossSalary = grossSalary
+    } else if (canReadCompensation) {
+      // Finance Officer: compensation fields only per DOC-013 §7.3.4
       response.grossSalary = grossSalary
     }
 
@@ -128,10 +145,13 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = (session.user as any)?.role
-    
-    // Only authorized roles can update employee data
-    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+    // RBAC v1: Check multi-role authorization
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
+
+    // RBAC v1: Only authorized roles can update employee data (DOC-014 §4.2)
+    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
+    if (!canWrite) {
       return NextResponse.json({ error: 'אין הרשאה לעדכן נתוני עובדים' }, { status: 403 })
     }
 
@@ -227,10 +247,13 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = (session.user as any)?.role
-    
-    // Only authorized roles can delete employees
-    if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
+    // RBAC v1: Check multi-role authorization
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
+
+    // RBAC v1: Only authorized roles can delete employees (DOC-014 §4.2)
+    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
+    if (!canWrite) {
       return NextResponse.json({ error: 'אין הרשאה למחוק עובדים' }, { status: 403 })
     }
 
