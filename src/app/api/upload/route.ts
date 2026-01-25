@@ -1,20 +1,35 @@
-// Version: 20260111-145000
+// ============================================
+// src/app/api/upload/route.ts
+// Version: 20260124
 // Added: logActivity for UPLOAD
+// SECURITY: Added role-based authorization for POST
+// ============================================
+
 import { NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
 import { auth } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 
+// Roles that can upload files (broad set for multi-module support)
+const UPLOAD_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager', 'hr_manager']
+
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
 
 export async function POST(request: Request) {
-  try {
-    const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+  const session = await auth()
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
 
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can upload files
+  if (!UPLOAD_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה להעלות קבצים' }, { status: 403 })
+  }
+
+  try {
     const formData = await request.formData()
     const file = formData.get('file') as File
     const folder = formData.get('folder') as string || 'uploads'
