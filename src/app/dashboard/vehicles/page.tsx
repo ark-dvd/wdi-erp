@@ -40,7 +40,8 @@ export default function VehiclesPage() {
     fetch('/api/vehicles')
       .then(r => r.json())
       .then(data => {
-        setVehicles(Array.isArray(data) ? data : [])
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setVehicles(data.items || (Array.isArray(data) ? data : []))
         setLoading(false)
       })
       .catch(() => setLoading(false))

@@ -65,7 +65,8 @@ export default function HRPage() {
       const res = await fetch('/api/hr')
       if (res.ok) {
         const data = await res.json()
-        setEmployees(data)
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setEmployees(data.items || data)
       }
     } catch (error) {
       console.error('Error fetching employees:', error)

@@ -1,11 +1,27 @@
-// Version: 20260124
+// Version: 20260124-MAYBACH
 // FIXED: N+1 query in addManagersToProject - using createMany
 // FIXED: Wrap POST in transaction to prevent orphaned records
 // SECURITY: Added role-based authorization for POST
+// MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import {
+  parsePagination,
+  calculateSkip,
+  paginatedResponse,
+  parseAndValidateFilters,
+  filterValidationError,
+  parseAndValidateSort,
+  sortValidationError,
+  toPrismaOrderBy,
+  versionedResponse,
+  validationError,
+  validateRequired,
+  FILTER_DEFINITIONS,
+  SORT_DEFINITIONS,
+} from '@/lib/api-contracts'
 
 // Roles that can create/modify project data
 const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
@@ -81,18 +97,40 @@ export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
-    const state = searchParams.get('state')
-    const category = searchParams.get('category')
-    const level = searchParams.get('level')
+
+    // R1: Parse pagination
+    const { page, limit } = parsePagination(searchParams)
+
+    // R3: Validate filters (no silent ignore)
+    const filterResult = parseAndValidateFilters(searchParams, FILTER_DEFINITIONS.projects)
+    if (!filterResult.valid) {
+      return filterValidationError(filterResult.errors)
+    }
+    const { search, state, category, level } = filterResult.filters
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.projects)
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error)
+    }
 
     const where: any = {}
+    if (search) {
+      where.OR = [
+        { name: { contains: search, mode: 'insensitive' } },
+        { projectNumber: { contains: search, mode: 'insensitive' } },
+      ]
+    }
     if (state) where.state = state
     if (category) where.category = category
     if (level === 'main') where.parentId = null
+
+    // R1: Count total for pagination
+    const total = await prisma.project.count({ where })
 
     const projects = await prisma.project.findMany({
       where,
@@ -147,13 +185,18 @@ export async function GET(request: Request) {
         },
         _count: { select: { events: true } },
       },
-      orderBy: { projectNumber: 'asc' },
+      // R4: Client-configurable sorting
+      orderBy: toPrismaOrderBy(sortResult.sort),
+      // R1: Apply pagination
+      skip: calculateSkip(page, limit),
+      take: limit,
     })
 
-    return NextResponse.json(projects)
+    // R1 + R5: Return paginated response with versioning
+    return versionedResponse(paginatedResponse(projects, page, limit, total))
   } catch (error) {
     console.error('Error fetching projects:', error)
-    return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to fetch projects' }, { status: 500 })
   }
 }
 
@@ -161,17 +204,25 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const userRole = (session.user as any)?.role
 
     // Only authorized roles can create projects
     if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה ליצור פרויקטים' }, { status: 403 })
+      return versionedResponse({ error: 'אין הרשאה ליצור פרויקטים' }, { status: 403 })
     }
 
     const data = await request.json()
+
+    // R2: Field-level validation
+    const requiredErrors = validateRequired(data, [
+      { field: 'name', label: 'שם פרויקט' },
+    ])
+    if (requiredErrors.length > 0) {
+      return validationError(requiredErrors)
+    }
     const { buildings, quarters, managerIds, ...projectData } = data
 
     let projectNumber: string
@@ -339,9 +390,10 @@ export async function POST(request: Request) {
       return project
     })
 
-    return NextResponse.json(project, { status: 201 })
+    // R5: Versioned response with 201 status
+    return versionedResponse(project, { status: 201 })
   } catch (error) {
     console.error('Error creating project:', error)
-    return NextResponse.json({ error: 'Failed to create project' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to create project' }, { status: 500 })
   }
 }

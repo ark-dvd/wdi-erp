@@ -1,12 +1,27 @@
 // src/app/api/individual-reviews/route.ts
-// Version: 20260111-140600
+// Version: 20260124-MAYBACH
 // FIXED: Wrap POST in transaction for atomicity
 // Added: logCrud for CREATE
+// MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logCrud } from '@/lib/activity';
+import {
+  parsePagination,
+  calculateSkip,
+  paginatedResponse,
+  parseAndValidateFilters,
+  filterValidationError,
+  parseAndValidateSort,
+  sortValidationError,
+  toPrismaOrderBy,
+  versionedResponse,
+  validationError,
+  FILTER_DEFINITIONS,
+  SORT_DEFINITIONS,
+} from '@/lib/api-contracts';
 
 const CRITERIA_FIELDS = [
   'accountability', 'boqQuality', 'specQuality', 'planQuality',
@@ -25,13 +40,26 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const { searchParams } = new URL(request.url);
-    const contactId = searchParams.get('contactId');
-    const projectId = searchParams.get('projectId');
-    const organizationId = searchParams.get('organizationId');
+
+    // R1: Parse pagination
+    const { page, limit } = parsePagination(searchParams);
+
+    // R3: Validate filters (no silent ignore)
+    const filterResult = parseAndValidateFilters(searchParams, FILTER_DEFINITIONS.reviews);
+    if (!filterResult.valid) {
+      return filterValidationError(filterResult.errors);
+    }
+    const { contactId, projectId, organizationId } = filterResult.filters;
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.reviews);
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error);
+    }
 
     const where: Record<string, unknown> = {};
     if (contactId) where.contactId = contactId;
@@ -45,28 +73,36 @@ export async function GET(request: NextRequest) {
       where.contactId = { in: orgContacts.map(c => c.id) };
     }
 
+    // R1: Count total for pagination
+    const total = await prisma.individualReview.count({ where });
+
     const reviews = await prisma.individualReview.findMany({
       where,
       include: {
         reviewer: { select: { id: true, name: true, email: true } },
-        contact: { 
-          select: { 
-            id: true, 
-            firstName: true, 
+        contact: {
+          select: {
+            id: true,
+            firstName: true,
             lastName: true,
             organizationId: true,
             organization: { select: { id: true, name: true } },
-          } 
+          }
         },
         project: { select: { id: true, name: true, projectNumber: true } },
       },
-      orderBy: { createdAt: 'desc' },
+      // R4: Client-configurable sorting
+      orderBy: toPrismaOrderBy(sortResult.sort),
+      // R1: Apply pagination
+      skip: calculateSkip(page, limit),
+      take: limit,
     });
 
-    return NextResponse.json(reviews);
+    // R1 + R5: Return paginated response with versioning
+    return versionedResponse(paginatedResponse(reviews, page, limit, total));
   } catch (error) {
     console.error('Error fetching individual reviews:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return versionedResponse({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
@@ -74,7 +110,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
     }
 
     const user = await prisma.user.findUnique({
@@ -82,14 +118,18 @@ export async function POST(request: NextRequest) {
     });
 
     if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+      return versionedResponse({ error: 'User not found' }, { status: 404 });
     }
 
     const body = await request.json();
     const { contactId, projectId, ...ratingData } = body;
 
-    if (!contactId || !projectId) {
-      return NextResponse.json({ error: 'contactId and projectId are required' }, { status: 400 });
+    // R2: Field-level validation
+    const fieldErrors: Record<string, string> = {};
+    if (!contactId) fieldErrors.contactId = 'נדרש לבחור איש קשר';
+    if (!projectId) fieldErrors.projectId = 'נדרש לבחור פרויקט';
+    if (Object.keys(fieldErrors).length > 0) {
+      return validationError(fieldErrors);
     }
 
     const existingReview = await prisma.individualReview.findUnique({
@@ -103,7 +143,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (existingReview) {
-      return NextResponse.json({
+      return versionedResponse({
         error: 'כבר דירגת את איש הקשר הזה בפרויקט זה'
       }, { status: 409 });
     }
@@ -120,9 +160,9 @@ export async function POST(request: NextRequest) {
 
     const ratedCount = Object.values(ratings).filter(r => r > 0).length;
     if (ratedCount < 6) {
-      return NextResponse.json({ 
-        error: `יש לדרג לפחות 6 קריטריונים (דורגו ${ratedCount})` 
-      }, { status: 400 });
+      return validationError({
+        ratings: `יש לדרג לפחות 6 קריטריונים (דורגו ${ratedCount})`
+      });
     }
 
     const contact = await prisma.contact.findUnique({
@@ -199,10 +239,11 @@ export async function POST(request: NextRequest) {
       return review
     })
 
-    return NextResponse.json(review, { status: 201 });
+    // R5: Versioned response with 201 status
+    return versionedResponse(review, { status: 201 });
   } catch (error) {
     console.error('Error creating individual review:', error);
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+    return versionedResponse({ error: 'Internal server error' }, { status: 500 });
   }
 }
 

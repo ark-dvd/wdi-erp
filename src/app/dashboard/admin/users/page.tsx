@@ -58,7 +58,8 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin/users')
       if (res.ok) {
         const data = await res.json()
-        setUsers(data)
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setUsers(data.items || data)
       }
     } catch (err) {
       console.error('Failed to fetch users')

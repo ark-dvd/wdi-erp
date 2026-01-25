@@ -1,9 +1,10 @@
 // ============================================
 // src/app/api/equipment/route.ts
-// Version: 20260124
+// Version: 20260124-MAYBACH
 // Equipment module - main API
 // FIXED: Moved labels to separate file (Next.js route export restriction)
 // SECURITY: Added role-based authorization for POST
+// MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,6 +13,21 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
 import { equipmentTypeLabels } from '@/lib/equipment-labels'
+import {
+  parsePagination,
+  calculateSkip,
+  paginatedResponse,
+  parseAndValidateFilters,
+  filterValidationError,
+  parseAndValidateSort,
+  sortValidationError,
+  toPrismaOrderBy,
+  versionedResponse,
+  validationError,
+  validateRequired,
+  FILTER_DEFINITIONS,
+  SORT_DEFINITIONS,
+} from '@/lib/api-contracts'
 
 // Roles that can manage equipment data
 const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
@@ -19,18 +35,30 @@ const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
   try {
     const { searchParams } = new URL(request.url)
-    const status = searchParams.get('status')
-    const type = searchParams.get('type')
-    const assigneeId = searchParams.get('assigneeId')
-    const isOffice = searchParams.get('isOffice')
-    
+
+    // R1: Parse pagination
+    const { page, limit } = parsePagination(searchParams)
+
+    // R3: Validate filters (no silent ignore)
+    const filterResult = parseAndValidateFilters(searchParams, FILTER_DEFINITIONS.equipment)
+    if (!filterResult.valid) {
+      return filterValidationError(filterResult.errors)
+    }
+    const { status, type, assigneeId, isOffice } = filterResult.filters
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.equipment)
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error)
+    }
+
     const where: any = {}
-    
+
     if (status && status !== 'all') {
       where.status = status
     }
@@ -45,7 +73,10 @@ export async function GET(request: NextRequest) {
     } else if (isOffice === 'false') {
       where.isOfficeEquipment = false
     }
-    
+
+    // R1: Count total for pagination
+    const total = await prisma.equipment.count({ where })
+
     const equipment = await prisma.equipment.findMany({
       where,
       include: {
@@ -73,40 +104,55 @@ export async function GET(request: NextRequest) {
           }
         }
       },
-      orderBy: { updatedAt: 'desc' }
+      // R4: Client-configurable sorting
+      orderBy: toPrismaOrderBy(sortResult.sort),
+      // R1: Apply pagination
+      skip: calculateSkip(page, limit),
+      take: limit,
     })
-    
-    return NextResponse.json(equipment)
+
+    // R1 + R5: Return paginated response with versioning
+    return versionedResponse(paginatedResponse(equipment, page, limit, total))
   } catch (error) {
     console.error('Error fetching equipment:', error)
-    return NextResponse.json({ error: 'Failed to fetch equipment' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to fetch equipment' }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const userRole = (session.user as any)?.role
 
   // Only authorized roles can create equipment
   if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה להוסיף ציוד' }, { status: 403 })
+    return versionedResponse({ error: 'אין הרשאה להוסיף ציוד' }, { status: 403 })
   }
 
   try {
     const userId = (session.user as any)?.id || null
     const data = await request.json()
-    
+
+    // R2: Field-level validation
+    const requiredErrors = validateRequired(data, [
+      { field: 'type', label: 'סוג ציוד' },
+      { field: 'manufacturer', label: 'יצרן' },
+      { field: 'model', label: 'דגם' },
+    ])
+    if (requiredErrors.length > 0) {
+      return validationError(requiredErrors)
+    }
+
     // Check for duplicate serial number
     if (data.serialNumber) {
       const existing = await prisma.equipment.findUnique({
         where: { serialNumber: data.serialNumber }
       })
       if (existing) {
-        return NextResponse.json({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 409 })
+        return versionedResponse({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 409 })
       }
     }
     
@@ -161,16 +207,17 @@ export async function POST(request: NextRequest) {
     
     // Log the action
     const typeLabel = equipmentTypeLabels[data.type as EquipmentType] || data.type
-    await logCrud('CREATE', 'equipment', 'equipment', equipment.id, 
+    await logCrud('CREATE', 'equipment', 'equipment', equipment.id,
       `${typeLabel} - ${data.manufacturer} ${data.model}`, {
       type: data.type,
       serialNumber: data.serialNumber,
       status: data.status || EquipmentStatus.ACTIVE,
     })
-    
-    return NextResponse.json(equipment, { status: 201 })
+
+    // R5: Versioned response with 201 status
+    return versionedResponse(equipment, { status: 201 })
   } catch (error) {
     console.error('Error creating equipment:', error)
-    return NextResponse.json({ error: 'Failed to create equipment' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to create equipment' }, { status: 500 })
   }
 }

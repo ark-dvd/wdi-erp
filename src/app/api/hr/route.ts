@@ -1,28 +1,83 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260124
+// Version: 20260124-MAYBACH
 // FIXED: Wrap POST in transaction for atomicity
 // SECURITY: Added role-based authorization for POST
 // Security: Removed idNumber from GET response (PII)
+// MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import {
+  parsePagination,
+  calculateSkip,
+  paginatedResponse,
+  parseAndValidateFilters,
+  filterValidationError,
+  parseAndValidateSort,
+  sortValidationError,
+  toPrismaOrderBy,
+  versionedResponse,
+  validationError,
+  validateRequired,
+  FILTER_DEFINITIONS,
+  SORT_DEFINITIONS,
+} from '@/lib/api-contracts'
 
 // Roles that can create/modify employee data
 const SENSITIVE_DATA_ROLES = ['founder', 'admin', 'hr_manager']
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const { searchParams } = new URL(request.url)
+
+    // R1: Parse pagination
+    const { page, limit } = parsePagination(searchParams)
+
+    // R3: Validate filters (no silent ignore)
+    const filterResult = parseAndValidateFilters(searchParams, FILTER_DEFINITIONS.employees)
+    if (!filterResult.valid) {
+      return filterValidationError(filterResult.errors)
+    }
+    const { search, status, department, role } = filterResult.filters
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.employees)
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error)
+    }
+
+    const where: any = {}
+    if (search) {
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } },
+        { phone: { contains: search } },
+      ]
+    }
+    if (status) where.status = status
+    if (department) where.department = department
+    if (role) where.role = role
+
+    // R1: Count total for pagination
+    const total = await prisma.employee.count({ where })
+
     const employees = await prisma.employee.findMany({
-      orderBy: { lastName: 'asc' },
+      where,
+      // R4: Client-configurable sorting
+      orderBy: toPrismaOrderBy(sortResult.sort),
+      // R1: Apply pagination
+      skip: calculateSkip(page, limit),
+      take: limit,
       select: {
         id: true,
         firstName: true,
@@ -69,10 +124,11 @@ export async function GET() {
       },
     })
 
-    return NextResponse.json(employees)
+    // R1 + R5: Return paginated response with versioning
+    return versionedResponse(paginatedResponse(employees, page, limit, total))
   } catch (error) {
     console.error('Error fetching employees:', error)
-    return NextResponse.json({ error: 'Failed to fetch employees' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to fetch employees' }, { status: 500 })
   }
 }
 
@@ -80,17 +136,29 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
     const userRole = (session.user as any)?.role
 
     // Only authorized roles can create employees
     if (!SENSITIVE_DATA_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה ליצור עובדים' }, { status: 403 })
+      return versionedResponse({ error: 'אין הרשאה ליצור עובדים' }, { status: 403 })
     }
 
     const data = await request.json()
+
+    // R2: Field-level validation
+    const requiredErrors = validateRequired(data, [
+      { field: 'firstName', label: 'שם פרטי' },
+      { field: 'lastName', label: 'שם משפחה' },
+      { field: 'idNumber', label: 'תעודת זהות' },
+      { field: 'role', label: 'תפקיד' },
+    ])
+    if (requiredErrors.length > 0) {
+      return validationError(requiredErrors)
+    }
+
     const normalizedEmail = data.email?.toLowerCase() || null
 
     const existingEmployee = await prisma.employee.findUnique({
@@ -98,7 +166,7 @@ export async function POST(request: Request) {
     })
 
     if (existingEmployee) {
-      return NextResponse.json({ error: 'עובד עם תעודת זהות זו כבר קיים במערכת' }, { status: 409 })
+      return versionedResponse({ error: 'עובד עם תעודת זהות זו כבר קיים במערכת' }, { status: 409 })
     }
 
     // Stage 2: User must exist before Employee creation
@@ -107,7 +175,7 @@ export async function POST(request: Request) {
         where: { email: normalizedEmail },
       })
       if (!existingUser) {
-        return NextResponse.json({ error: 'משתמש לא קיים במערכת. יש ליצור משתמש לפני יצירת עובד' }, { status: 400 })
+        return validationError({ email: 'משתמש לא קיים במערכת. יש ליצור משתמש לפני יצירת עובד' })
       }
     }
 
@@ -169,9 +237,10 @@ export async function POST(request: Request) {
       department: data.department
     })
 
-    return NextResponse.json(employee, { status: 201 })
+    // R5: Versioned response with 201 status
+    return versionedResponse(employee, { status: 201 })
   } catch (error) {
     console.error('Error creating employee:', error)
-    return NextResponse.json({ error: 'Failed to create employee' }, { status: 500 })
+    return versionedResponse({ error: 'Failed to create employee' }, { status: 500 })
   }
 }

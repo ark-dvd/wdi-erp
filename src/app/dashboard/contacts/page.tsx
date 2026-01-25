@@ -76,8 +76,15 @@ export default function ContactsPage() {
         fetch('/api/contacts'),
         fetch('/api/organizations')
       ])
-      if (contactsRes.ok) setContacts(await contactsRes.json())
-      if (orgsRes.ok) setOrganizations(await orgsRes.json())
+      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+      if (contactsRes.ok) {
+        const data = await contactsRes.json()
+        setContacts(data.items || data)
+      }
+      if (orgsRes.ok) {
+        const data = await orgsRes.json()
+        setOrganizations(data.items || data)
+      }
     } catch (error) {
       console.error('Error fetching data:', error)
     } finally {
