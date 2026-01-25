@@ -1,8 +1,21 @@
+// ============================================
+// src/app/api/events/from-email/route.ts
+// Version: 20260124
+// IDEMPOTENCY: Added replay detection via fingerprint
+// ============================================
+
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Storage } from '@google-cloud/storage'
+import { createHash } from 'crypto'
 
 const API_KEY = process.env.EMAIL_ADDON_API_KEY || 'wdi-email-addon-secret-2024'
+
+// Generate deterministic fingerprint for email deduplication
+function generateEmailFingerprint(projectId: string, emailFrom: string, emailSubject: string, emailDate: string): string {
+  const data = `${projectId}|${emailFrom}|${emailSubject}|${emailDate}`
+  return createHash('sha256').update(data).digest('hex').substring(0, 32)
+}
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
 
@@ -41,24 +54,54 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Project not found' }, { status: 404 })
     }
 
+    // Generate fingerprint for deduplication
+    const fingerprint = generateEmailFingerprint(
+      projectId,
+      emailFrom,
+      emailSubject,
+      emailDate || new Date().toISOString()
+    )
+    const fingerprintMarker = `[email-fp:${fingerprint}]`
+
+    // Check for duplicate (replay detection)
+    const existingEvent = await prisma.projectEvent.findFirst({
+      where: {
+        projectId,
+        description: { contains: fingerprintMarker }
+      },
+      select: { id: true }
+    })
+
+    if (existingEvent) {
+      // Replay detected - return existing event info
+      return NextResponse.json({
+        success: true,
+        eventId: existingEvent.id,
+        message: 'Email already saved (duplicate detected)',
+        duplicate: true
+      })
+    }
+
     // Find user by email
     const user = userEmail ? await prisma.user.findUnique({
       where: { email: userEmail }
     }) : null
 
-    // Build description with user note + full email
+    // Build description with user note + full email + fingerprint marker
     let description = ''
-    
+
     if (userNote && userNote.trim()) {
       description += `${userNote.trim()}\n\n--- מייל מקורי ---\n`
     }
-    
+
     description += `נושא: ${emailSubject}
 מאת: ${emailFrom}
 אל: ${emailTo || '-'}
 תאריך: ${emailDate || new Date().toISOString()}
 
-${emailBody}`
+${emailBody}
+
+${fingerprintMarker}`
 
     // Create event
     const event = await prisma.projectEvent.create({
