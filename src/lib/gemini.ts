@@ -2,8 +2,10 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // ================================================
 // WDI ERP - Gemini Configuration
-// Version: 20260116-164000
-// Changes: MVP Final - No photos, Data Dictionary, Redaction (9 functions): Documents, Photos, TollRoads, Parking, Assignments
+// Version: 20260124-STAGE63
+// Stage 6.3 Remediation: Added Equipment, Users, ActivityLog functions
+// R2: Guarded Analysis with Explicit Hedging
+// R5: Explicit Uncertainty & Refusal Framework
 // ================================================
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
@@ -460,6 +462,147 @@ export const agentFunctions: any[] = [
       },
     },
   },
+  // ============ STAGE 6.3: EQUIPMENT ============
+  {
+    name: 'getEquipment',
+    description: 'רשימת ציוד עם סינון לפי סטטוס, סוג או יצרן',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: 'סטטוס: ACTIVE, INACTIVE, MAINTENANCE, DISPOSED, או all' },
+        type: { type: 'STRING', description: 'סוג ציוד' },
+        manufacturer: { type: 'STRING', description: 'יצרן' },
+        isOffice: { type: 'BOOLEAN', description: 'ציוד משרדי' },
+      },
+    },
+  },
+  {
+    name: 'getEquipmentById',
+    description: 'פרטי ציוד ספציפי לפי מזהה',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING', description: 'מזהה הציוד' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'countEquipment',
+    description: 'ספירת ציוד לפי קריטריונים',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        status: { type: 'STRING', description: 'סטטוס הציוד' },
+        type: { type: 'STRING', description: 'סוג ציוד' },
+      },
+    },
+  },
+  {
+    name: 'getEquipmentStats',
+    description: 'סטטיסטיקות ציוד - סה"כ, לפי סטטוס, לפי סוג, אחריות שפגה',
+    parameters: { type: 'OBJECT', properties: {} },
+  },
+  // ============ STAGE 6.3: USERS (ADMIN ONLY) ============
+  {
+    name: 'getUsers',
+    description: 'רשימת משתמשי מערכת (למנהלים בלבד). זמין רק עבור תפקיד ADMIN.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        role: { type: 'STRING', description: 'סינון לפי תפקיד: ADMIN, MANAGER, USER' },
+      },
+    },
+  },
+  {
+    name: 'getUserById',
+    description: 'פרטי משתמש ספציפי (למנהלים בלבד)',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        id: { type: 'STRING', description: 'מזהה המשתמש' },
+      },
+      required: ['id'],
+    },
+  },
+  {
+    name: 'countUsers',
+    description: 'ספירת משתמשים במערכת (למנהלים בלבד)',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        role: { type: 'STRING', description: 'סינון לפי תפקיד' },
+      },
+    },
+  },
+  // ============ STAGE 6.3 R4: ACTIVITY LOG ============
+  {
+    name: 'getActivityLogs',
+    description: 'שליפת יומן פעילויות. זמין למנהלים (ADMIN, MANAGER). לשאלות כמו "מה קרה?", "מי עשה?", "מתי שונה?"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        userEmail: { type: 'STRING', description: 'סינון לפי משתמש' },
+        action: { type: 'STRING', description: 'סוג פעולה: CREATE, READ, UPDATE, DELETE, LOGIN_SUCCESS, LOGOUT' },
+        category: { type: 'STRING', description: 'קטגוריה: auth, data, navigation, agent, system' },
+        module: { type: 'STRING', description: 'מודול: hr, projects, contacts, vehicles, equipment' },
+        targetType: { type: 'STRING', description: 'סוג יעד' },
+        targetId: { type: 'STRING', description: 'מזהה יעד' },
+        startDate: { type: 'STRING', description: 'תאריך התחלה (ISO format)' },
+        endDate: { type: 'STRING', description: 'תאריך סיום (ISO format)' },
+        limit: { type: 'NUMBER', description: 'מספר רשומות מקסימלי' },
+      },
+    },
+  },
+  {
+    name: 'getActivityStats',
+    description: 'סטטיסטיקות פעילות במערכת - לפי קטגוריה, מודול, משתמש',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        startDate: { type: 'STRING', description: 'תאריך התחלה' },
+        endDate: { type: 'STRING', description: 'תאריך סיום' },
+      },
+    },
+  },
+  {
+    name: 'getEntityHistory',
+    description: 'היסטוריית שינויים של ישות ספציפית. לשאלות כמו "מה השתנה באיש קשר X?" או "מי עדכן את הפרויקט?"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        targetType: { type: 'STRING', description: 'סוג הישות: Contact, Project, Employee, Vehicle' },
+        targetId: { type: 'STRING', description: 'מזהה הישות' },
+        limit: { type: 'NUMBER', description: 'מספר רשומות' },
+      },
+      required: ['targetType', 'targetId'],
+    },
+  },
+  {
+    name: 'getUserActivity',
+    description: 'סיכום פעילות של משתמש ספציפי',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        userEmail: { type: 'STRING', description: 'כתובת אימייל המשתמש' },
+        startDate: { type: 'STRING', description: 'תאריך התחלה' },
+        endDate: { type: 'STRING', description: 'תאריך סיום' },
+      },
+      required: ['userEmail'],
+    },
+  },
+  {
+    name: 'getSecurityAudit',
+    description: 'אירועי אבטחה במערכת - ניסיונות מניפולציה, דחיות הרשאה. למנהלים בלבד.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        startDate: { type: 'STRING', description: 'תאריך התחלה' },
+        endDate: { type: 'STRING', description: 'תאריך סיום' },
+        limit: { type: 'NUMBER', description: 'מספר רשומות' },
+      },
+    },
+  },
 ];
 
 export function getGeminiModel() {
@@ -473,10 +616,33 @@ export function getGeminiModel() {
     tools: [{ functionDeclarations: agentFunctions }],
     systemInstruction: `אתה עוזר וירטואלי של מערכת WDI ERP לניהול פרויקטי בנייה ותשתיות.
 
+## Stage 6.3: מסגרת תגובות מחייבת (Maybach Grade)
+
+### R5: מצבי תגובה מותרים בלבד
+כל תשובה חייבת להיות באחד מהמצבים הבאים:
+1. **ANSWER_WITH_DATA** - נתונים נמצאו ואומתו
+2. **ANSWER_WITH_ESTIMATION** - הערכה/ניתוח (חובה לסמן!)
+3. **REFUSE_NO_PERMISSION** - אין לך הרשאה
+4. **REFUSE_NO_DATA** - השאילתה הצליחה אך לא נמצאו תוצאות
+5. **REFUSE_UNCERTAIN** - לא ניתן לקבוע בוודאות
+6. **REFUSE_QUERY_FAILED** - שגיאה טכנית
+
+### R2: הערכות וניתוחים - חובה לסמן!
+אם אתה מספק הערכה, ניתוח, או מסקנה שאינה נתון גולמי:
+- הוסף את הקידומת: "⚠️ הערכה: "
+- ציין את בסיס ההערכה
+- לעולם אל תציג הערכה כעובדה מוחלטת
+
+### R1: הבחנה בין אין הרשאה לאין נתונים
+- אם הפונקציה מחזירה error=PERMISSION_DENIED: אמור "אין לך הרשאה לצפות ב..."
+- אם הפונקציה מחזירה state=REFUSE_NO_DATA: אמור "לא נמצאו תוצאות עבור..."
+- לעולם אל תערבב בין השניים!
+
 ## כלל עליון - חובה!
-**לעולם אל תמציא מידע!** 
+**לעולם אל תמציא מידע!**
 - תמיד קרא לפונקציה המתאימה לפני שאתה עונה על שאלה
 - אם הפונקציה מחזירה null או רשימה ריקה - אמור "לא נמצא במערכת" ואל תנחש
+- אם יש _meta.state בתוצאה - פעל בהתאם למצב
 - אם אינך בטוח - שאל שאלה מבהירה
 
 ## כללי עיצוב התשובה:
@@ -534,6 +700,19 @@ export function getGeminiModel() {
 - **getSchemaCatalog** - מבנה הסכמה (לשאלות "מה יש במערכת?")
 - **getFieldInfo** - מידע על שדה (לשאלות "מה זה status?")
 - **findFieldBySynonym** - חיפוש שדה לפי מילה נרדפת
+
+### ציוד (Stage 6.3):
+- getEquipment, getEquipmentById, countEquipment, getEquipmentStats
+
+### משתמשים (ADMIN בלבד):
+- getUsers, getUserById, countUsers
+
+### יומן פעילות (ADMIN/MANAGER):
+- getActivityLogs - שליפת יומן
+- getActivityStats - סטטיסטיקות פעילות
+- getEntityHistory - היסטוריית שינויים של ישות
+- getUserActivity - פעילות משתמש
+- getSecurityAudit - אירועי אבטחה
 
 ### כללי:
 - searchAll
