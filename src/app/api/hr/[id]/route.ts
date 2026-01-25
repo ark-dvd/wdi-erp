@@ -64,8 +64,12 @@ export async function GET(
           select: {
             id: true,
             email: true,
-            role: {
-              select: { displayName: true },
+            roles: {
+              select: {
+                role: {
+                  select: { displayName: true },
+                },
+              },
             },
           },
         },
