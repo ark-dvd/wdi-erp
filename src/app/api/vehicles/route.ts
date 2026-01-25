@@ -1,8 +1,9 @@
 // ============================================
 // src/app/api/vehicles/route.ts
-// Version: 20260112-000000
+// Version: 20260124
 // Added: auth check for all functions
 // Added: logCrud for CREATE
+// SECURITY: Added role-based authorization for POST
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -10,6 +11,9 @@ import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { VehicleStatus } from '@prisma/client'
+
+// Roles that can manage vehicle data
+const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -64,6 +68,13 @@ export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
+  const userRole = (session.user as any)?.role
+
+  // Only authorized roles can create vehicles
+  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
+    return NextResponse.json({ error: 'אין הרשאה ליצור רכבים' }, { status: 403 })
   }
 
   try {
