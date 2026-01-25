@@ -1745,12 +1745,12 @@ export async function getUsers(params: { role?: string }) {
   const where: any = {};
 
   if (params.role) {
-    where.role = { name: params.role };
+    where.roles = { some: { role: { name: params.role } } };
   }
 
   const users = await prisma.user.findMany({
     where,
-    include: { role: true },
+    include: { roles: { include: { role: true } } },
     orderBy: { email: 'asc' },
     take: 50,
   });
@@ -1760,7 +1760,7 @@ export async function getUsers(params: { role?: string }) {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role?.name,
+    role: user.roles[0]?.role?.name,
     createdAt: user.createdAt,
     lastLogin: user.lastLogin,
     isActive: user.isActive,
@@ -1770,7 +1770,7 @@ export async function getUsers(params: { role?: string }) {
 export async function getUserById(params: { id: string }) {
   const user = await prisma.user.findUnique({
     where: { id: params.id },
-    include: { role: true },
+    include: { roles: { include: { role: true } } },
   });
 
   if (!user) return null;
@@ -1779,7 +1779,7 @@ export async function getUserById(params: { id: string }) {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role?.name,
+    role: user.roles[0]?.role?.name,
     createdAt: user.createdAt,
     lastLogin: user.lastLogin,
     isActive: user.isActive,
@@ -1790,7 +1790,7 @@ export async function countUsers(params: { role?: string }) {
   const where: any = {};
 
   if (params.role) {
-    where.role = { name: params.role };
+    where.roles = { some: { role: { name: params.role } } };
   }
 
   const count = await prisma.user.count({ where });
