@@ -222,7 +222,7 @@ async function main() {
     uniquePermissions.add(key)
   }
 
-  for (const permKey of uniquePermissions) {
+  for (const permKey of Array.from(uniquePermissions)) {
     const [module, action, scope] = permKey.split(':')
     const created = await prisma.permission.create({
       data: {
