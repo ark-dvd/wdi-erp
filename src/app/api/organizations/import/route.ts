@@ -2,6 +2,7 @@
 // Version: 20260124
 // Added: logCrud for bulk import
 // SECURITY: Added role-based authorization for bulk import
+// IDEMPOTENCY: Wrapped in transaction for atomicity (all-or-nothing)
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -45,16 +46,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'נדרש מערך של ארגונים' }, { status: 400 })
     }
 
-    const results = {
-      created: 0,
-      skipped: 0,
-      errors: [] as string[],
-      createdIds: [] as string[]
-    }
+    // Wrap entire import in transaction for atomicity (all-or-nothing)
+    const result = await prisma.$transaction(async (tx) => {
+      const results = {
+        created: 0,
+        skipped: 0,
+        createdIds: [] as string[]
+      }
 
-    for (const org of organizations) {
-      try {
-        const existing = await prisma.organization.findFirst({
+      for (const org of organizations) {
+        if (!org.name) {
+          throw new Error('חסר שם ארגון')
+        }
+
+        const existing = await tx.organization.findFirst({
           where: { name: { equals: org.name, mode: 'insensitive' } }
         })
 
@@ -63,7 +68,7 @@ export async function POST(request: Request) {
           continue
         }
 
-        const created = await prisma.organization.create({
+        const created = await tx.organization.create({
           data: {
             name: org.name,
             type: org.type || 'חברה פרטית',
@@ -81,27 +86,25 @@ export async function POST(request: Request) {
 
         results.created++
         results.createdIds.push(created.id)
-      } catch (err) {
-        const error = err as Error
-        results.errors.push(`${org.name}: ${error.message}`)
       }
-    }
 
-    // Logging - added (log bulk import as single action)
-    if (results.created > 0) {
+      return results
+    })
+
+    // Logging - outside transaction (non-critical)
+    if (result.created > 0) {
       await logCrud('CREATE', 'organizations', 'import', 'bulk',
-        `ייבוא ${results.created} ארגונים`, {
+        `ייבוא ${result.created} ארגונים`, {
         totalOrganizations: organizations.length,
-        created: results.created,
-        skipped: results.skipped,
-        errors: results.errors.length,
+        created: result.created,
+        skipped: result.skipped,
       })
     }
 
     return NextResponse.json({
       success: true,
-      message: `נוצרו ${results.created} ארגונים, דולגו ${results.skipped} קיימים`,
-      ...results
+      message: `נוצרו ${result.created} ארגונים, דולגו ${result.skipped} קיימים`,
+      ...result
     })
   } catch (error) {
     console.error('Import organizations error:', error)
