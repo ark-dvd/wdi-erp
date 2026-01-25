@@ -1,16 +1,27 @@
+// ============================================
+// src/app/dashboard/contacts/[id]/edit/page.tsx
+// Version: 20260124
+// UI-015: Added dirty state warning
+// UI-025, UI-016, UI-017, UI-024: Added success toast
+// UI-013: Added error clearing on form change
+// ============================================
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Save, Trash2, Loader2 } from 'lucide-react'
 import { CONTACT_TYPES, DISCIPLINES } from '@/lib/contact-constants'
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
+import { useToast } from '@/components/Toast'
 
 interface Organization { id: string; name: string; type: string | null }
 
 export default function EditContactPage() {
   const params = useParams()
   const router = useRouter()
+  const { showSuccess, showError } = useToast()
   const contactId = params?.id as string
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -18,13 +29,20 @@ export default function EditContactPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
-  
+
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', phone: '', phoneAlt: '',
     email: '', emailAlt: '', linkedinUrl: '', organizationId: '',
     role: '', department: '', contactTypes: [] as string[],
     disciplines: [] as string[], status: 'פעיל', notes: '',
   })
+
+  // UI-015: Track original data for dirty state detection
+  const originalDataRef = useRef<string>('')
+  const isDirty = originalDataRef.current !== '' && originalDataRef.current !== JSON.stringify(formData)
+
+  // UI-015: Warn before navigating away from unsaved changes
+  useUnsavedChangesWarning(isDirty)
 
   useEffect(() => {
     const loadData = async () => {
@@ -45,7 +63,7 @@ export default function EditContactPage() {
       const res = await fetch(`/api/contacts/${contactId}`)
       if (res.ok) {
         const contact = await res.json()
-        setFormData({
+        const data = {
           firstName: contact.firstName || '',
           lastName: contact.lastName || '',
           nickname: contact.nickname || '',
@@ -61,7 +79,10 @@ export default function EditContactPage() {
           disciplines: contact.disciplines || [],
           status: contact.status || 'פעיל',
           notes: contact.notes || '',
-        })
+        }
+        setFormData(data)
+        // UI-015: Store original data for dirty detection
+        originalDataRef.current = JSON.stringify(data)
       } else {
         setError('איש הקשר לא נמצא')
         setTimeout(() => router.push('/dashboard/contacts'), 2000)
@@ -74,7 +95,7 @@ export default function EditContactPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // וולידציה - שדות חובה
     if (formData.contactTypes.length === 0) {
       setError('יש לבחור לפחות סוג איש קשר אחד')
@@ -84,7 +105,7 @@ export default function EditContactPage() {
       setError('יש לבחור לפחות דיסציפלינה אחת')
       return
     }
-    
+
     setSaving(true)
     setError('')
     try {
@@ -94,9 +115,14 @@ export default function EditContactPage() {
         body: JSON.stringify(formData),
       })
       if (!res.ok) throw new Error('Failed to update contact')
+      // UI-015: Clear dirty state before navigation
+      originalDataRef.current = JSON.stringify(formData)
+      // UI-025, UI-016, UI-017, UI-024: Show success confirmation
+      showSuccess('איש הקשר עודכן בהצלחה')
       router.push(`/dashboard/contacts/${contactId}`)
     } catch (err) {
       setError('שגיאה בעדכון איש הקשר')
+      showError('שגיאה בעדכון איש הקשר')
       console.error(err)
     } finally { setSaving(false) }
   }
@@ -114,10 +140,18 @@ export default function EditContactPage() {
   }
 
   const toggleArrayField = (field: 'contactTypes' | 'disciplines', value: string) => {
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
     setFormData(prev => ({
       ...prev,
       [field]: prev[field].includes(value) ? prev[field].filter(v => v !== value) : [...prev[field], value]
     }))
+  }
+
+  // UI-013: Helper to clear error on any field change
+  const handleFieldChange = (field: string, value: string) => {
+    if (error) setError('')
+    setFormData(prev => ({ ...prev, [field]: value }))
   }
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-[#0a3161]" /></div>

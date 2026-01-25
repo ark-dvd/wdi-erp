@@ -1,23 +1,43 @@
 // ============================================
 // src/app/dashboard/vehicles/new/page.tsx
+// Version: 20260124
+// UI-015: Added dirty state warning
+// UI-025, UI-016, UI-017, UI-024: Added success toast
+// UI-013: Added error clearing on form change
 // ============================================
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Save, Car } from 'lucide-react'
+import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
+import { useToast } from '@/components/Toast'
 
 export default function NewVehiclePage() {
   const router = useRouter()
+  const { showSuccess, showError: showErrorToast } = useToast()
   const [employees, setEmployees] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // UI-015: Track if form has been modified
+  const formRef = useRef<HTMLFormElement>(null)
+  const [isDirty, setIsDirty] = useState(false)
+
+  // UI-015: Warn before navigating away from unsaved changes
+  useUnsavedChangesWarning(isDirty)
+
   useEffect(() => {
     fetch('/api/hr').then(r => r.json()).then(data => setEmployees(data.filter((e: any) => e.status === 'פעיל'))).catch(() => {})
   }, [])
+
+  // UI-013: Clear error and mark dirty on any input change
+  const handleFormChange = () => {
+    if (error) setError(null)
+    if (!isDirty) setIsDirty(true)
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -27,9 +47,22 @@ export default function NewVehiclePage() {
     fd.forEach((v, k) => { data[k] = v || null })
     try {
       const res = await fetch('/api/vehicles', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) })
-      if (res.ok) { const v = await res.json(); router.push(`/dashboard/vehicles/${v.id}`) }
-      else setError((await res.json()).error || 'שגיאה')
-    } catch { setError('שגיאה') } finally { setSaving(false) }
+      if (res.ok) {
+        const v = await res.json()
+        // UI-015: Clear dirty state before navigation
+        setIsDirty(false)
+        // UI-025, UI-016, UI-017, UI-024: Show success confirmation
+        showSuccess('הרכב נוצר בהצלחה')
+        router.push(`/dashboard/vehicles/${v.id}`)
+      } else {
+        const errData = await res.json()
+        setError(errData.error || 'שגיאה')
+        showErrorToast(errData.error || 'שגיאה ביצירת הרכב')
+      }
+    } catch {
+      setError('שגיאה')
+      showErrorToast('שגיאה ביצירת הרכב')
+    } finally { setSaving(false) }
   }
 
   return (
@@ -37,7 +70,7 @@ export default function NewVehiclePage() {
       <Link href="/dashboard/vehicles" className="text-blue-600 text-sm flex items-center gap-1 mb-4"><ArrowRight size={14} /> חזרה</Link>
       <div className="flex items-center gap-4 mb-6"><div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center"><Car className="text-blue-600" size={24} /></div><div><h1 className="text-2xl font-bold">רכב חדש</h1><p className="text-gray-500">הזן פרטים</p></div></div>
       {error && <div className="bg-red-50 text-red-700 p-4 rounded-lg mb-6">{error}</div>}
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <form ref={formRef} onSubmit={handleSubmit} onChange={handleFormChange} className="space-y-6">
         <div className="bg-white rounded-xl border p-6">
           <h2 className="font-semibold mb-4">פרטי רכב</h2>
           <div className="grid md:grid-cols-3 gap-4">
