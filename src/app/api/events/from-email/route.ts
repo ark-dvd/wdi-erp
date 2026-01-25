@@ -2,12 +2,14 @@
 // src/app/api/events/from-email/route.ts
 // Version: 20260124
 // IDEMPOTENCY: Added replay detection via fingerprint
+// OBSERVABILITY: Added logCrud for event creation audit trail
 // ============================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { Storage } from '@google-cloud/storage'
 import { createHash } from 'crypto'
+import { logCrud } from '@/lib/activity'
 
 const API_KEY = process.env.EMAIL_ADDON_API_KEY || 'wdi-email-addon-secret-2024'
 
@@ -115,27 +117,28 @@ ${fingerprintMarker}`
     })
 
     // Upload attachments to GCS and create EventFile records
-    if (attachments && attachments.length > 0) {
+    const attachmentsCount = attachments?.length || 0
+    if (attachments && attachmentsCount > 0) {
       const bucket = storage.bucket(bucketName)
-      
+
       for (const attachment of attachments) {
         const { filename, mimeType, base64Data } = attachment
-        
+
         // Generate unique filename
         const timestamp = Date.now()
         const safeName = filename.replace(/[^a-zA-Z0-9.-]/g, '_')
         const gcsPath = `events/${event.id}/${timestamp}_${safeName}`
-        
+
         // Upload to GCS
         const file = bucket.file(gcsPath)
         const buffer = Buffer.from(base64Data, 'base64')
-        
+
         await file.save(buffer, {
           metadata: {
             contentType: mimeType,
           }
         })
-        
+
         // Create EventFile record
         await prisma.eventFile.create({
           data: {
@@ -149,11 +152,30 @@ ${fingerprintMarker}`
       }
     }
 
-    return NextResponse.json({ 
-      success: true, 
+    // Audit logging - outside mutations (non-critical)
+    try {
+      await logCrud('CREATE', 'events', 'from-email', event.id,
+        `אירוע נוצר ממייל: ${emailSubject}`, {
+        eventId: event.id,
+        projectId,
+        projectName: project.name,
+        eventType,
+        emailFrom,
+        emailSubject,
+        attachmentsCount,
+        fingerprint,
+        userEmail: userEmail || null,
+        duplicate: false,
+      })
+    } catch (logError) {
+      console.error('Failed to create audit log:', logError)
+    }
+
+    return NextResponse.json({
+      success: true,
       eventId: event.id,
       message: 'Email saved as event',
-      attachmentsCount: attachments?.length || 0
+      attachmentsCount
     })
 
   } catch (error) {
