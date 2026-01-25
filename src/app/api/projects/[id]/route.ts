@@ -79,7 +79,7 @@ export async function GET(
     })
 
     if (!project) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      return NextResponse.json({ error: 'פרויקט לא נמצא' }, { status: 404 })
     }
 
     // Fetch contacts from ContactProject table
@@ -149,7 +149,7 @@ export async function PUT(
     })
 
     if (!existingProject) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      return NextResponse.json({ error: 'פרויקט לא נמצא' }, { status: 404 })
     }
 
     const changes: Record<string, { from: any; to: any }> = {}
@@ -238,7 +238,7 @@ export async function DELETE(
     })
 
     if (!existingProject) {
-      return NextResponse.json({ error: 'Project not found' }, { status: 404 })
+      return NextResponse.json({ error: 'פרויקט לא נמצא' }, { status: 404 })
     }
 
     const childrenCount = await prisma.project.count({

@@ -98,7 +98,7 @@ export async function POST(request: Request) {
     })
 
     if (existingEmployee) {
-      return NextResponse.json({ error: 'עובד עם תעודת זהות זו כבר קיים במערכת' }, { status: 400 })
+      return NextResponse.json({ error: 'עובד עם תעודת זהות זו כבר קיים במערכת' }, { status: 409 })
     }
 
     // Stage 2: User must exist before Employee creation
@@ -169,7 +169,7 @@ export async function POST(request: Request) {
       department: data.department
     })
 
-    return NextResponse.json(employee)
+    return NextResponse.json(employee, { status: 201 })
   } catch (error) {
     console.error('Error creating employee:', error)
     return NextResponse.json({ error: 'Failed to create employee' }, { status: 500 })

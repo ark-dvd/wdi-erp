@@ -106,7 +106,7 @@ export async function POST(request: NextRequest) {
         where: { serialNumber: data.serialNumber }
       })
       if (existing) {
-        return NextResponse.json({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 400 })
+        return NextResponse.json({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 409 })
       }
     }
     

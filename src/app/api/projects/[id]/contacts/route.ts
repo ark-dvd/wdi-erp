@@ -92,7 +92,7 @@ export async function POST(
       where: { contactId_projectId: { contactId: data.contactId, projectId: id } }
     })
     if (existing) {
-      return NextResponse.json({ error: 'איש הקשר כבר משויך לפרויקט זה' }, { status: 400 })
+      return NextResponse.json({ error: 'איש הקשר כבר משויך לפרויקט זה' }, { status: 409 })
     }
 
     // Get contact and project info for logging
@@ -141,7 +141,7 @@ export async function POST(
       roleInProject: data.roleInProject,
     })
 
-    return NextResponse.json(contactProject)
+    return NextResponse.json(contactProject, { status: 201 })
   } catch (error) {
     console.error('Error adding contact to project:', error)
     return NextResponse.json({ error: 'Failed to add contact' }, { status: 500 })

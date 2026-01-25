@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
       where: { licensePlate: data.licensePlate }
     })
     if (existing) {
-      return NextResponse.json({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 400 })
+      return NextResponse.json({ error: 'מספר רישוי כבר קיים במערכת' }, { status: 409 })
     }
     
     const vehicle = await prisma.vehicle.create({

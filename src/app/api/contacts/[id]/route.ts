@@ -154,6 +154,10 @@ export async function DELETE(
       select: { firstName: true, lastName: true, organization: { select: { name: true } } }
     })
 
+    if (!contact) {
+      return NextResponse.json({ error: 'איש קשר לא נמצא' }, { status: 404 })
+    }
+
     await prisma.contact.delete({ where: { id } })
 
     // Logging - added

@@ -71,9 +71,9 @@ export async function GET(
     })
     
     if (!equipment) {
-      return NextResponse.json({ error: 'Equipment not found' }, { status: 404 })
+      return NextResponse.json({ error: 'ציוד לא נמצא' }, { status: 404 })
     }
-    
+
     return NextResponse.json(equipment)
   } catch (error) {
     console.error('Error fetching equipment:', error)
@@ -107,7 +107,7 @@ export async function PUT(
     })
     
     if (!existing) {
-      return NextResponse.json({ error: 'Equipment not found' }, { status: 404 })
+      return NextResponse.json({ error: 'ציוד לא נמצא' }, { status: 404 })
     }
     
     // Check for duplicate serial number (if changed)
@@ -116,7 +116,7 @@ export async function PUT(
         where: { serialNumber: data.serialNumber }
       })
       if (duplicate) {
-        return NextResponse.json({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 400 })
+        return NextResponse.json({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 409 })
       }
     }
     
@@ -245,9 +245,9 @@ export async function DELETE(
     })
     
     if (!equipment) {
-      return NextResponse.json({ error: 'Equipment not found' }, { status: 404 })
+      return NextResponse.json({ error: 'ציוד לא נמצא' }, { status: 404 })
     }
-    
+
     // Delete equipment (assignments will cascade)
     await prisma.equipment.delete({
       where: { id: params.id }

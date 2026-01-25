@@ -32,7 +32,7 @@ export async function GET(
       },
     })
 
-    if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 })
+    if (!event) return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
 
     return NextResponse.json(event)
   } catch (error) {
@@ -110,6 +110,10 @@ export async function DELETE(
       where: { id },
       include: { project: { select: { name: true } } }
     })
+
+    if (!event) {
+      return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
+    }
 
     // Delete associated files first
     await prisma.eventFile.deleteMany({

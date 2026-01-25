@@ -137,7 +137,7 @@ export async function POST(request: Request) {
       organizationName: contact.organization?.name,
     })
 
-    return NextResponse.json(contact)
+    return NextResponse.json(contact, { status: 201 })
   } catch (error) {
     console.error('Error creating contact:', error)
     return NextResponse.json({ error: 'Failed to create contact' }, { status: 500 })
