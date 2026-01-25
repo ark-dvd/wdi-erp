@@ -1,8 +1,10 @@
 // Version: 20260124
 // FIXED: Wrap entire import in transaction - all or nothing
+// OBSERVABILITY: Added logCrud for import-save audit trail
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { logCrud } from '@/lib/activity'
 
 export async function POST(request: Request) {
   try {
@@ -184,6 +186,20 @@ export async function POST(request: Request) {
           status: 'completed',
           importedById: (session.user as any).id
         }
+      })
+
+      // Audit logging for ActivityLog
+      const totalCreated = result.organizationsCreated + result.contactsCreated
+      const totalUpdated = result.organizationsUpdated + result.contactsUpdated
+      await logCrud('CREATE', 'admin', 'import-contacts', 'bulk',
+        `ייבוא אנשי קשר: ${totalCreated} נוצרו, ${totalUpdated} עודכנו`, {
+        totalRecords: contacts.length,
+        organizationsCreated: result.organizationsCreated,
+        organizationsUpdated: result.organizationsUpdated,
+        contactsCreated: result.contactsCreated,
+        contactsUpdated: result.contactsUpdated,
+        skipped: result.skipped,
+        sourceContext: sourceContext || null,
       })
     } catch (logError) {
       console.error('Failed to create import log:', logError)
