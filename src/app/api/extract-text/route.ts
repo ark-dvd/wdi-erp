@@ -2,12 +2,14 @@
 // src/app/api/extract-text/route.ts
 // Version: 20260112-004500
 // Note: POST has no auth - called internally by events API
+// OBSERVABILITY: Added logCrud for text extraction audit trail
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { extractTextFromFile, supportsTextExtraction } from '@/lib/text-extraction';
 import { auth } from '@/lib/auth';
+import { logCrud } from '@/lib/activity';
 
 export async function POST(request: NextRequest) {
   // No auth check - this is called internally by the events API after file upload
@@ -60,6 +62,19 @@ export async function POST(request: NextRequest) {
       });
 
       console.log(`Text extracted successfully for file: ${file.fileName} (${extractedText.length} chars)`);
+
+      // Audit logging - non-critical
+      try {
+        await logCrud('UPDATE', 'events', 'extract-text', fileId,
+          `חולץ טקסט לקובץ: ${file.fileName}`, {
+          eventFileId: fileId,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          textLength: extractedText.length,
+        });
+      } catch (logError) {
+        console.error('Failed to create audit log:', logError);
+      }
 
       return NextResponse.json({
         success: true,
