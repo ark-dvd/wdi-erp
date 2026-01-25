@@ -284,7 +284,11 @@ export function createNoResultsResponse(options: {
 
 // ============================================================================
 // R1: Permission vs Data Distinction
+// RBAC v1: Uses canonical roles from DOC-013
+// CRITICAL: Agent is PROHIBITED from HR access (DOC-013 M-003)
 // ============================================================================
+
+import type { CanonicalRole, Module } from './authorization'
 
 export interface ModulePermissions {
   canRead: boolean
@@ -292,44 +296,145 @@ export interface ModulePermissions {
   restrictedFields?: string[]
 }
 
+// Agent module mapping (some API modules map to different canonical modules)
+const AGENT_MODULE_MAP: Record<string, Module> = {
+  'hr': 'hr',
+  'contacts': 'vendors',        // Contacts are part of vendors module
+  'projects': 'projects',
+  'organizations': 'vendors',   // Organizations are vendor entities
+  'vehicles': 'vehicles',
+  'equipment': 'equipment',
+  'events': 'events',
+  'reviews': 'vendors',         // Reviews are vendor-related
+  'users': 'admin',
+  'activityLog': 'admin',
+}
+
 /**
- * Module access permissions by role
- * R1 Requirement: Clear distinction between "no access" and "no data"
+ * RBAC v1 Module Permissions by Canonical Role
+ * Source: DOC-014 §4.10 Agent Authorization Matrix
+ *
+ * CRITICAL: Agent is READ-ONLY and CANNOT access HR (DOC-013 §9, M-003)
+ * The Agent MUST NOT access hr module under any circumstances.
  */
-export const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermissions>> = {
-  // ADMIN has full access to everything
-  ADMIN: {
-    contacts: { canRead: true, canWrite: true },
-    projects: { canRead: true, canWrite: true },
-    hr: { canRead: true, canWrite: true },
-    organizations: { canRead: true, canWrite: true },
-    vehicles: { canRead: true, canWrite: true },
-    equipment: { canRead: true, canWrite: true },
-    events: { canRead: true, canWrite: true },
-    reviews: { canRead: true, canWrite: true },
-    users: { canRead: true, canWrite: true },
+const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermissions>> = {
+  // Owner: Full read access to all modules (Agent is still read-only)
+  owner: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED per DOC-013 M-003
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: true, canWrite: false },
     activityLog: { canRead: true, canWrite: false },
   },
 
-  // MANAGER has read access to most, limited write
-  MANAGER: {
-    contacts: { canRead: true, canWrite: true },
-    projects: { canRead: true, canWrite: true },
-    hr: { canRead: true, canWrite: false, restrictedFields: ['salary', 'bankAccount'] },
-    organizations: { canRead: true, canWrite: true },
-    vehicles: { canRead: true, canWrite: true },
-    equipment: { canRead: true, canWrite: true },
-    events: { canRead: true, canWrite: true },
-    reviews: { canRead: true, canWrite: true },
+  // Executive: Full read access to all modules
+  executive: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
     users: { canRead: false, canWrite: false },
     activityLog: { canRead: true, canWrite: false },
   },
 
-  // USER has limited access
-  USER: {
+  // Trust Officer: Full read access
+  trust_officer: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: true, canWrite: false },
+  },
+
+  // Finance Officer: Read access to most modules
+  finance_officer: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // Domain Head: Domain-scoped access (Agent queries via ProjectKnowledgeView)
+  domain_head: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },  // DOMAIN scope applied server-side
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // Senior PM: Project-scoped access
+  senior_pm: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },  // PROJECT scope applied server-side
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // Project Coordinator: Project-scoped access
+  project_coordinator: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // Operations Staff: Project-scoped access
+  operations_staff: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },
+    equipment: { canRead: true, canWrite: false },
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: false },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // All Employees: Baseline access (all authenticated users)
+  all_employees: {
+    contacts: { canRead: true, canWrite: false },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // PROHIBITED - only MyProfileView via Agent
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -340,12 +445,49 @@ export const MODULE_PERMISSIONS: Record<string, Record<string, ModulePermissions
   },
 }
 
+// Legacy compatibility: Map old role names to canonical roles
+const LEGACY_ROLE_MAP: Record<string, CanonicalRole> = {
+  'ADMIN': 'owner',
+  'MANAGER': 'trust_officer',
+  'USER': 'all_employees',
+  'founder': 'owner',
+  'ceo': 'executive',
+  'office_manager': 'trust_officer',
+  'department_manager': 'domain_head',
+  'project_manager': 'senior_pm',
+  'secretary': 'operations_staff',
+  'employee': 'all_employees',
+}
+
+/**
+ * Normalize role name to canonical format
+ */
+function normalizeRole(role: string): CanonicalRole {
+  const normalized = role.toLowerCase()
+
+  // Check if already canonical
+  if (normalized in AGENT_MODULE_PERMISSIONS) {
+    return normalized as CanonicalRole
+  }
+
+  // Check legacy mapping
+  const legacy = LEGACY_ROLE_MAP[role] || LEGACY_ROLE_MAP[role.toUpperCase()]
+  if (legacy) {
+    return legacy
+  }
+
+  // Default to all_employees (safe baseline)
+  return 'all_employees'
+}
+
 export function checkModulePermission(
   role: string,
   module: string,
   operation: 'read' | 'write' = 'read'
 ): ModulePermissions | null {
-  const rolePermissions = MODULE_PERMISSIONS[role.toUpperCase()]
+  const canonicalRole = normalizeRole(role)
+  const rolePermissions = AGENT_MODULE_PERMISSIONS[canonicalRole]
+
   if (!rolePermissions) {
     return null
   }
@@ -363,10 +505,18 @@ export function hasModuleAccess(
   module: string,
   operation: 'read' | 'write' = 'read'
 ): boolean {
+  // CRITICAL: HR is always prohibited for Agent (DOC-013 M-003)
+  if (module.toLowerCase() === 'hr') {
+    return false
+  }
+
   const permission = checkModulePermission(role, module, operation)
   if (!permission) return false
   return operation === 'read' ? permission.canRead : permission.canWrite
 }
+
+// Export for use in authorization module
+export { AGENT_MODULE_PERMISSIONS, AGENT_MODULE_MAP }
 
 // ============================================================================
 // R2: Guarded Analysis Helpers

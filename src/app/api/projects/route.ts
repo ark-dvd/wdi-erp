@@ -1,8 +1,10 @@
-// Version: 20260124-MAYBACH
-// FIXED: N+1 query in addManagersToProject - using createMany
-// FIXED: Wrap POST in transaction to prevent orphaned records
-// SECURITY: Added role-based authorization for POST
+// ================================================
+// WDI ERP - Projects API Route
+// Version: 20260125-RBAC-V1-CENTRAL
+// RBAC v1: Central authorization via loadUserAuthContext + evaluateAuthorization
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
+// ================================================
+
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -22,9 +24,7 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-
-// Roles that can create/modify project data
-const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+import { loadUserAuthContext, evaluateAuthorization } from '@/lib/authorization'
 
 async function generateProjectNumber(): Promise<string> {
   let attempts = 0
@@ -41,18 +41,18 @@ async function generateProjectNumber(): Promise<string> {
 
 async function generateQuarterNumber(parentNumber: string): Promise<string> {
   const siblings = await prisma.project.findMany({
-    where: { 
+    where: {
       projectNumber: { startsWith: `${parentNumber}-` },
       level: 'quarter'
     },
     select: { projectNumber: true }
   })
-  
+
   const usedLetters = siblings.map(s => {
     const match = s.projectNumber.match(new RegExp(`^${parentNumber}-([A-Z])$`))
     return match ? match[1] : null
   }).filter(Boolean)
-  
+
   for (let i = 0; i < 26; i++) {
     const letter = String.fromCharCode(65 + i)
     if (!usedLetters.includes(letter)) {
@@ -64,18 +64,18 @@ async function generateQuarterNumber(parentNumber: string): Promise<string> {
 
 async function generateBuildingNumber(parentNumber: string): Promise<string> {
   const siblings = await prisma.project.findMany({
-    where: { 
+    where: {
       projectNumber: { startsWith: `${parentNumber}-` },
       level: 'building'
     },
     select: { projectNumber: true }
   })
-  
+
   const usedNumbers = siblings.map(s => {
     const match = s.projectNumber.match(new RegExp(`^${parentNumber}-(\\d{2})$`))
     return match ? parseInt(match[1]) : 0
   }).filter(n => n > 0)
-  
+
   const nextNum = usedNumbers.length > 0 ? Math.max(...usedNumbers) + 1 : 1
   return `${parentNumber}-${String(nextNum).padStart(2, '0')}`
 }
@@ -100,6 +100,26 @@ export async function GET(request: Request) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    const userId = (session.user as any)?.id
+    if (!userId) {
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // RBAC v1: Central authorization
+    const ctx = await loadUserAuthContext(userId)
+    if (!ctx) {
+      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+    }
+
+    const authResult = await evaluateAuthorization(ctx, {
+      module: 'projects',
+      operation: 'READ',
+    })
+
+    if (!authResult.authorized) {
+      return versionedResponse({ error: 'אין הרשאה לצפות בפרויקטים' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     // R1: Parse pagination
@@ -118,6 +138,7 @@ export async function GET(request: Request) {
       return sortValidationError(sortResult.error)
     }
 
+    // Build where clause with scope filtering
     const where: any = {}
     if (search) {
       where.OR = [
@@ -128,6 +149,15 @@ export async function GET(request: Request) {
     if (state) where.state = state
     if (category) where.category = category
     if (level === 'main') where.parentId = null
+
+    // RBAC v1: Apply scope-based filtering (DOC-013 §5)
+    if (authResult.effectiveScope !== 'ALL' && authResult.scopeFilter) {
+      if (authResult.effectiveScope === 'DOMAIN' && authResult.scopeFilter.domainIds) {
+        where.domainId = { in: authResult.scopeFilter.domainIds }
+      } else if (authResult.effectiveScope === 'PROJECT' && authResult.scopeFilter.projectIds) {
+        where.id = { in: authResult.scopeFilter.projectIds }
+      }
+    }
 
     // R1: Count total for pagination
     const total = await prisma.project.count({ where })
@@ -207,10 +237,23 @@ export async function POST(request: Request) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    const userRole = (session.user as any)?.role
+    const userId = (session.user as any)?.id
+    if (!userId) {
+      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    // Only authorized roles can create projects
-    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
+    // RBAC v1: Central authorization
+    const ctx = await loadUserAuthContext(userId)
+    if (!ctx) {
+      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+    }
+
+    const authResult = await evaluateAuthorization(ctx, {
+      module: 'projects',
+      operation: 'CREATE',
+    })
+
+    if (!authResult.authorized) {
       return versionedResponse({ error: 'אין הרשאה ליצור פרויקטים' }, { status: 403 })
     }
 
@@ -232,7 +275,7 @@ export async function POST(request: Request) {
         where: { id: projectData.parentId },
         select: { projectNumber: true, level: true, projectType: true }
       })
-      
+
       if (!parent) {
         return NextResponse.json({ error: 'פרויקט אב לא נמצא' }, { status: 404 })
       }

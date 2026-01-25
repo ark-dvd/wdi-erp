@@ -66,11 +66,11 @@ export default function AdminConsolePage() {
     },
     {
       title: 'תפקידים והרשאות',
-      description: 'הגדרת תפקידים והרשאות גישה',
+      description: 'סקירת תפקידים והרשאות גישה',
       icon: Shield,
       href: '/dashboard/admin/roles',
       color: 'bg-purple-500',
-      ready: false,
+      ready: true,
     },
     {
       title: 'אנליטיקות',

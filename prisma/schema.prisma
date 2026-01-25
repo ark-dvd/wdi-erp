@@ -18,14 +18,18 @@ datasource db {
 }
 
 // ============ AUTH & USERS ============
+// RBAC v1: Multi-role support per DOC-013
 
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String?
   image         String?
-  role          Role      @relation(fields: [roleId], references: [id])
-  roleId        String
+  // RBAC v1: Multi-role support via junction table
+  roles         UserRole[]
+  // Legacy: Keep roleId for migration, will be removed in v2
+  legacyRoleId  String?   @map("roleId")
+  legacyRole    Role?     @relation("LegacyUserRole", fields: [legacyRoleId], references: [id])
   employeeId    String?   @unique
   employee      Employee? @relation(fields: [employeeId], references: [id])
   isActive      Boolean   @default(true)
@@ -43,9 +47,29 @@ model User {
   reviewedDuplicates DuplicateSet[] @relation("DuplicateSetReviewer")
   mergesMade        MergeHistory[] @relation("MergeHistoryMerger")
   mergesUndone      MergeHistory[] @relation("MergeHistoryUndoer")
+  // RBAC v1: Domain assignments
+  domainAssignments UserDomainAssignment[]
+  // RBAC v1: Visibility grants
+  visibilityGrantsReceived VisibilityGrant[] @relation("VisibilityGrantee")
+  visibilityGrantsGiven    VisibilityGrant[] @relation("VisibilityGrantor")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   activityLogs  ActivityLog[] @relation("UserActivityLogs")
+}
+
+// RBAC v1: Junction table for multi-role support (DOC-013 §3.2)
+model UserRole {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  role      Role     @relation(fields: [roleId], references: [id])
+  roleId    String
+  createdAt DateTime @default(now())
+  createdBy String?  // Audit: who assigned this role
+
+  @@unique([userId, roleId])
+  @@index([userId])
+  @@index([roleId])
 }
 
 model Role {
@@ -53,8 +77,12 @@ model Role {
   name        String           @unique
   displayName String
   description String?
+  // Role hierarchy level for UI ordering (lower = more privileged)
+  level       Int              @default(100)
   permissions RolePermission[]
-  users       User[]
+  userRoles   UserRole[]
+  // Legacy relation - will be removed
+  legacyUsers User[]           @relation("LegacyUserRole")
   createdAt   DateTime         @default(now())
 }
 
@@ -62,11 +90,13 @@ model Permission {
   id          String           @id @default(cuid())
   module      String
   action      String
+  // RBAC v1: Scope dimension per DOC-013 §5
+  scope       String           @default("ALL") // ALL, DOMAIN, PROJECT, OWN, SELF
   description String?
   roles       RolePermission[]
   createdAt   DateTime         @default(now())
 
-  @@unique([module, action])
+  @@unique([module, action, scope])
 }
 
 model RolePermission {
@@ -85,6 +115,53 @@ model AllowedDomain {
   domain    String   @unique
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
+}
+
+// RBAC v1: Functional domain definitions (DOC-013 §5.1)
+model Domain {
+  id          String   @id @default(cuid())
+  name        String   @unique  // e.g., 'construction', 'infrastructure'
+  displayName String             // Hebrew name
+  description String?
+  isActive    Boolean  @default(true)
+  users       UserDomainAssignment[]
+  projects    Project[] @relation("ProjectDomain")
+  createdAt   DateTime @default(now())
+}
+
+// RBAC v1: User-to-domain mapping for DOMAIN scope
+model UserDomainAssignment {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  domain    Domain   @relation(fields: [domainId], references: [id])
+  domainId  String
+  createdAt DateTime @default(now())
+  createdBy String?  // Audit
+
+  @@unique([userId, domainId])
+  @@index([userId])
+  @@index([domainId])
+}
+
+// RBAC v1: Visibility grants per DOC-013 §8
+model VisibilityGrant {
+  id          String    @id @default(cuid())
+  grantee     User      @relation("VisibilityGrantee", fields: [granteeId], references: [id])
+  granteeId   String
+  project     Project   @relation(fields: [projectId], references: [id])
+  projectId   String
+  grantor     User      @relation("VisibilityGrantor", fields: [grantorId], references: [id])
+  grantorId   String
+  reason      String?   // Optional justification
+  isActive    Boolean   @default(true)
+  revokedAt   DateTime?
+  revokedBy   String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([granteeId, projectId])  // One grant per user per project
+  @@index([granteeId, isActive])
+  @@index([projectId])
 }
 
 // ============ HR MODULE ============
@@ -174,6 +251,11 @@ model Project {
   contacts        ProjectContact[]
   contactProjects ContactProject[]
   individualReviews IndividualReview[]
+  // RBAC v1: Domain assignment for DOMAIN scope
+  domainId        String?
+  domain          Domain?   @relation("ProjectDomain", fields: [domainId], references: [id])
+  // RBAC v1: Visibility grants
+  visibilityGrants VisibilityGrant[]
   updatedById     String?
   updatedBy       User?     @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   createdAt       DateTime  @default(now())

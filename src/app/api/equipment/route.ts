@@ -1,11 +1,9 @@
-// ============================================
-// src/app/api/equipment/route.ts
-// Version: 20260124-MAYBACH
-// Equipment module - main API
-// FIXED: Moved labels to separate file (Next.js route export restriction)
-// SECURITY: Added role-based authorization for POST
+// ================================================
+// WDI ERP - Equipment API Route
+// Version: 20260125-RBAC-V1-CENTRAL
+// RBAC v1: Central authorization via loadUserAuthContext + evaluateAuthorization
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
-// ============================================
+// ================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
@@ -28,9 +26,7 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-
-// Roles that can manage equipment data
-const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+import { loadUserAuthContext, evaluateAuthorization } from '@/lib/authorization'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -38,7 +34,32 @@ export async function GET(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  const userId = (session.user as any)?.id
+  if (!userId) {
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   try {
+    // RBAC v1: Central authorization
+    const ctx = await loadUserAuthContext(userId)
+    if (!ctx) {
+      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+    }
+
+    const authResult = await evaluateAuthorization(ctx, {
+      module: 'equipment',
+      operation: 'READ',
+    })
+
+    if (!authResult.authorized) {
+      return versionedResponse({ error: 'אין הרשאה לצפות בציוד' }, { status: 403 })
+    }
+
+    // RBAC v1: This module is ALL-scope only
+    if (authResult.effectiveScope !== 'ALL') {
+      return versionedResponse({ error: 'אין הרשאה לצפות בציוד (נדרש ALL)' }, { status: 403 })
+    }
+
     const { searchParams } = new URL(request.url)
 
     // R1: Parse pagination
@@ -73,6 +94,8 @@ export async function GET(request: NextRequest) {
     } else if (isOffice === 'false') {
       where.isOfficeEquipment = false
     }
+
+    // RBAC v1: This module is ALL-scope only (enforced above)
 
     // R1: Count total for pagination
     const total = await prisma.equipment.count({ where })
@@ -125,15 +148,32 @@ export async function POST(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const userRole = (session.user as any)?.role
+  const userId = (session.user as any)?.id
+  if (!userId) {
+    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+  }
 
-  // Only authorized roles can create equipment
-  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
+  // RBAC v1: Central authorization
+  const ctx = await loadUserAuthContext(userId)
+  if (!ctx) {
+    return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
+  }
+
+  const authResult = await evaluateAuthorization(ctx, {
+    module: 'equipment',
+    operation: 'CREATE',
+  })
+
+  if (!authResult.authorized) {
     return versionedResponse({ error: 'אין הרשאה להוסיף ציוד' }, { status: 403 })
   }
 
+  // RBAC v1: This module is ALL-scope only
+  if (authResult.effectiveScope !== 'ALL') {
+    return versionedResponse({ error: 'אין הרשאה להוסיף ציוד (נדרש ALL)' }, { status: 403 })
+  }
+
   try {
-    const userId = (session.user as any)?.id || null
     const data = await request.json()
 
     // R2: Field-level validation
@@ -155,10 +195,10 @@ export async function POST(request: NextRequest) {
         return versionedResponse({ error: 'מספר סריאלי כבר קיים במערכת' }, { status: 409 })
       }
     }
-    
+
     // Determine if it's a screen type (needs screenSizeInch)
     const isScreenType = ['LAPTOP', 'MONITOR', 'MEETING_ROOM_TV'].includes(data.type)
-    
+
     const equipment = await prisma.equipment.create({
       data: {
         type: data.type,
@@ -186,7 +226,7 @@ export async function POST(request: NextRequest) {
         updatedById: userId,
       }
     })
-    
+
     // If assigned to employee, create assignment record
     if (data.currentAssigneeId && !data.isOfficeEquipment) {
       await prisma.$transaction([
@@ -204,15 +244,15 @@ export async function POST(request: NextRequest) {
         })
       ])
     }
-    
+
     // Log the action
     const typeLabel = equipmentTypeLabels[data.type as EquipmentType] || data.type
     await logCrud('CREATE', 'equipment', 'equipment', equipment.id,
       `${typeLabel} - ${data.manufacturer} ${data.model}`, {
-      type: data.type,
-      serialNumber: data.serialNumber,
-      status: data.status || EquipmentStatus.ACTIVE,
-    })
+        type: data.type,
+        serialNumber: data.serialNumber,
+        status: data.status || EquipmentStatus.ACTIVE,
+      })
 
     // R5: Versioned response with 201 status
     return versionedResponse(equipment, { status: 201 })
