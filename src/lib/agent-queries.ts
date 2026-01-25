@@ -52,6 +52,16 @@ import {
   findFieldBySynonym,
 } from './agent-data-dictionary';
 
+// Stage 6.3 R4: ייבוא פונקציות ActivityLog
+import {
+  queryActivityLogs,
+  getActivityLogStats,
+  getEntityTimeline,
+  getUserActivitySummary,
+  getSecurityEvents,
+  type ActivityLogEntry,
+} from './activity';
+
 
 // ============ EMPLOYEE FUNCTIONS ============
 
@@ -1601,6 +1611,262 @@ export async function getEmployeesWithEducation(params: {
 }
 
 
+// ============ STAGE 6.3: EQUIPMENT FUNCTIONS ============
+// S6-GAP-002: Equipment module was not covered
+
+export async function getEquipment(params: {
+  status?: string;
+  type?: string;
+  manufacturer?: string;
+  isOffice?: boolean;
+}) {
+  const where: any = {};
+
+  if (params.status && params.status !== 'all') {
+    where.status = params.status.toUpperCase();
+  }
+  if (params.type) {
+    where.type = { contains: params.type, mode: 'insensitive' };
+  }
+  if (params.manufacturer) {
+    where.manufacturer = { contains: params.manufacturer, mode: 'insensitive' };
+  }
+  if (params.isOffice !== undefined) {
+    where.isOfficeEquipment = params.isOffice;
+  }
+
+  const equipment = await prisma.equipment.findMany({
+    where,
+    include: {
+      currentAssignee: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50,
+  });
+
+  return equipment.map((eq) => ({
+    id: eq.id,
+    type: eq.type,
+    manufacturer: eq.manufacturer,
+    model: eq.model,
+    serialNumber: eq.serialNumber,
+    status: eq.status,
+    isOfficeEquipment: eq.isOfficeEquipment,
+    purchaseDate: eq.purchaseDate,
+    warrantyExpiry: eq.warrantyExpiry,
+    location: eq.location,
+    assignedTo: eq.currentAssignee
+      ? `${eq.currentAssignee.firstName} ${eq.currentAssignee.lastName}`
+      : null,
+    notes: eq.notes,
+  }));
+}
+
+export async function getEquipmentById(params: { id: string }) {
+  const equipment = await prisma.equipment.findUnique({
+    where: { id: params.id },
+    include: {
+      currentAssignee: {
+        select: { firstName: true, lastName: true },
+      },
+    },
+  });
+
+  if (!equipment) return null;
+
+  return {
+    id: equipment.id,
+    type: equipment.type,
+    manufacturer: equipment.manufacturer,
+    model: equipment.model,
+    serialNumber: equipment.serialNumber,
+    status: equipment.status,
+    isOfficeEquipment: equipment.isOfficeEquipment,
+    purchaseDate: equipment.purchaseDate,
+    warrantyExpiry: equipment.warrantyExpiry,
+    location: equipment.location,
+    assignedTo: equipment.currentAssignee
+      ? `${equipment.currentAssignee.firstName} ${equipment.currentAssignee.lastName}`
+      : null,
+    notes: equipment.notes,
+  };
+}
+
+export async function countEquipment(params: { status?: string; type?: string }) {
+  const where: any = {};
+
+  if (params.status && params.status !== 'all') {
+    where.status = params.status.toUpperCase();
+  }
+  if (params.type) {
+    where.type = { contains: params.type, mode: 'insensitive' };
+  }
+
+  const count = await prisma.equipment.count({ where });
+  return { count };
+}
+
+export async function getEquipmentStats() {
+  const [total, byStatus, byType, expiringSoon] = await Promise.all([
+    prisma.equipment.count(),
+    prisma.equipment.groupBy({
+      by: ['status'],
+      _count: { _all: true },
+    }),
+    prisma.equipment.groupBy({
+      by: ['type'],
+      _count: { _all: true },
+    }),
+    prisma.equipment.count({
+      where: {
+        warrantyExpiry: {
+          lte: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+          gte: new Date(),
+        },
+      },
+    }),
+  ]);
+
+  return {
+    total,
+    byStatus: Object.fromEntries(byStatus.map((s) => [s.status, s._count._all])),
+    byType: Object.fromEntries(byType.map((t) => [t.type, t._count._all])),
+    warrantyExpiringSoon: expiringSoon,
+  };
+}
+
+// ============ STAGE 6.3: USERS FUNCTIONS (ADMIN ONLY) ============
+// S6-GAP-001: Users module was not covered
+// NOTE: These functions should ONLY be called when userRole is ADMIN
+
+export async function getUsers(params: { role?: string }) {
+  const where: any = {};
+
+  if (params.role) {
+    where.role = { name: params.role };
+  }
+
+  const users = await prisma.user.findMany({
+    where,
+    include: { role: true },
+    orderBy: { email: 'asc' },
+    take: 50,
+  });
+
+  // Return only non-sensitive fields
+  return users.map((user) => ({
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role?.name,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    isActive: user.isActive,
+  }));
+}
+
+export async function getUserById(params: { id: string }) {
+  const user = await prisma.user.findUnique({
+    where: { id: params.id },
+    include: { role: true },
+  });
+
+  if (!user) return null;
+
+  return {
+    id: user.id,
+    email: user.email,
+    name: user.name,
+    role: user.role?.name,
+    createdAt: user.createdAt,
+    lastLogin: user.lastLogin,
+    isActive: user.isActive,
+  };
+}
+
+export async function countUsers(params: { role?: string }) {
+  const where: any = {};
+
+  if (params.role) {
+    where.role = { name: params.role };
+  }
+
+  const count = await prisma.user.count({ where });
+  return { count };
+}
+
+// ============ STAGE 6.3 R4: ACTIVITY LOG FUNCTIONS ============
+// These functions wrap the activity.ts exports for Agent use
+// Access control: ADMIN can see all, MANAGER can see module logs (not security)
+
+export async function getActivityLogs(params: {
+  userEmail?: string;
+  action?: string;
+  category?: string;
+  module?: string;
+  targetType?: string;
+  targetId?: string;
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}): Promise<ActivityLogEntry[]> {
+  return queryActivityLogs({
+    userEmail: params.userEmail,
+    action: params.action,
+    category: params.category,
+    module: params.module,
+    targetType: params.targetType,
+    targetId: params.targetId,
+    startDate: params.startDate ? new Date(params.startDate) : undefined,
+    endDate: params.endDate ? new Date(params.endDate) : undefined,
+    limit: params.limit || 20,
+  });
+}
+
+export async function getActivityStats(params: {
+  startDate?: string;
+  endDate?: string;
+}) {
+  return getActivityLogStats({
+    startDate: params.startDate ? new Date(params.startDate) : undefined,
+    endDate: params.endDate ? new Date(params.endDate) : undefined,
+  });
+}
+
+export async function getEntityHistory(params: {
+  targetType: string;
+  targetId: string;
+  limit?: number;
+}): Promise<ActivityLogEntry[]> {
+  return getEntityTimeline(params.targetType, params.targetId, params.limit);
+}
+
+export async function getUserActivity(params: {
+  userEmail: string;
+  startDate?: string;
+  endDate?: string;
+}) {
+  return getUserActivitySummary(
+    params.userEmail,
+    params.startDate ? new Date(params.startDate) : undefined,
+    params.endDate ? new Date(params.endDate) : undefined
+  );
+}
+
+export async function getSecurityAudit(params: {
+  startDate?: string;
+  endDate?: string;
+  limit?: number;
+}): Promise<ActivityLogEntry[]> {
+  return getSecurityEvents(
+    params.startDate ? new Date(params.startDate) : undefined,
+    params.endDate ? new Date(params.endDate) : undefined,
+    params.limit
+  );
+}
+
 // מיפוי שמות פונקציות לפונקציות בפועל
 export const functionMap: Record<string, Function> = {
   getEmployees,
@@ -1657,4 +1923,19 @@ export const functionMap: Record<string, Function> = {
   findFieldBySynonym,
   // Education & Certifications
   getEmployeesWithEducation,
+  // Stage 6.3: Equipment
+  getEquipment,
+  getEquipmentById,
+  countEquipment,
+  getEquipmentStats,
+  // Stage 6.3: Users (ADMIN only)
+  getUsers,
+  getUserById,
+  countUsers,
+  // Stage 6.3 R4: Activity Log
+  getActivityLogs,
+  getActivityStats,
+  getEntityHistory,
+  getUserActivity,
+  getSecurityAudit,
 };
