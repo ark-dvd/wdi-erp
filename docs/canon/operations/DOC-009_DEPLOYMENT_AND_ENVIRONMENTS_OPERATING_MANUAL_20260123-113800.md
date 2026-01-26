@@ -236,17 +236,17 @@ The application version is automatically generated at build time and includes th
 
 **Staging Build:**
 ```bash
-BUILD_ENV=S gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp-staging:latest
+GIT_HASH=$(git rev-parse --short HEAD) BUILD_ENV=S gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp-staging:latest
 ```
 
 **Production Build:**
 ```bash
-BUILD_ENV=P gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp:latest
+GIT_HASH=$(git rev-parse --short HEAD) BUILD_ENV=P gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp:latest
 ```
 
-The `BUILD_ENV` variable determines the environment indicator in the version string:
-- `S` = Staging
-- `P` = Production
+Environment variables:
+- `GIT_HASH` = Short Git commit hash (7 characters) - must be passed from host since Docker has no git
+- `BUILD_ENV` = Environment indicator: `S` for Staging, `P` for Production
 
 ---
 
