@@ -9,8 +9,8 @@ Author: Claude (acting CTO)
 Owner: Product / Engineering Leadership
 Timezone: America/Chicago (CST)
 Created At: 2026-01-23 11:38:00 CST
-Last Updated: 2026-01-23 11:38:00 CST
-Current Version: v1.0
+Last Updated: 2026-01-26 CST
+Current Version: v1.1
 ---
 
 # DOC-009 — Deployment & Environments Operating Manual
@@ -230,6 +230,24 @@ When the pipeline fails:
 - No manual override to skip failed stages
 - Fix forward or roll back; no manual patches
 
+### 5.4 Build Commands
+
+The application version is automatically generated at build time and includes the Git commit hash for traceability.
+
+**Staging Build:**
+```bash
+BUILD_ENV=S gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp-staging:latest
+```
+
+**Production Build:**
+```bash
+BUILD_ENV=P gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp:latest
+```
+
+The `BUILD_ENV` variable determines the environment indicator in the version string:
+- `S` = Staging
+- `P` = Production
+
 ---
 
 ## 6. Secrets Management
@@ -278,12 +296,14 @@ Secrets must be rotatable without service disruption. Rotation requirements:
 
 ### 7.1 Version Numbering
 
-All releases are versioned. Version numbers follow the format: `VV.DDMMYYYY.HHMM` where:
-- VV: Major version
-- DDMMYYYY: Release date
-- HHMM: Release time (CST)
+All releases are versioned. Version numbers follow the format: `YYYY.MM.DD.HHMM-<git-hash>-E` where:
+- YYYY.MM.DD.HHMM: Build date and time
+- git-hash: Short Git commit hash (7 characters)
+- E: Environment indicator (`S` for Staging, `P` for Production)
 
-Example: `01.23012026.1430` represents major version 1, released January 23, 2026 at 14:30 CST.
+Example: `2026.01.26.1430-de8b106-S` represents a staging build from January 26, 2026 at 14:30, from commit de8b106.
+
+**Why Git hash?** If both environments show the same hash, it confirms they run identical code — even if build times differ.
 
 ### 7.2 Release Notes
 
@@ -419,6 +439,7 @@ Chronic exceptions indicate process failures requiring systemic correction.
 |---------|-------------------|--------|-------------|
 | v0.1 | 2026-01-23 11:38:00 CST | Claude (acting CTO) | Initial pre-canonical draft authored under the established governance standard |
 | v1.0 | 2026-01-23 11:38:00 CST | Claude (acting CTO) | Promotion to Canonical per approved Document Registry & Baseline v1.0 |
+| v1.1 | 2026-01-26 CST | Claude (Opus 4.5) | Updated version format to include Git hash; Added build commands with BUILD_ENV |
 
 ---
 

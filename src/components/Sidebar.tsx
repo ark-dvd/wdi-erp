@@ -101,8 +101,7 @@ export default function Sidebar() {
     <aside className="w-64 bg-white border-l border-[#e2e4e8] h-screen flex flex-col">
       <div className="p-6 border-b border-[#e2e4e8]">
         <Link href="/dashboard" className="flex flex-col items-center">
-          <img src="/logo.png" alt="WDI Logo" className="h-12 mb-2" />
-          <span className="text-xs text-[#8f8f96]">v05.15012026.1600</span>
+          <img src="/logo.png" alt="WDI Logo" className="h-12" />
         </Link>
       </div>
 
@@ -163,6 +162,11 @@ export default function Sidebar() {
             <LogOut size={18} />
           </button>
         </div>
+      </div>
+
+      {/* Version Footer */}
+      <div className="text-xs text-gray-400 text-center py-2 border-t border-[#e2e4e8]">
+        {process.env.NEXT_PUBLIC_APP_VERSION || 'dev'}
       </div>
     </aside>
   )
