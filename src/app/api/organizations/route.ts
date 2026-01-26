@@ -22,8 +22,13 @@ import {
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
 
-// Roles that can create/modify organization data
-const ORGS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can create/modify organization data (using canonical RBAC role names)
+const ORGS_WRITE_ROLES = [
+  'owner', 'executive', 'trust_officer', 'finance_officer',
+  'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff',
+  // Legacy role names for backwards compatibility
+  'founder', 'admin', 'ceo', 'office_manager', 'project_manager'
+]
 
 export async function GET(request: Request) {
   try {
@@ -32,8 +37,8 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url)
 
-    // R1: Parse pagination
-    const { page, limit } = parsePagination(searchParams)
+    // Check for dropdown mode - returns all items without pagination (for select dropdowns)
+    const isDropdown = searchParams.get('dropdown') === 'true'
 
     // R3: Validate filters (no silent ignore)
     const filterResult = parseAndValidateFilters(searchParams, FILTER_DEFINITIONS.organizations)
@@ -41,12 +46,6 @@ export async function GET(request: Request) {
       return filterValidationError(filterResult.errors)
     }
     const { search, type } = filterResult.filters
-
-    // R4: Validate sort parameters
-    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.organizations)
-    if (!sortResult.valid && sortResult.error) {
-      return sortValidationError(sortResult.error)
-    }
 
     const where: any = {}
     if (search) {
@@ -56,6 +55,31 @@ export async function GET(request: Request) {
       ]
     }
     if (type) where.type = type
+
+    // Dropdown mode: return all items sorted by name, minimal data
+    if (isDropdown) {
+      const organizations = await prisma.organization.findMany({
+        where,
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          contactTypes: true,
+          disciplines: true,
+        },
+        orderBy: { name: 'asc' },
+      })
+      return versionedResponse(organizations)
+    }
+
+    // R1: Parse pagination (only for non-dropdown mode)
+    const { page, limit } = parsePagination(searchParams)
+
+    // R4: Validate sort parameters
+    const sortResult = parseAndValidateSort(searchParams, SORT_DEFINITIONS.organizations)
+    if (!sortResult.valid && sortResult.error) {
+      return sortValidationError(sortResult.error)
+    }
 
     // R1: Count total for pagination
     const total = await prisma.organization.count({ where })
@@ -118,6 +142,7 @@ export async function POST(request: Request) {
         isVendor: data.isVendor || false,
         contactTypes: data.contactTypes || [],
         disciplines: data.disciplines || [],
+        otherText: data.otherText || null,
         updatedById: userId,
       }
     })

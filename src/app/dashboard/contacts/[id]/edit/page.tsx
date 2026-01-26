@@ -79,11 +79,12 @@ export default function EditContactPage() {
 
   const fetchOrganizations = async () => {
     try {
-      const res = await fetch('/api/organizations')
+      // Use dropdown=true to get all organizations without pagination
+      const res = await fetch('/api/organizations?dropdown=true')
       if (res.ok) {
         const data = await res.json()
-        // Handle paginated response (API returns { items: [...], pagination: {...} })
-        setOrganizations(data.items || data)
+        // dropdown mode returns array directly, not paginated
+        setOrganizations(Array.isArray(data) ? data : data.items || [])
       }
     } catch (error) { console.error('Error fetching organizations:', error) }
   }

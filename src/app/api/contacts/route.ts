@@ -23,8 +23,13 @@ import {
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
 
-// Roles that can create/modify contact data
-const CONTACTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can create/modify contact data (using canonical RBAC role names)
+const CONTACTS_WRITE_ROLES = [
+  'owner', 'executive', 'trust_officer', 'finance_officer',
+  'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff',
+  // Legacy role names for backwards compatibility
+  'founder', 'admin', 'ceo', 'office_manager', 'project_manager'
+]
 
 export async function GET(request: Request) {
   try {
@@ -165,6 +170,7 @@ export async function POST(request: Request) {
           department: data.department || null,
           contactTypes: data.contactTypes || [],
           disciplines: data.disciplines || [],
+          otherText: data.otherText || null,
           status: data.status || 'פעיל',
           notes: data.notes || null,
           vendorId: data.vendorId || null,

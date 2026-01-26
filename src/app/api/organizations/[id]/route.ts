@@ -8,8 +8,13 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
-// Roles that can modify/delete organization data
-const ORGS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can modify/delete organization data (using canonical RBAC role names)
+const ORGS_WRITE_ROLES = [
+  'owner', 'executive', 'trust_officer', 'finance_officer',
+  'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff',
+  // Legacy role names for backwards compatibility
+  'founder', 'admin', 'ceo', 'office_manager', 'project_manager'
+]
 
 export async function GET(
   request: NextRequest,
@@ -105,6 +110,7 @@ export async function PUT(
         isVendor: data.isVendor || false,
         contactTypes: data.contactTypes || [],
         disciplines: data.disciplines || [],
+        otherText: data.otherText || null,
         updatedById: userId,
       }
     })
