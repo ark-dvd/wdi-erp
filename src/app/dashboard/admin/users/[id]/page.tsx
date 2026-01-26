@@ -113,12 +113,16 @@ export default function AdminUserDetailPage({
   const [confirmRemoveRole, setConfirmRemoveRole] = useState<Role | null>(null)
   const [confirmToggleActive, setConfirmToggleActive] = useState(false)
 
-  // Authorization check
+  // RBAC v1: Check admin access (both roles array and role string)
   const currentUserId = (session?.user as any)?.id
   const userRoles = (session?.user as any)?.roles || []
-  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
-  const canManageRoles = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
-  const isOwner = userRoleNames.includes('owner')
+  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
+  const primaryRole = (session?.user as any)?.role
+
+  const canManageRoles =
+    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
+    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
+  const isOwner = userRoleNames.includes('owner') || primaryRole === 'owner'
   const isSelf = currentUserId === userId
 
   // Redirect if not authorized

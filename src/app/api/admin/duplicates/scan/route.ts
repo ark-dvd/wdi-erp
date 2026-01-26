@@ -1,5 +1,5 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/scan/route.ts
-// Version: 20260114-223000
+// Version: 20260125-RBAC-V1
 // FIXED: N+1 query issue - pre-fetch all records into Maps
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,6 +12,7 @@ import {
   validateWithGemini,
   DuplicateCandidate,
 } from '@/lib/duplicate-detection'
+import { checkAdminAccess } from '@/lib/authorization'
 
 export async function POST(request: NextRequest) {
   try {
@@ -20,8 +21,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
+    if (!checkAdminAccess(session)) {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 

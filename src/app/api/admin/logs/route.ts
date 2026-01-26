@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { checkAdminAccess } from '@/lib/authorization'
 
 export async function GET(request: Request) {
   try {
     const session = await auth()
-    
-    // בדיקת הרשאה - רק Founder
-    const userRole = (session?.user as any)?.role
-    if (userRole !== 'founder') {
-      return NextResponse.json({ error: 'Access denied. Founders only.' }, { status: 403 })
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
+    if (!checkAdminAccess(session)) {
+      return NextResponse.json({ error: 'אין הרשאה לצפות בלוגים' }, { status: 403 })
     }
     
     const { searchParams } = new URL(request.url)

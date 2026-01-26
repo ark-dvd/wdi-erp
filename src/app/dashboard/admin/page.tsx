@@ -20,10 +20,14 @@ export default function AdminConsolePage() {
   usePageView('admin')
   const router = useRouter()
 
-  // RBAC v1: Check multi-role authorization
+  // RBAC v1: Check admin access (both roles array and role string)
   const userRoles = (session?.user as any)?.roles || []
-  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
-  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
+  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
+  const primaryRole = (session?.user as any)?.role
+
+  const canAccessAdmin =
+    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
+    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
 
   useEffect(() => {
     if (status === 'authenticated' && !canAccessAdmin) {

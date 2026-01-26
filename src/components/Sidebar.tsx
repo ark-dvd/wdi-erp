@@ -4,21 +4,24 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
 import Image from 'next/image'
-import { 
-  Users, 
-  FolderKanban, 
+import {
+  Users,
+  FolderKanban,
   Calendar,
-  Wrench, 
-  Car, 
-  Building2, 
-  FileText, 
-  DollarSign, 
+  Wrench,
+  Car,
+  Building2,
+  FileText,
+  DollarSign,
   Bot,
   Shield,
   LogOut,
   UserCircle,
   Contact
 } from 'lucide-react'
+
+// RBAC v1: Canonical admin roles (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 const menuGroup1 = [
   { href: '/dashboard/events', label: 'יומן אירועים', icon: Calendar },
@@ -51,7 +54,28 @@ export default function Sidebar() {
   }
 
   const user = session?.user
-  const userRole = (user as any)?.roleDisplayName || 'משתמש'
+  const userRoleDisplayName = (user as any)?.roleDisplayName || 'משתמש'
+
+  // RBAC v1: Check admin access - multiple fallback checks for robustness
+  const userRoles = (user as any)?.roles || []
+  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
+  const primaryRole = (user as any)?.role as string | undefined
+
+  // Check BOTH the roles array AND the primary role string
+  const canAccessAdmin =
+    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
+    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
+
+  // Debug log - remove after confirming fix works
+  if (typeof window !== 'undefined') {
+    console.log('[Sidebar Auth Debug]', {
+      userRoles,
+      userRoleNames,
+      primaryRole,
+      canAccessAdmin,
+      RBAC_ADMIN_ROLES
+    })
+  }
 
   const renderMenuItem = (item: { href: string; label: string; icon: any }) => {
     const Icon = item.icon
@@ -94,7 +118,7 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {(userRole === 'מייסד שותף') && (
+      {canAccessAdmin && (
         <div className="px-3 py-2 border-t border-[#e2e4e8]">
           <Link
             href="/dashboard/admin"
@@ -129,7 +153,7 @@ export default function Sidebar() {
             <p className="text-sm font-medium text-[#0a3161] truncate">
               {((user as any)?.employeeName || user?.name) || 'משתמש'}
             </p>
-            <p className="text-xs text-[#8f8f96] truncate">{userRole}</p>
+            <p className="text-xs text-[#8f8f96] truncate">{userRoleDisplayName}</p>
           </div>
           <button
             onClick={() => signOut({ callbackUrl: '/' })}

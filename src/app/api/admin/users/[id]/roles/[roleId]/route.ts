@@ -12,6 +12,7 @@ import { versionedResponse } from '@/lib/api-contracts'
 import {
   RBAC_ADMIN_ROLES,
   canModifyRbac,
+  checkAdminAccess,
   type CanonicalRole,
 } from '@/lib/authorization'
 
@@ -38,9 +39,8 @@ export async function DELETE(
     const actorRoles = (session.user as any)?.roles || []
     const actorRoleNames: CanonicalRole[] = actorRoles.map((r: { name: string }) => r.name)
 
-    // RBAC v1: Check admin authorization
-    const canModify = actorRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
-    if (!canModify) {
+    // RBAC v1: Check admin authorization (with fallback)
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה להסרת תפקידים' }, { status: 403 })
     }
 

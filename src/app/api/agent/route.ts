@@ -118,7 +118,9 @@ export async function POST(request: NextRequest) {
 
   const userId = (session.user as any)?.id || 'unknown';
   const userEmail = session.user?.email || 'unknown';
-  const userRole = (session.user as any)?.role?.name || 'USER';
+  // RBAC v1 FIX: session.user.role is a STRING, not an object with .name
+  // Previously: role?.name would always be undefined, falling back to 'USER'
+  const userRole = (session.user as any)?.role || 'USER';
 
   const startTime = Date.now();
   let questionText = '';

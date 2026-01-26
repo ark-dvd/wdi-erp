@@ -13,7 +13,7 @@ import {
   validationError,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { RBAC_ADMIN_ROLES, canModifyRbac, type CanonicalRole } from '@/lib/authorization'
+import { RBAC_ADMIN_ROLES, canModifyRbac, checkAdminAccess, type CanonicalRole } from '@/lib/authorization'
 
 // Version: 20260125-RBAC-V1
 // RBAC v1: Role management per DOC-013 §10.2
@@ -27,13 +27,12 @@ export async function GET(request: Request) {
     }
 
     // RBAC v1: Check multi-role authorization (DOC-013 §10.2)
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-    const canReadAdmin = userRoleNames.some(r => RBAC_ADMIN_ROLES.includes(r))
-
-    if (!canReadAdmin) {
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה לניהול משתמשים' }, { status: 403 })
     }
+
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
     const { searchParams } = new URL(request.url)
 
