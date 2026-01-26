@@ -1,10 +1,17 @@
-// Version: 20251218-094600
+// ================================================
+// WDI ERP - Admin Import Contacts Page
+// Version: 20260125-RBAC-V1
+// RBAC v1: Multi-role authorization per DOC-013 §10.2
+// ================================================
 'use client'
 
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Upload, FileText, ArrowRight, Loader2, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Merge, SkipForward, Search } from 'lucide-react'
+
+// RBAC admin roles that can access this page (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 interface EnrichedOrganization {
   name?: string
@@ -91,7 +98,11 @@ interface ParseResults {
 export default function ImportContactsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
-  const userRole = (session?.user as any)?.role
+
+  // RBAC v1: Check multi-role authorization
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
+  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
 
   const [rawInput, setRawInput] = useState('')
   const [sourceContext, setSourceContext] = useState('')
@@ -109,16 +120,16 @@ export default function ImportContactsPage() {
   })
 
   useEffect(() => {
-    if (status === 'authenticated' && userRole !== 'founder') {
+    if (status === 'authenticated' && !canAccessAdmin) {
       router.push('/dashboard')
     }
-  }, [status, userRole, router])
+  }, [status, canAccessAdmin, router])
 
   if (status === 'loading') {
     return <div className="p-8 text-center">טוען...</div>
   }
 
-  if (userRole !== 'founder') {
+  if (!canAccessAdmin) {
     return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
   }
 
