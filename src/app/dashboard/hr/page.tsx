@@ -192,15 +192,20 @@ export default function HRPage() {
   }
 
   const filteredEmployees = employees.filter((employee) => {
+    // Null-safe search: use optional chaining and fallback to empty string
+    const firstName = employee.firstName || ''
+    const lastName = employee.lastName || ''
+    const idNumber = employee.idNumber || ''
+
     const matchesSearch =
       searchTerm === '' ||
-      `${employee.firstName} ${employee.lastName}`.includes(searchTerm) ||
-      `${employee.lastName} ${employee.firstName}`.includes(searchTerm) ||
-      employee.idNumber.includes(searchTerm) ||
+      `${firstName} ${lastName}`.includes(searchTerm) ||
+      `${lastName} ${firstName}`.includes(searchTerm) ||
+      idNumber.includes(searchTerm) ||
       employee.email?.includes(searchTerm) ||
       employee.phone?.includes(searchTerm)
 
-    const matchesStatus = statusFilter === '' || employee.status === statusFilter
+    const matchesStatus = statusFilter === '' || (employee.status || '') === statusFilter
 
     return matchesSearch && matchesStatus
   })
@@ -242,11 +247,11 @@ export default function HRPage() {
           ) : (
             <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
               <span className="text-blue-600 font-medium text-sm">
-                {item.firstName[0]}{item.lastName[0]}
+                {(item.firstName || '?')[0]}{(item.lastName || '?')[0]}
               </span>
             </div>
           )}
-          <p className="font-medium">{item.lastName} {item.firstName}</p>
+          <p className="font-medium">{item.lastName || ''} {item.firstName || ''}</p>
         </div>
       ),
     },
