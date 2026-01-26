@@ -227,11 +227,14 @@ export default function AdminRoleDetailPage({
 
   // Get permissions for a module
   const getModulePermissions = (moduleKey: string) => {
-    if (!role) return []
+    if (!role || !Array.isArray(role.permissions)) return []
     return role.permissions
       .filter((p) => p.module === moduleKey)
       .map((p) => ({ action: p.action, scope: p.scope }))
   }
+
+  // Get users safely (defensive for API response structure)
+  const roleUsers = role && Array.isArray(role.users) ? role.users : []
 
   // Get colors for role
   const colors = roleColorSchemes[roleName] || roleColorSchemes.all_employees
@@ -349,14 +352,14 @@ export default function AdminRoleDetailPage({
         <div className="px-6 py-4 border-b border-gray-100">
           <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
             <Users className="w-5 h-5 text-gray-400" />
-            משתמשים עם תפקיד זה ({role.users.length})
+            משתמשים עם תפקיד זה ({roleUsers.length})
           </h3>
         </div>
 
         <div className="p-6">
-          {role.users.length > 0 ? (
+          {roleUsers.length > 0 ? (
             <ul className="space-y-3">
-              {role.users.map((user) => {
+              {roleUsers.map((user) => {
                 const displayName = user.employee
                   ? `${user.employee.firstName} ${user.employee.lastName}`
                   : user.name || user.email.split('@')[0]

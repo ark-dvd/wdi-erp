@@ -1,5 +1,8 @@
-// Version: 20260111-144000
-// Added: contacts, organizations, vehicles, vendor-rating to moduleLabels
+// ================================================
+// WDI ERP - Admin Activity Logs Page
+// Version: 20260125-RBAC-V1
+// RBAC v1: Multi-role authorization per DOC-013 §10.2
+// ================================================
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -8,6 +11,9 @@ import { usePageView } from '@/hooks/useActivityLog'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Download, Eye, RefreshCw, ArrowRight } from 'lucide-react'
+
+// RBAC admin roles that can access this page (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 interface ActivityLog {
   id: string
@@ -192,14 +198,17 @@ export default function BackOfficeLogsPage() {
   const [filterModule, setFilterModule] = useState('')
   
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null)
-  
-  const userRole = (session?.user as any)?.role
+
+  // RBAC v1: Check multi-role authorization
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
+  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
 
   useEffect(() => {
-    if (status === 'authenticated' && userRole !== 'founder') {
+    if (status === 'authenticated' && !canAccessAdmin) {
       router.push('/dashboard')
     }
-  }, [status, userRole, router])
+  }, [status, canAccessAdmin, router])
 
   const fetchLogs = async () => {
     try {
@@ -242,11 +251,11 @@ export default function BackOfficeLogsPage() {
   }
 
   useEffect(() => {
-    if (userRole === 'founder') {
+    if (canAccessAdmin) {
       fetchLogs()
       fetchStats()
     }
-  }, [page, filterAction, filterModule, userRole])
+  }, [page, filterAction, filterModule, canAccessAdmin])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -301,7 +310,7 @@ export default function BackOfficeLogsPage() {
     return <div className="p-8 text-center">טוען...</div>
   }
 
-  if (userRole !== 'founder') {
+  if (!canAccessAdmin) {
     return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
   }
 

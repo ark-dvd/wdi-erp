@@ -1,18 +1,19 @@
-// /home/user/wdi-erp/src/app/dashboard/admin/duplicates/page.tsx
-// Version: 20260114-191000
-// Admin page for duplicate management
-
+// ================================================
+// WDI ERP - Admin Duplicates Page
+// Version: 20260125-RBAC-V1
+// RBAC v1: Multi-role authorization per DOC-013 §10.2
+// ================================================
 'use client'
 
 import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { usePageView } from '@/hooks/useActivityLog'
-import { 
-  Search, 
-  RefreshCw, 
-  Building2, 
-  Users, 
+import {
+  Search,
+  RefreshCw,
+  Building2,
+  Users,
   AlertTriangle,
   CheckCircle,
   XCircle,
@@ -20,6 +21,9 @@ import {
   ArrowRight,
   Loader2
 } from 'lucide-react'
+
+// RBAC admin roles that can access this page (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 interface DuplicateSet {
   id: string
@@ -56,19 +60,22 @@ export default function DuplicatesPage() {
   const [entityFilter, setEntityFilter] = useState<string>('')
   const [scanResults, setScanResults] = useState<any>(null)
 
-  const userRole = (session?.user as any)?.role
+  // RBAC v1: Check multi-role authorization
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
+  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && userRole !== 'founder') {
+    if (sessionStatus === 'authenticated' && !canAccessAdmin) {
       router.push('/dashboard')
     }
-  }, [sessionStatus, userRole, router])
+  }, [sessionStatus, canAccessAdmin, router])
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && userRole === 'founder') {
+    if (sessionStatus === 'authenticated' && canAccessAdmin) {
       fetchDuplicates()
     }
-  }, [sessionStatus, userRole, statusFilter, entityFilter])
+  }, [sessionStatus, canAccessAdmin, statusFilter, entityFilter])
 
   const fetchDuplicates = async () => {
     setLoading(true)
@@ -142,7 +149,7 @@ export default function DuplicatesPage() {
     return <div className="p-8 text-center">טוען...</div>
   }
 
-  if (userRole !== 'founder') {
+  if (!canAccessAdmin) {
     return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
   }
 
