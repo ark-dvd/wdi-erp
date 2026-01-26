@@ -301,6 +301,7 @@ model Organization {
   isVendor      Boolean   @default(false)
   contactTypes  String[]  @default([])
   disciplines   String[]  @default([])
+  otherText     String?   // Free text for "אחר" contact type
   averageRating Float?
   reviewCount   Int       @default(0)
   notes         String?   @db.Text
@@ -330,6 +331,7 @@ model Contact {
   department      String?
   contactTypes    String[]  @default([])
   disciplines     String[]  @default([])
+  otherText       String?   // Free text for "אחר" contact type
   averageRating   Float?
   reviewCount     Int       @default(0)
   specialization  String?
