@@ -39,6 +39,7 @@ const ITEMS_PER_PAGE = 50
 export default function ProjectsPage() {
   const router = useRouter()
   const [projects, setProjects] = useState<Project[]>([])
+  const [projectsApiTotal, setProjectsApiTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   const [stateFilter, setStateFilter] = useState<string>('')
@@ -62,7 +63,10 @@ export default function ProjectsPage() {
       if (res.ok) {
         const data = await res.json()
         // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-        setProjects(data.items || data)
+        const items = data.items || data
+        setProjects(items)
+        // PAGINATION FIX: Track API total for hierarchical data
+        setProjectsApiTotal(data.pagination?.total ?? (Array.isArray(items) ? items.length : 0))
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
@@ -312,7 +316,7 @@ export default function ProjectsPage() {
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-[#3a3a3d]">פרויקטים</h1>
-            <p className="text-[#8f8f96] mt-1">{projectCount} פרויקטים, {buildingCount} מבנים</p>
+            <p className="text-[#8f8f96] mt-1">{(searchTerm || stateFilter) ? projectCount.toLocaleString('he-IL') : (projectsApiTotal || projectCount).toLocaleString('he-IL')} פרויקטים, {buildingCount.toLocaleString('he-IL')} מבנים</p>
           </div>
           <Link href="/dashboard/projects/new" className="btn btn-primary">
             <Plus size={20} />

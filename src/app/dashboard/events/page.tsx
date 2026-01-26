@@ -25,8 +25,9 @@ const ITEMS_PER_PAGE = 50
 
 function EventsContent() {
   const searchParams = useSearchParams()
-  
+
   const [events, setEvents] = useState<any[]>([])
+  const [eventsTotal, setEventsTotal] = useState<number>(0)
   const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedEvents, setExpandedEvents] = useState<{ [key: string]: boolean }>({})
@@ -72,7 +73,9 @@ function EventsContent() {
     if (res.ok) {
       const data = await res.json()
       // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-      setEvents(data.items || (Array.isArray(data) ? data : []))
+      const items = data.items || (Array.isArray(data) ? data : [])
+      setEvents(items)
+      setEventsTotal(data.pagination?.total ?? items.length)
     }
     setLoading(false)
   }
@@ -249,7 +252,7 @@ function EventsContent() {
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-2xl font-bold text-[#3a3a3d]">יומן אירועים</h1>
-            <p className="text-[#8f8f96] mt-1">{filteredEvents.length} אירועים</p>
+            <p className="text-[#8f8f96] mt-1">{(selectedProject || selectedType || searchText) ? filteredEvents.length.toLocaleString('he-IL') : eventsTotal.toLocaleString('he-IL')} אירועים</p>
           </div>
           <button onClick={() => setShowForm(!showForm)} className="btn btn-primary">
             {showForm ? <X size={18} /> : <Plus size={18} />}

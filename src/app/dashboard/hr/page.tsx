@@ -46,6 +46,7 @@ interface Employee {
 export default function HRPage() {
   const router = useRouter()
   const [employees, setEmployees] = useState<Employee[]>([])
+  const [employeesTotal, setEmployeesTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
   // #9: ברירת מחדל "פעיל"
@@ -66,7 +67,9 @@ export default function HRPage() {
       if (res.ok) {
         const data = await res.json()
         // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-        setEmployees(data.items || data)
+        const items = data.items || data
+        setEmployees(items)
+        setEmployeesTotal(data.pagination?.total ?? (Array.isArray(items) ? items.length : 0))
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -203,8 +206,12 @@ export default function HRPage() {
   })
 
   // #1: כותרת משנה דינמית לפי מסנן
+  // PAGINATION FIX: Use employeesTotal from API when showing all employees
   const getSubtitle = () => {
-    const count = filteredEmployees.length
+    // When no filters, show total from API; otherwise show filtered count
+    const count = (statusFilter === '' && searchTerm === '')
+      ? employeesTotal.toLocaleString('he-IL')
+      : filteredEmployees.length.toLocaleString('he-IL')
     if (statusFilter === '') {
       return `${count} עובדים`
     }
