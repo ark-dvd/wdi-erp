@@ -6,9 +6,9 @@
 
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { usePageView } from '@/hooks/useActivityLog'
 import { Shield, Loader2, Users, User as UserIcon } from 'lucide-react'
@@ -168,12 +168,10 @@ const moduleNotes: Record<string, Record<string, string>> = {
 // COMPONENT
 // ================================================
 
-export default function AdminRoleDetailPage({
-  params,
-}: {
-  params: Promise<{ name: string }>
-}) {
-  const { name: roleName } = use(params)
+export default function AdminRoleDetailPage() {
+  // Fix: use useParams() instead of use(params) for client components
+  const params = useParams()
+  const roleName = (params?.name as string) || ''
   const { data: session, status } = useSession()
   usePageView('admin')
   const router = useRouter()

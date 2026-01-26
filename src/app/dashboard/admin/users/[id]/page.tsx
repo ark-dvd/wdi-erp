@@ -6,9 +6,9 @@
 
 'use client'
 
-import { useState, useEffect, use } from 'react'
+import { useState, useEffect } from 'react'
 import { useSession } from 'next-auth/react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { usePageView } from '@/hooks/useActivityLog'
 import {
   User as UserIcon,
@@ -87,12 +87,10 @@ const roleColors: Record<string, string> = {
 // COMPONENT
 // ================================================
 
-export default function AdminUserDetailPage({
-  params,
-}: {
-  params: Promise<{ id: string }>
-}) {
-  const { id: userId } = use(params)
+export default function AdminUserDetailPage() {
+  // Fix: use useParams() instead of use(params) for client components
+  const params = useParams()
+  const userId = (params?.id as string) || ''
   const { data: session, status } = useSession()
   usePageView('admin')
   const router = useRouter()
