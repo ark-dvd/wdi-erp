@@ -66,17 +66,6 @@ export default function Sidebar() {
     userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
     (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
 
-  // Debug log - remove after confirming fix works
-  if (typeof window !== 'undefined') {
-    console.log('[Sidebar Auth Debug]', {
-      userRoles,
-      userRoleNames,
-      primaryRole,
-      canAccessAdmin,
-      RBAC_ADMIN_ROLES
-    })
-  }
-
   const renderMenuItem = (item: { href: string; label: string; icon: any }) => {
     const Icon = item.icon
     const active = isActive(item.href)
