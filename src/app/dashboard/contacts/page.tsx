@@ -1,12 +1,13 @@
 'use client'
 
 // /home/user/wdi-erp/src/app/dashboard/contacts/page.tsx
-// Version: 20260112-230000
+// Version: 20260125-SERVER-PAGINATION
+// Implements server-side pagination and search
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Plus, Trash2, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star } from 'lucide-react'
+import { Search, Plus, Trash2, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star, ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Organization {
   id: string
@@ -62,6 +63,7 @@ export default function ContactsPage() {
   const [orgsTotal, setOrgsTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
   const [disciplineFilter, setDisciplineFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -70,27 +72,130 @@ export default function ContactsPage() {
   const [orgSortField, setOrgSortField] = useState<OrgSortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
-  useEffect(() => { fetchData() }, [])
+  // Pagination state
+  const [contactsPage, setContactsPage] = useState(1)
+  const [orgsPage, setOrgsPage] = useState(1)
+  const [contactsPages, setContactsPages] = useState(1)
+  const [orgsPages, setOrgsPages] = useState(1)
+  const [contactsHasNext, setContactsHasNext] = useState(false)
+  const [orgsHasNext, setOrgsHasNext] = useState(false)
+  const ITEMS_PER_PAGE = 20
 
-  const fetchData = async () => {
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+      // Reset to page 1 when search changes
+      setContactsPage(1)
+      setOrgsPage(1)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  // Fetch data when filters/pagination change
+  useEffect(() => {
+    if (activeTab === 'contacts') {
+      fetchContacts()
+    }
+  }, [debouncedSearch, typeFilter, disciplineFilter, statusFilter, contactsPage, contactSortField, sortDirection, activeTab])
+
+  useEffect(() => {
+    if (activeTab === 'organizations') {
+      fetchOrganizations()
+    }
+  }, [debouncedSearch, orgTypeFilter, orgsPage, orgSortField, sortDirection, activeTab])
+
+  // Build query string for contacts API
+  const buildContactsQuery = useCallback(() => {
+    const params = new URLSearchParams()
+    params.set('page', contactsPage.toString())
+    params.set('limit', ITEMS_PER_PAGE.toString())
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (typeFilter) params.set('type', typeFilter)
+    if (disciplineFilter) params.set('discipline', disciplineFilter)
+    if (statusFilter) params.set('status', statusFilter)
+    // Map frontend sort fields to API fields
+    const sortFieldMap: Record<ContactSortField, string> = {
+      name: 'lastName',
+      organization: 'lastName', // API doesn't support org sort, fallback to name
+      role: 'lastName', // API doesn't support role sort, fallback to name
+      type: 'lastName', // API doesn't support type sort, fallback to name
+      rating: 'lastName', // API doesn't support rating sort, fallback to name
+      activeProjects: 'lastName', // API doesn't support projects sort, fallback to name
+      updatedAt: 'updatedAt'
+    }
+    params.set('sortBy', sortFieldMap[contactSortField])
+    params.set('sortDir', sortDirection)
+    return params.toString()
+  }, [contactsPage, debouncedSearch, typeFilter, disciplineFilter, statusFilter, contactSortField, sortDirection])
+
+  // Build query string for organizations API
+  const buildOrgsQuery = useCallback(() => {
+    const params = new URLSearchParams()
+    params.set('page', orgsPage.toString())
+    params.set('limit', ITEMS_PER_PAGE.toString())
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (orgTypeFilter) params.set('type', orgTypeFilter)
+    // Map frontend sort fields to API fields
+    const sortFieldMap: Record<OrgSortField, string> = {
+      name: 'name',
+      type: 'type',
+      rating: 'name', // API doesn't support rating sort, fallback to name
+      contacts: 'name', // API doesn't support contacts sort, fallback to name
+      updatedAt: 'updatedAt'
+    }
+    params.set('sortBy', sortFieldMap[orgSortField])
+    params.set('sortDir', sortDirection)
+    return params.toString()
+  }, [orgsPage, debouncedSearch, orgTypeFilter, orgSortField, sortDirection])
+
+  const fetchContacts = async () => {
     try {
-      const [contactsRes, orgsRes] = await Promise.all([
-        fetch('/api/contacts'),
-        fetch('/api/organizations')
-      ])
-      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-      if (contactsRes.ok) {
-        const data = await contactsRes.json()
+      setLoading(true)
+      const query = buildContactsQuery()
+      const res = await fetch(`/api/contacts?${query}`)
+      if (res.ok) {
+        const data = await res.json()
         setContacts(data.items || data)
-        setContactsTotal(data.pagination?.total ?? (data.items?.length || data.length || 0))
-      }
-      if (orgsRes.ok) {
-        const data = await orgsRes.json()
-        setOrganizations(data.items || data)
-        setOrgsTotal(data.pagination?.total ?? (data.items?.length || data.length || 0))
+        const pagination = data.pagination
+        if (pagination) {
+          setContactsTotal(pagination.total)
+          setContactsPages(pagination.pages)
+          setContactsHasNext(pagination.hasNext)
+        } else {
+          setContactsTotal(data.items?.length || data.length || 0)
+          setContactsPages(1)
+          setContactsHasNext(false)
+        }
       }
     } catch (error) {
-      console.error('Error fetching data:', error)
+      console.error('Error fetching contacts:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchOrganizations = async () => {
+    try {
+      setLoading(true)
+      const query = buildOrgsQuery()
+      const res = await fetch(`/api/organizations?${query}`)
+      if (res.ok) {
+        const data = await res.json()
+        setOrganizations(data.items || data)
+        const pagination = data.pagination
+        if (pagination) {
+          setOrgsTotal(pagination.total)
+          setOrgsPages(pagination.pages)
+          setOrgsHasNext(pagination.hasNext)
+        } else {
+          setOrgsTotal(data.items?.length || data.length || 0)
+          setOrgsPages(1)
+          setOrgsHasNext(false)
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching organizations:', error)
     } finally {
       setLoading(false)
     }
@@ -99,11 +204,34 @@ export default function ContactsPage() {
   const handleContactSort = (field: ContactSortField) => {
     if (contactSortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     else { setContactSortField(field); setSortDirection('asc') }
+    setContactsPage(1) // Reset to first page on sort change
   }
 
   const handleOrgSort = (field: OrgSortField) => {
     if (orgSortField === field) setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     else { setOrgSortField(field); setSortDirection('asc') }
+    setOrgsPage(1) // Reset to first page on sort change
+  }
+
+  // Filter change handlers - reset to page 1
+  const handleTypeFilterChange = (value: string) => {
+    setTypeFilter(value)
+    setContactsPage(1)
+  }
+
+  const handleDisciplineFilterChange = (value: string) => {
+    setDisciplineFilter(value)
+    setContactsPage(1)
+  }
+
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    setContactsPage(1)
+  }
+
+  const handleOrgTypeFilterChange = (value: string) => {
+    setOrgTypeFilter(value)
+    setOrgsPage(1)
   }
 
   const handleDeleteContact = async (id: string, name: string) => {
@@ -111,7 +239,8 @@ export default function ContactsPage() {
     try {
       const res = await fetch(`/api/contacts/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        setContacts(contacts.filter(c => c.id !== id))
+        // Refresh current page data from server
+        fetchContacts()
       } else {
         alert('שגיאה במחיקת איש הקשר')
       }
@@ -126,7 +255,8 @@ export default function ContactsPage() {
     try {
       const res = await fetch(`/api/organizations/${id}`, { method: 'DELETE' })
       if (res.ok) {
-        setOrganizations(organizations.filter(o => o.id !== id))
+        // Refresh current page data from server
+        fetchOrganizations()
       } else {
         alert('שגיאה במחיקת הארגון')
       }
@@ -151,46 +281,8 @@ export default function ContactsPage() {
 
   const getActiveProjectsCount = (contact: Contact) => contact.projects?.filter(p => p.status === 'פעיל').length || 0
 
-  const filteredContacts = contacts.filter(contact => {
-    const fullName = `${contact.lastName} ${contact.firstName}`
-    const matchesSearch = !search || fullName.includes(search) || contact.phone?.includes(search) || contact.email?.toLowerCase().includes(search.toLowerCase()) || contact.organization?.name?.includes(search)
-    const matchesType = !typeFilter || contact.contactTypes?.includes(typeFilter)
-    const matchesDiscipline = !disciplineFilter || contact.disciplines?.includes(disciplineFilter)
-    const matchesStatus = !statusFilter || contact.status === statusFilter
-    return matchesSearch && matchesType && matchesDiscipline && matchesStatus
-  })
-
-  const filteredOrgs = organizations.filter(org => {
-    const matchesSearch = !search || org.name.includes(search) || org.email?.toLowerCase().includes(search.toLowerCase()) || org.phone?.includes(search)
-    const matchesType = !orgTypeFilter || org.type === orgTypeFilter
-    return matchesSearch && matchesType
-  })
-
-  const sortedContacts = [...filteredContacts].sort((a, b) => {
-    let cmp = 0
-    switch (contactSortField) {
-      case 'name': cmp = `${a.lastName} ${a.firstName}`.localeCompare(`${b.lastName} ${b.firstName}`); break
-      case 'organization': cmp = (a.organization?.name || '').localeCompare(b.organization?.name || ''); break
-      case 'role': cmp = (a.role || '').localeCompare(b.role || ''); break
-      case 'type': cmp = (a.contactTypes?.[0] || '').localeCompare(b.contactTypes?.[0] || ''); break
-      case 'rating': cmp = (a.averageRating || 0) - (b.averageRating || 0); break
-      case 'activeProjects': cmp = getActiveProjectsCount(a) - getActiveProjectsCount(b); break
-      case 'updatedAt': cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(); break
-    }
-    return sortDirection === 'asc' ? cmp : -cmp
-  })
-
-  const sortedOrgs = [...filteredOrgs].sort((a, b) => {
-    let cmp = 0
-    switch (orgSortField) {
-      case 'name': cmp = a.name.localeCompare(b.name); break
-      case 'type': cmp = (a.type || '').localeCompare(b.type || ''); break
-      case 'rating': cmp = (a.averageRating || 0) - (b.averageRating || 0); break
-      case 'contacts': cmp = (a._count?.contacts || 0) - (b._count?.contacts || 0); break
-      case 'updatedAt': cmp = new Date(a.updatedAt).getTime() - new Date(b.updatedAt).getTime(); break
-    }
-    return sortDirection === 'asc' ? cmp : -cmp
-  })
+  // Server-side pagination - data comes pre-filtered and sorted from API
+  // Use contacts and organizations directly (no client-side filtering needed)
 
   const renderRating = (rating: number | null, count: number) => {
     if (!count || count === 0) return <span className="text-[#a7a7b0]">-</span>
@@ -219,11 +311,11 @@ export default function ContactsPage() {
           </Link>
         </div>
         <div className="flex gap-2 border-b border-[#e2e4e8] mb-4">
-          <button onClick={() => { setActiveTab('contacts'); setSearch(''); setTypeFilter(''); setDisciplineFilter(''); setStatusFilter('') }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'contacts' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
+          <button onClick={() => { setActiveTab('contacts'); setSearch(''); setTypeFilter(''); setDisciplineFilter(''); setStatusFilter(''); setContactsPage(1) }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'contacts' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
             <div className="flex items-center gap-2"><User size={18} /><span>אנשי קשר</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{contactsTotal.toLocaleString('he-IL')}</span></div>
             {activeTab === 'contacts' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0a3161]"></div>}
           </button>
-          <button onClick={() => { setActiveTab('organizations'); setSearch(''); setOrgTypeFilter('') }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'organizations' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
+          <button onClick={() => { setActiveTab('organizations'); setSearch(''); setOrgTypeFilter(''); setOrgsPage(1) }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'organizations' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
             <div className="flex items-center gap-2"><Building2 size={18} /><span>ארגונים</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{orgsTotal.toLocaleString('he-IL')}</span></div>
             {activeTab === 'organizations' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0a3161]"></div>}
           </button>
@@ -235,12 +327,12 @@ export default function ContactsPage() {
           </div>
           {activeTab === 'contacts' ? (
             <>
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{CONTACT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
-              <select value={disciplineFilter} onChange={(e) => setDisciplineFilter(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הדיסציפלינות</option>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}</select>
-              <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסטטוסים</option><option value="פעיל">פעיל</option><option value="לא פעיל">לא פעיל</option></select>
+              <select value={typeFilter} onChange={(e) => handleTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{CONTACT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
+              <select value={disciplineFilter} onChange={(e) => handleDisciplineFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הדיסציפלינות</option>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}</select>
+              <select value={statusFilter} onChange={(e) => handleStatusFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסטטוסים</option><option value="פעיל">פעיל</option><option value="לא פעיל">לא פעיל</option></select>
             </>
           ) : (
-            <select value={orgTypeFilter} onChange={(e) => setOrgTypeFilter(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{ORG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
+            <select value={orgTypeFilter} onChange={(e) => handleOrgTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{ORG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
           )}
         </div>
         {activeTab === 'contacts' ? (
@@ -275,9 +367,9 @@ export default function ContactsPage() {
       <div className="flex-1 overflow-y-auto px-6 pb-6">
         {activeTab === 'contacts' ? (
           <div className="bg-white rounded-b-xl border border-t-0 border-[#e2e4e8]">
-            {sortedContacts.length === 0 ? (
-              <div className="text-center py-12 text-[#8f8f96]">לא נמצאו אנשי קשר</div>
-            ) : sortedContacts.map((contact) => (
+            {contacts.length === 0 ? (
+              <div className="text-center py-12 text-[#8f8f96]">{loading ? 'טוען...' : 'לא נמצאו אנשי קשר'}</div>
+            ) : contacts.map((contact) => (
               <div key={contact.id} className="grid grid-cols-[2fr_1.5fr_80px_1fr_120px_1fr_80px_1fr_80px] items-center gap-3 p-3 hover:bg-[#f5f6f8] border-b border-[#e2e4e8] cursor-pointer transition-colors" onClick={() => router.push(`/dashboard/contacts/${contact.id}`)}>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-[#0a3161]/10 rounded-full flex items-center justify-center"><User size={18} className="text-[#0a3161]" /></div>
@@ -305,9 +397,9 @@ export default function ContactsPage() {
           </div>
         ) : (
           <div className="bg-white rounded-b-xl border border-t-0 border-[#e2e4e8]">
-            {sortedOrgs.length === 0 ? (
-              <div className="text-center py-12 text-[#8f8f96]">לא נמצאו ארגונים</div>
-            ) : sortedOrgs.map((org) => (
+            {organizations.length === 0 ? (
+              <div className="text-center py-12 text-[#8f8f96]">{loading ? 'טוען...' : 'לא נמצאו ארגונים'}</div>
+            ) : organizations.map((org) => (
               <div key={org.id} className="grid grid-cols-[2fr_1fr_80px_120px_150px_100px_1fr_80px] items-center gap-3 p-3 hover:bg-[#f5f6f8] border-b border-[#e2e4e8] cursor-pointer transition-colors" onClick={() => router.push(`/dashboard/contacts/org/${org.id}`)}>
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 bg-[#0a3161]/10 rounded-full flex items-center justify-center"><Building2 size={18} className="text-[#0a3161]" /></div>
@@ -331,6 +423,59 @@ export default function ContactsPage() {
                 </div>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {activeTab === 'contacts' && contactsPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-xl border border-[#e2e4e8]">
+            <div className="text-sm text-[#8f8f96]">
+              עמוד {contactsPage.toLocaleString('he-IL')} מתוך {contactsPages.toLocaleString('he-IL')} ({contactsTotal.toLocaleString('he-IL')} אנשי קשר)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setContactsPage(p => Math.max(1, p - 1))}
+                disabled={contactsPage === 1 || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
+                הקודם
+              </button>
+              <button
+                onClick={() => setContactsPage(p => p + 1)}
+                disabled={!contactsHasNext || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                הבא
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'organizations' && orgsPages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-xl border border-[#e2e4e8]">
+            <div className="text-sm text-[#8f8f96]">
+              עמוד {orgsPage.toLocaleString('he-IL')} מתוך {orgsPages.toLocaleString('he-IL')} ({orgsTotal.toLocaleString('he-IL')} ארגונים)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setOrgsPage(p => Math.max(1, p - 1))}
+                disabled={orgsPage === 1 || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
+                הקודם
+              </button>
+              <button
+                onClick={() => setOrgsPage(p => p + 1)}
+                disabled={!orgsHasNext || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-[#e2e4e8] rounded-lg hover:bg-[#f5f6f8] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                הבא
+                <ChevronLeft size={16} />
+              </button>
+            </div>
           </div>
         )}
       </div>

@@ -2,14 +2,14 @@
 
 // ================================================
 // WDI ERP - HR List Page
-// Version: 20260111-153500
-// Added: updatedAt column for standardization
+// Version: 20260125-SERVER-PAGINATION
+// Implements server-side pagination and search
 // ================================================
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Plus, Search, Edit, Trash2, AlertTriangle } from 'lucide-react'
+import { Plus, Search, Edit, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import SortableTable, { Column } from '@/components/SortableTable'
 
 interface Project {
@@ -49,27 +49,64 @@ export default function HRPage() {
   const [employeesTotal, setEmployeesTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
   // #9: ברירת מחדל "פעיל"
   const [statusFilter, setStatusFilter] = useState<string>('פעיל')
-  
+
+  // Pagination state
+  const [page, setPage] = useState(1)
+  const [pages, setPages] = useState(1)
+  const [hasNext, setHasNext] = useState(false)
+  const ITEMS_PER_PAGE = 20
+
   // #4: מודאל מחיקה מעוצב
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [employeeToDelete, setEmployeeToDelete] = useState<Employee | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchTerm)
+      setPage(1) // Reset to page 1 when search changes
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchTerm])
+
+  // Fetch data when filters/pagination change
   useEffect(() => {
     fetchEmployees()
-  }, [])
+  }, [debouncedSearch, statusFilter, page])
+
+  // Build query string for API
+  const buildQuery = useCallback(() => {
+    const params = new URLSearchParams()
+    params.set('page', page.toString())
+    params.set('limit', ITEMS_PER_PAGE.toString())
+    if (debouncedSearch) params.set('search', debouncedSearch)
+    if (statusFilter) params.set('status', statusFilter)
+    return params.toString()
+  }, [page, debouncedSearch, statusFilter])
 
   const fetchEmployees = async () => {
     try {
-      const res = await fetch('/api/hr')
+      setLoading(true)
+      const query = buildQuery()
+      const res = await fetch(`/api/hr?${query}`)
       if (res.ok) {
         const data = await res.json()
-        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
         const items = data.items || data
         setEmployees(items)
-        setEmployeesTotal(data.pagination?.total ?? (Array.isArray(items) ? items.length : 0))
+        const pagination = data.pagination
+        if (pagination) {
+          setEmployeesTotal(pagination.total)
+          setPages(pagination.pages)
+          setHasNext(pagination.hasNext)
+        } else {
+          setEmployeesTotal(Array.isArray(items) ? items.length : 0)
+          setPages(1)
+          setHasNext(false)
+        }
       }
     } catch (error) {
       console.error('Error fetching employees:', error)
@@ -86,20 +123,27 @@ export default function HRPage() {
 
   const handleDelete = async () => {
     if (!employeeToDelete) return
-    
+
     setDeleting(true)
     try {
       const res = await fetch(`/api/hr/${employeeToDelete.id}`, { method: 'DELETE' })
       if (res.ok) {
-        setEmployees(employees.filter((e) => e.id !== employeeToDelete.id))
         setShowDeleteModal(false)
         setEmployeeToDelete(null)
+        // Refresh current page data from server
+        fetchEmployees()
       }
     } catch (error) {
       console.error('Error deleting employee:', error)
     } finally {
       setDeleting(false)
     }
+  }
+
+  // Status filter handler - reset to page 1
+  const handleStatusFilterChange = (value: string) => {
+    setStatusFilter(value)
+    setPage(1)
   }
 
   // #12: תיקון תאריכים - שימוש ב-UTC למניעת הזזת יום
@@ -191,32 +235,13 @@ export default function HRPage() {
     return `${projects[0]} (+${projects.length - 1})`
   }
 
-  const filteredEmployees = employees.filter((employee) => {
-    // Null-safe search: use optional chaining and fallback to empty string
-    const firstName = employee.firstName || ''
-    const lastName = employee.lastName || ''
-    const idNumber = employee.idNumber || ''
-
-    const matchesSearch =
-      searchTerm === '' ||
-      `${firstName} ${lastName}`.includes(searchTerm) ||
-      `${lastName} ${firstName}`.includes(searchTerm) ||
-      idNumber.includes(searchTerm) ||
-      employee.email?.includes(searchTerm) ||
-      employee.phone?.includes(searchTerm)
-
-    const matchesStatus = statusFilter === '' || (employee.status || '') === statusFilter
-
-    return matchesSearch && matchesStatus
-  })
+  // Server-side pagination - data comes pre-filtered from API
+  // No client-side filtering needed
 
   // #1: כותרת משנה דינמית לפי מסנן
-  // PAGINATION FIX: Use employeesTotal from API when showing all employees
+  // Server-side pagination: always use employeesTotal from API
   const getSubtitle = () => {
-    // When no filters, show total from API; otherwise show filtered count
-    const count = (statusFilter === '' && searchTerm === '')
-      ? employeesTotal.toLocaleString('he-IL')
-      : filteredEmployees.length.toLocaleString('he-IL')
+    const count = employeesTotal.toLocaleString('he-IL')
     if (statusFilter === '') {
       return `${count} עובדים`
     }
@@ -358,7 +383,8 @@ export default function HRPage() {
   }
 
   // #2: הוספת שדה age ו-seniorityMonths לנתונים לצורך מיון
-  const employeesWithAge = filteredEmployees.map(emp => ({
+  // Server-side pagination: use employees directly (already filtered by server)
+  const employeesWithAge = employees.map(emp => ({
     ...emp,
     age: calculateAge(emp.birthDate),
     seniorityMonths: calculateSeniorityMonths(emp.startDate)
@@ -405,7 +431,7 @@ export default function HRPage() {
             {/* #9: ברירת מחדל "פעיל" */}
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
+              onChange={(e) => handleStatusFilterChange(e.target.value)}
               className="px-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="">כל הסטטוסים</option>
@@ -425,9 +451,36 @@ export default function HRPage() {
             columns={columns}
             keyField="id"
             onRowClick={(item) => router.push(`/dashboard/hr/${item.id}`)}
-            emptyMessage="לא נמצאו עובדים"
+            emptyMessage={loading ? 'טוען...' : 'לא נמצאו עובדים'}
           />
         </div>
+
+        {/* Pagination Controls */}
+        {pages > 1 && (
+          <div className="flex items-center justify-between mt-4 px-4 py-3 bg-white rounded-lg border border-gray-200">
+            <div className="text-sm text-gray-500">
+              עמוד {page.toLocaleString('he-IL')} מתוך {pages.toLocaleString('he-IL')} ({employeesTotal.toLocaleString('he-IL')} עובדים)
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1 || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight size={16} />
+                הקודם
+              </button>
+              <button
+                onClick={() => setPage(p => p + 1)}
+                disabled={!hasNext || loading}
+                className="flex items-center gap-1 px-3 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                הבא
+                <ChevronLeft size={16} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* #4: מודאל מחיקה מעוצב */}
