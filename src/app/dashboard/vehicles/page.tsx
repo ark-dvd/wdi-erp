@@ -27,6 +27,7 @@ type SortField = 'licensePlate' | 'manufacturer' | 'driver' | 'currentKm' | 'sta
 
 export default function VehiclesPage() {
   const [vehicles, setVehicles] = useState<any[]>([])
+  const [vehiclesTotal, setVehiclesTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -41,7 +42,9 @@ export default function VehiclesPage() {
       .then(r => r.json())
       .then(data => {
         // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-        setVehicles(data.items || (Array.isArray(data) ? data : []))
+        const items = data.items || (Array.isArray(data) ? data : [])
+        setVehicles(items)
+        setVehiclesTotal(data.pagination?.total ?? items.length)
         setLoading(false)
       })
       .catch(() => setLoading(false))
@@ -96,8 +99,9 @@ export default function VehiclesPage() {
       return sortDirection === 'asc' ? cmp : -cmp
     })
 
+  // PAGINATION FIX: Use vehiclesTotal from API for total count
   const stats = {
-    total: vehicles.length,
+    total: vehiclesTotal,
     active: vehicles.filter(v => v.status === 'ACTIVE').length,
     inService: vehicles.filter(v => v.status === 'IN_SERVICE').length,
     unassigned: vehicles.filter(v => !v.currentDriverId && v.status === 'ACTIVE').length,
@@ -157,7 +161,7 @@ export default function VehiclesPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">ניהול רכבים</h1>
-          <p className="text-gray-500 text-sm mt-1">{stats.total} רכבים במערכת</p>
+          <p className="text-gray-500 text-sm mt-1">{stats.total.toLocaleString('he-IL')} רכבים במערכת</p>
         </div>
         <Link 
           href="/dashboard/vehicles/new" 

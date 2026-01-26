@@ -107,6 +107,7 @@ interface Equipment {
 export default function EquipmentPage() {
   const router = useRouter()
   const [equipment, setEquipment] = useState<Equipment[]>([])
+  const [equipmentTotal, setEquipmentTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
@@ -128,7 +129,9 @@ export default function EquipmentPage() {
       if (res.ok) {
         const data = await res.json()
         // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-        setEquipment(data.items || (Array.isArray(data) ? data : []))
+        const items = data.items || (Array.isArray(data) ? data : [])
+        setEquipment(items)
+        setEquipmentTotal(data.pagination?.total ?? items.length)
       }
     } catch (error) {
       console.error('Error fetching equipment:', error)
@@ -194,8 +197,9 @@ export default function EquipmentPage() {
       return sortDirection === 'asc' ? cmp : -cmp
     })
 
+  // PAGINATION FIX: Use equipmentTotal from API for total count
   const stats = {
-    total: equipment.length,
+    total: equipmentTotal,
     active: equipment.filter(e => e.status === 'ACTIVE').length,
     inRepair: equipment.filter(e => e.status === 'IN_REPAIR').length,
     office: equipment.filter(e => e.isOfficeEquipment).length,
@@ -285,7 +289,7 @@ export default function EquipmentPage() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-[#0a3161]">ניהול ציוד</h1>
-          <p className="text-[#8f8f96] text-sm mt-1">{stats.total} פריטים במערכת</p>
+          <p className="text-[#8f8f96] text-sm mt-1">{stats.total.toLocaleString('he-IL')} פריטים במערכת</p>
         </div>
         <Link
           href="/dashboard/equipment/new"
@@ -299,7 +303,7 @@ export default function EquipmentPage() {
       {/* Stats Cards */}
       <div className="grid grid-cols-5 gap-4">
         <div className="bg-white rounded-xl border border-[#e2e4e8] p-4">
-          <div className="text-2xl font-bold text-[#0a3161]">{stats.total}</div>
+          <div className="text-2xl font-bold text-[#0a3161]">{stats.total.toLocaleString('he-IL')}</div>
           <div className="text-sm text-[#8f8f96]">סה"כ פריטים</div>
         </div>
         <div className="bg-white rounded-xl border border-[#e2e4e8] p-4">

@@ -58,6 +58,7 @@ export default function AdminUsersPage() {
 
   // State
   const [users, setUsers] = useState<User[]>([])
+  const [usersTotal, setUsersTotal] = useState<number>(0)
   const [allRoles, setAllRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
@@ -92,7 +93,10 @@ export default function AdminUsersPage() {
       const res = await fetch('/api/admin/users')
       if (res.ok) {
         const data = await res.json()
-        setUsers(data.items || data)
+        const items = data.items || data
+        setUsers(items)
+        // PAGINATION FIX: Store API total for display
+        setUsersTotal(data.pagination?.total ?? (Array.isArray(items) ? items.length : 0))
       }
     } catch (err) {
       console.error('Failed to fetch users')
@@ -178,7 +182,7 @@ export default function AdminUsersPage() {
       {/* Stats Bar */}
       <div className="grid grid-cols-3 gap-4 mb-6">
         <div className="bg-white rounded-xl border border-gray-100 p-4">
-          <div className="text-3xl font-bold text-gray-900">{users.length}</div>
+          <div className="text-3xl font-bold text-gray-900">{usersTotal.toLocaleString('he-IL')}</div>
           <div className="text-sm text-gray-500">משתמשים במערכת</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-4">
@@ -244,7 +248,7 @@ export default function AdminUsersPage() {
         {/* Active filters indicator */}
         {(search || selectedRoleFilter !== 'all') && (
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-2">
-            <span className="text-xs text-gray-500">מציג {filteredUsers.length} מתוך {users.length} משתמשים</span>
+            <span className="text-xs text-gray-500">מציג {filteredUsers.length.toLocaleString('he-IL')} מתוך {usersTotal.toLocaleString('he-IL')} משתמשים</span>
             {(search || selectedRoleFilter !== 'all') && (
               <button
                 onClick={() => {

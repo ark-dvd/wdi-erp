@@ -58,6 +58,8 @@ export default function ContactsPage() {
   const [activeTab, setActiveTab] = useState<'contacts' | 'organizations'>(initialTab)
   const [contacts, setContacts] = useState<Contact[]>([])
   const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [contactsTotal, setContactsTotal] = useState<number>(0)
+  const [orgsTotal, setOrgsTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [typeFilter, setTypeFilter] = useState('')
@@ -80,10 +82,12 @@ export default function ContactsPage() {
       if (contactsRes.ok) {
         const data = await contactsRes.json()
         setContacts(data.items || data)
+        setContactsTotal(data.pagination?.total ?? (data.items?.length || data.length || 0))
       }
       if (orgsRes.ok) {
         const data = await orgsRes.json()
         setOrganizations(data.items || data)
+        setOrgsTotal(data.pagination?.total ?? (data.items?.length || data.length || 0))
       }
     } catch (error) {
       console.error('Error fetching data:', error)
@@ -207,7 +211,7 @@ export default function ContactsPage() {
         <div className="flex justify-between items-start mb-6">
           <div>
             <h1 className="text-2xl font-bold text-[#0a3161]">אנשי קשר</h1>
-            <p className="text-[#8f8f96] mt-1">{activeTab === 'contacts' ? `${filteredContacts.length} אנשי קשר` : `${filteredOrgs.length} ארגונים`}</p>
+            <p className="text-[#8f8f96] mt-1">{activeTab === 'contacts' ? `${contactsTotal.toLocaleString('he-IL')} אנשי קשר` : `${orgsTotal.toLocaleString('he-IL')} ארגונים`}</p>
           </div>
           <Link href={activeTab === 'contacts' ? "/dashboard/contacts/new" : "/dashboard/contacts/org/new"} className="flex items-center gap-2 px-4 py-2 bg-[#0a3161] text-white rounded-lg hover:bg-[#0a3161]/90 transition-colors">
             <Plus size={20} />
@@ -216,11 +220,11 @@ export default function ContactsPage() {
         </div>
         <div className="flex gap-2 border-b border-[#e2e4e8] mb-4">
           <button onClick={() => { setActiveTab('contacts'); setSearch(''); setTypeFilter(''); setDisciplineFilter(''); setStatusFilter('') }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'contacts' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
-            <div className="flex items-center gap-2"><User size={18} /><span>אנשי קשר</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{contacts.length}</span></div>
+            <div className="flex items-center gap-2"><User size={18} /><span>אנשי קשר</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{contactsTotal.toLocaleString('he-IL')}</span></div>
             {activeTab === 'contacts' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0a3161]"></div>}
           </button>
           <button onClick={() => { setActiveTab('organizations'); setSearch(''); setOrgTypeFilter('') }} className={`px-4 py-2 text-sm font-medium transition-colors relative ${activeTab === 'organizations' ? 'text-[#0a3161]' : 'text-[#8f8f96] hover:text-[#3a3a3d]'}`}>
-            <div className="flex items-center gap-2"><Building2 size={18} /><span>ארגונים</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{organizations.length}</span></div>
+            <div className="flex items-center gap-2"><Building2 size={18} /><span>ארגונים</span><span className="bg-[#e2e4e8] px-2 py-0.5 rounded-full text-xs">{orgsTotal.toLocaleString('he-IL')}</span></div>
             {activeTab === 'organizations' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#0a3161]"></div>}
           </button>
         </div>
