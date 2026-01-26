@@ -1,18 +1,19 @@
 // ================================================
-// Discipline Migration Script
-// Version: 20260126
-// Purpose: Update existing contacts with new discipline values
+// Contact Types & Categories Migration Script
+// Version: 20260126-V3-CATEGORIES
+// Purpose: Update existing contacts with new contact types and category values
 // Usage: npx ts-node scripts/migrate-disciplines.ts
 // ================================================
 
 import { PrismaClient } from '@prisma/client'
-import { DISCIPLINE_MIGRATION_MAP } from '../src/lib/contact-constants'
+import { CATEGORY_MIGRATION_MAP, CONTACT_TYPE_MIGRATION_MAP } from '../src/lib/contact-constants'
 
 const prisma = new PrismaClient()
 
 async function migrateDisciplines() {
-  console.log('🔄 Starting discipline migration...')
-  console.log(`📋 Migration map has ${Object.keys(DISCIPLINE_MIGRATION_MAP).length} entries`)
+  console.log('🔄 Starting contact types & categories migration...')
+  console.log(`📋 Category migration map has ${Object.keys(CATEGORY_MIGRATION_MAP).length} entries`)
+  console.log(`📋 Contact type migration map has ${Object.keys(CONTACT_TYPE_MIGRATION_MAP).length} entries`)
 
   // Get all contacts with disciplines (array field)
   const contacts = await prisma.contact.findMany({
@@ -48,7 +49,7 @@ async function migrateDisciplines() {
   // Migrate contacts
   for (const contact of contacts) {
     const oldDisciplines = contact.disciplines
-    const newDisciplines = oldDisciplines.map(d => DISCIPLINE_MIGRATION_MAP[d] || d)
+    const newDisciplines = oldDisciplines.map(d => CATEGORY_MIGRATION_MAP[d] || d)
 
     // Check if any discipline changed
     const hasChanges = oldDisciplines.some((d, i) => d !== newDisciplines[i])
@@ -59,7 +60,7 @@ async function migrateDisciplines() {
           where: { id: contact.id },
           data: { disciplines: newDisciplines }
         })
-        console.log(`✅ Contact: "${contact.firstName} ${contact.lastName}" - updated ${oldDisciplines.length} discipline(s)`)
+        console.log(`✅ Contact: "${contact.firstName} ${contact.lastName}" - updated ${oldDisciplines.length} category(ies)`)
         updatedCount++
       } catch (err) {
         const errorMsg = `Failed to update contact ${contact.id}: ${err}`
@@ -74,7 +75,7 @@ async function migrateDisciplines() {
   // Migrate organizations
   for (const org of organizations) {
     const oldDisciplines = org.disciplines
-    const newDisciplines = oldDisciplines.map(d => DISCIPLINE_MIGRATION_MAP[d] || d)
+    const newDisciplines = oldDisciplines.map(d => CATEGORY_MIGRATION_MAP[d] || d)
 
     // Check if any discipline changed
     const hasChanges = oldDisciplines.some((d, i) => d !== newDisciplines[i])
@@ -85,7 +86,7 @@ async function migrateDisciplines() {
           where: { id: org.id },
           data: { disciplines: newDisciplines }
         })
-        console.log(`✅ Organization: "${org.name}" - updated ${oldDisciplines.length} discipline(s)`)
+        console.log(`✅ Organization: "${org.name}" - updated ${oldDisciplines.length} category(ies)`)
         updatedCount++
       } catch (err) {
         const errorMsg = `Failed to update organization ${org.id}: ${err}`
@@ -110,7 +111,7 @@ async function migrateDisciplines() {
   }
 
   console.log('')
-  console.log('✅ Discipline migration completed!')
+  console.log('✅ Categories migration completed!')
 }
 
 migrateDisciplines()
