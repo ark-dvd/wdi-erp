@@ -430,9 +430,33 @@ export interface ExtendedSession extends Session {
   user: Session['user'] & {
     id?: string
     roles?: { name: string }[]
+    role?: string  // Primary role string (backwards compat)
     employeeId?: string | null
     permissions?: string[]  // "module:action:scope" format
   }
+}
+
+/**
+ * Check if user has admin access (owner or trust_officer)
+ * Checks both roles array AND primary role string for robustness
+ * DOC-013 §10.2
+ */
+export function checkAdminAccess(session: any): boolean {
+  // Check roles array first
+  const userRoles = session?.user?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
+
+  if (userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r as CanonicalRole))) {
+    return true
+  }
+
+  // Fallback to primary role string
+  const primaryRole = session?.user?.role
+  if (primaryRole && RBAC_ADMIN_ROLES.includes(primaryRole as CanonicalRole)) {
+    return true
+  }
+
+  return false
 }
 
 /**

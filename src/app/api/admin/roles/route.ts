@@ -7,7 +7,7 @@
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { versionedResponse } from '@/lib/api-contracts'
-import { RBAC_ADMIN_ROLES, type CanonicalRole } from '@/lib/authorization'
+import { checkAdminAccess } from '@/lib/authorization'
 
 export async function GET(request: Request) {
   try {
@@ -16,12 +16,8 @@ export async function GET(request: Request) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // RBAC v1: Check multi-role authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-    const canReadAdmin = userRoleNames.some(r => RBAC_ADMIN_ROLES.includes(r))
-
-    if (!canReadAdmin) {
+    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה לצפות בתפקידים' }, { status: 403 })
     }
 

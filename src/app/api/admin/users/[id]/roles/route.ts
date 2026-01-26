@@ -12,6 +12,7 @@ import { versionedResponse, validationError } from '@/lib/api-contracts'
 import {
   RBAC_ADMIN_ROLES,
   canModifyRbac,
+  checkAdminAccess,
   type CanonicalRole,
 } from '@/lib/authorization'
 
@@ -34,9 +35,8 @@ export async function POST(
     const userRoles = (session.user as any)?.roles || []
     const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
-    // RBAC v1: Check admin authorization
-    const canModify = userRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
-    if (!canModify) {
+    // RBAC v1: Check admin authorization (with fallback)
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה להקצאת תפקידים' }, { status: 403 })
     }
 

@@ -1,26 +1,26 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/[id]/route.ts
-// Version: 20260114-191000
+// Version: 20260125-RBAC-V1
 // API for single duplicate set details and status update
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity'
+import { checkAdminAccess } from '@/lib/authorization'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  
+
   try {
     const session = await auth()
     if (!session?.user) {
       return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    if (!checkAdminAccess(session)) {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 
@@ -127,8 +127,7 @@ export async function PUT(
       return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    if (!checkAdminAccess(session)) {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 

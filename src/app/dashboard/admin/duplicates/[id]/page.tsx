@@ -1,5 +1,5 @@
 // /home/user/wdi-erp/src/app/dashboard/admin/duplicates/[id]/page.tsx
-// Version: 20260117-225500
+// Version: 20260125-RBAC-V1
 // Duplicate comparison and merge page
 // Fix: Changed from use(params) to useParams() for client component
 
@@ -10,17 +10,20 @@ import { useSession } from 'next-auth/react'
 import { useRouter, useParams } from 'next/navigation'
 import Link from 'next/link'
 import { usePageView } from '@/hooks/useActivityLog'
-import { 
-  ArrowRight, 
-  Building2, 
-  Users, 
-  Check, 
+import {
+  ArrowRight,
+  Building2,
+  Users,
+  Check,
   X,
   Undo2,
   Loader2,
   AlertTriangle,
   ChevronRight
 } from 'lucide-react'
+
+// RBAC v1: Canonical admin roles (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 interface ConflictField {
   field: string
@@ -50,19 +53,26 @@ export default function DuplicateDetailPage() {
   const [selectedMaster, setSelectedMaster] = useState<'primary' | 'secondary'>('primary')
   const [fieldSelections, setFieldSelections] = useState<Record<string, 'primary' | 'secondary'>>({})
 
-  const userRole = (session?.user as any)?.role
+  // RBAC v1: Check admin access (both roles array and role string)
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
+  const primaryRole = (session?.user as any)?.role
+
+  const canAccessAdmin =
+    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
+    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && userRole !== 'founder') {
+    if (sessionStatus === 'authenticated' && !canAccessAdmin) {
       router.push('/dashboard')
     }
-  }, [sessionStatus, userRole, router])
+  }, [sessionStatus, canAccessAdmin, router])
 
   useEffect(() => {
-    if (sessionStatus === 'authenticated' && userRole === 'founder') {
+    if (sessionStatus === 'authenticated' && canAccessAdmin) {
       fetchDuplicate()
     }
-  }, [sessionStatus, userRole, id])
+  }, [sessionStatus, canAccessAdmin, id])
 
   const fetchDuplicate = async () => {
     setLoading(true)
@@ -194,7 +204,7 @@ export default function DuplicateDetailPage() {
     )
   }
 
-  if (userRole !== 'founder') {
+  if (!canAccessAdmin) {
     return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
   }
 

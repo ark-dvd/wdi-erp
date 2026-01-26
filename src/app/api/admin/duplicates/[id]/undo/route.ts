@@ -1,5 +1,5 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/[id]/undo/route.ts
-// Version: 20260114-220000
+// Version: 20260125-RBAC-V1
 // FIXED: Field names to match Schema (survivorId, mergedId)
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -8,20 +8,21 @@ import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity'
 import { undoMerge } from '@/lib/duplicate-detection'
 
+import { checkAdminAccess } from '@/lib/authorization'
+
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params
-  
+
   try {
     const session = await auth()
     if (!session?.user) {
       return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    if (!checkAdminAccess(session)) {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 

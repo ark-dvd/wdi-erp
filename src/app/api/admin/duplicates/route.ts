@@ -1,10 +1,11 @@
 // /home/user/wdi-erp/src/app/api/admin/duplicates/route.ts
-// Version: 20260114-191000
+// Version: 20260125-RBAC-V1
 // API for listing duplicate sets
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { checkAdminAccess } from '@/lib/authorization'
 
 export async function GET(request: NextRequest) {
   try {
@@ -13,8 +14,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
+    if (!checkAdminAccess(session)) {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 

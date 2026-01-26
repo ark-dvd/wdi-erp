@@ -12,6 +12,7 @@ import { versionedResponse, validationError } from '@/lib/api-contracts'
 import {
   RBAC_ADMIN_ROLES,
   canModifyRbac,
+  checkAdminAccess,
   loadUserAuthContext,
   evaluateAuthorization,
   type CanonicalRole,
@@ -55,14 +56,13 @@ export async function GET(
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // RBAC v1: Check admin authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-    const canReadAdmin = userRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
-
-    if (!canReadAdmin) {
+    // RBAC v1: Check admin authorization (with fallback)
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה לצפות בפרטי משתמש' }, { status: 403 })
     }
+
+    const userRoles = (session.user as any)?.roles || []
+    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
     const { id } = await params
 
@@ -221,9 +221,8 @@ export async function PATCH(
     const userRoles = (session.user as any)?.roles || []
     const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
 
-    // RBAC v1: Check admin authorization
-    const canModify = userRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
-    if (!canModify) {
+    // RBAC v1: Check admin authorization (with fallback)
+    if (!checkAdminAccess(session)) {
       return versionedResponse({ error: 'אין הרשאה לעדכן משתמשים' }, { status: 403 })
     }
 
