@@ -1,6 +1,8 @@
-// /home/user/wdi-erp/src/app/dashboard/admin/page.tsx
-// Version: 20260114-191500
-// Updated: Added Duplicate Management card
+// ================================================
+// WDI ERP - Admin Console Page
+// Version: 20260125-RBAC-V1
+// Updated: RBAC v1 multi-role authorization
+// ================================================
 'use client'
 
 import { useSession } from 'next-auth/react'
@@ -8,27 +10,50 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import { usePageView } from '@/hooks/useActivityLog'
-import { Users, Activity, BarChart3, Shield, Upload, GitMerge } from 'lucide-react'
+import { Users, Activity, BarChart3, Shield, Upload, GitMerge, Loader2 } from 'lucide-react'
+
+// RBAC admin roles that can access this page (DOC-013 §10.2)
+const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
 export default function AdminConsolePage() {
   const { data: session, status } = useSession()
   usePageView('admin')
   const router = useRouter()
-  
-  const userRole = (session?.user as any)?.role
+
+  // RBAC v1: Check multi-role authorization
+  const userRoles = (session?.user as any)?.roles || []
+  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
+  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
 
   useEffect(() => {
-    if (status === 'authenticated' && userRole !== 'founder') {
+    if (status === 'authenticated' && !canAccessAdmin) {
       router.push('/dashboard')
     }
-  }, [status, userRole, router])
+  }, [status, canAccessAdmin, router])
 
   if (status === 'loading') {
-    return <div className="p-8 text-center">טוען...</div>
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <Loader2 className="w-8 h-8 animate-spin text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-500">טוען...</p>
+        </div>
+      </div>
+    )
   }
 
-  if (userRole !== 'founder') {
-    return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
+  if (!canAccessAdmin) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Shield className="w-8 h-8 text-red-500" />
+          </div>
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">אין הרשאה</h2>
+          <p className="text-gray-500">אין לך הרשאה לגשת לדף זה</p>
+        </div>
+      </div>
+    )
   }
 
   const cards = [
