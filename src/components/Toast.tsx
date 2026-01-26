@@ -33,6 +33,31 @@ const ToastContext = createContext<ToastContextValue | null>(null)
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<ToastMessage[]>([])
 
+  // Add CSS animation on mount (client-side only)
+  useEffect(() => {
+    const styleId = 'toast-animations'
+    if (!document.getElementById(styleId)) {
+      const style = document.createElement('style')
+      style.id = styleId
+      style.textContent = `
+        @keyframes slide-in {
+          from {
+            transform: translateX(-100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+        .animate-slide-in {
+          animation: slide-in 0.3s ease-out;
+        }
+      `
+      document.head.appendChild(style)
+    }
+  }, [])
+
   const showToast = useCallback((type: ToastType, message: string, duration = 4000) => {
     const id = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
     setToasts(prev => [...prev, { id, type, message, duration }])
@@ -152,27 +177,3 @@ function ToastContainer({
   )
 }
 
-// Add CSS animation via style tag (will be included once)
-if (typeof window !== 'undefined') {
-  const styleId = 'toast-animations'
-  if (!document.getElementById(styleId)) {
-    const style = document.createElement('style')
-    style.id = styleId
-    style.textContent = `
-      @keyframes slide-in {
-        from {
-          transform: translateX(-100%);
-          opacity: 0;
-        }
-        to {
-          transform: translateX(0);
-          opacity: 1;
-        }
-      }
-      .animate-slide-in {
-        animation: slide-in 0.3s ease-out;
-      }
-    `
-    document.head.appendChild(style)
-  }
-}

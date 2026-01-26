@@ -1,11 +1,16 @@
+// ============================================
+// src/app/dashboard/contacts/org/[id]/edit/page.tsx
+// Version: 20260126-V3-CATEGORIES
+// V3-CATEGORIES: Multi-select contact types with dynamic categories
+// ============================================
+
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Save, Loader2 } from 'lucide-react'
-import { ORG_TYPES, CONTACT_TYPES, DISCIPLINES } from '@/lib/contact-constants'
-
+import { ORG_TYPES, CONTACT_TYPES, getCategoriesForTypes, hasOtherType, isOnlyOtherType } from '@/lib/contact-constants'
 
 export default function EditOrganizationPage() {
   const params = useParams()
@@ -14,12 +19,29 @@ export default function EditOrganizationPage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  
+
   const [formData, setFormData] = useState({
     name: '', type: '', phone: '', email: '', website: '',
     address: '', businessId: '', logoUrl: '', notes: '', isVendor: false,
-    contactTypes: [] as string[], disciplines: [] as string[],
+    contactTypes: [] as string[],
+    categories: [] as string[],  // UI uses categories, maps to disciplines in DB
+    otherText: '',  // for "אחר" free text
   })
+
+  // Compute available categories based on selected contact types
+  const availableCategories = useMemo(() => {
+    return getCategoriesForTypes(formData.contactTypes)
+  }, [formData.contactTypes])
+
+  // When contact types change, filter out categories that are no longer available
+  useEffect(() => {
+    if (formData.categories.length > 0) {
+      const filteredCategories = formData.categories.filter(c => availableCategories.includes(c))
+      if (filteredCategories.length !== formData.categories.length) {
+        setFormData(prev => ({ ...prev, categories: filteredCategories }))
+      }
+    }
+  }, [availableCategories])
 
   useEffect(() => { fetchOrg() }, [orgId])
 
@@ -40,7 +62,8 @@ export default function EditOrganizationPage() {
           notes: org.notes || '',
           isVendor: org.isVendor || false,
           contactTypes: org.contactTypes || [],
-          disciplines: org.disciplines || [],
+          categories: org.disciplines || [],  // Map disciplines to categories
+          otherText: org.otherText || '',
         })
       } else {
         setError('הארגון לא נמצא')
@@ -53,6 +76,7 @@ export default function EditOrganizationPage() {
   }
 
   const toggleContactType = (type: string) => {
+    if (error) setError('')
     setFormData(prev => ({
       ...prev,
       contactTypes: prev.contactTypes.includes(type)
@@ -61,36 +85,50 @@ export default function EditOrganizationPage() {
     }))
   }
 
-  const toggleDiscipline = (discipline: string) => {
+  const toggleCategory = (category: string) => {
+    if (error) setError('')
     setFormData(prev => ({
       ...prev,
-      disciplines: prev.disciplines.includes(discipline)
-        ? prev.disciplines.filter(d => d !== discipline)
-        : [...prev.disciplines, discipline]
+      categories: prev.categories.includes(category)
+        ? prev.categories.filter(c => c !== category)
+        : [...prev.categories, category]
     }))
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    
+
     // וולידציה - שדות חובה
     if (formData.contactTypes.length === 0) {
-      setError('יש לבחור לפחות סוג ארגון אחד')
+      setError('יש לבחור לפחות סוג קשר אחד')
       return
     }
-    if (formData.disciplines.length === 0) {
-      setError('יש לבחור לפחות דיסציפלינה אחת')
+
+    // If only "אחר" is selected, otherText is required instead of categories
+    if (isOnlyOtherType(formData.contactTypes)) {
+      if (!formData.otherText.trim()) {
+        setError('יש להזין תיאור עבור סוג "אחר"')
+        return
+      }
+    } else if (formData.categories.length === 0) {
+      setError('יש לבחור לפחות קטגוריה אחת')
       return
     }
-    
+
     setSaving(true)
     setError('')
 
     try {
+      // Prepare data for API - map categories to disciplines field for DB compatibility
+      const updateData = {
+        ...formData,
+        disciplines: formData.categories,  // DB field is still called disciplines
+      }
+
       const res = await fetch(`/api/organizations/${orgId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(updateData),
       })
       if (!res.ok) throw new Error('Failed to update')
       router.push(`/dashboard/contacts/org/${orgId}`)
@@ -99,6 +137,9 @@ export default function EditOrganizationPage() {
       console.error(err)
     } finally { setSaving(false) }
   }
+
+  const showCategoriesSection = formData.contactTypes.length > 0 && !isOnlyOtherType(formData.contactTypes)
+  const showOtherTextField = hasOtherType(formData.contactTypes)
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-[#0a3161]" /></div>
 
@@ -130,20 +171,47 @@ export default function EditOrganizationPage() {
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-[#3a3a3d] mb-2">סוג קשר <span className="text-red-500">*</span></label>
+                <p className="text-xs text-[#8f8f96] mb-2">ניתן לבחור יותר מסוג אחד</p>
                 <div className="flex flex-wrap gap-2">
                   {CONTACT_TYPES.map(type => (
                     <button key={type} type="button" onClick={() => toggleContactType(type)} className={`px-4 py-2 rounded-lg border transition-colors ${formData.contactTypes.includes(type) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{type}</button>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[#3a3a3d] mb-2">דיסציפלינות <span className="text-red-500">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {DISCIPLINES.map(disc => (
-                    <button key={disc} type="button" onClick={() => toggleDiscipline(disc)} className={`px-4 py-2 rounded-lg border transition-colors ${formData.disciplines.includes(disc) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{disc}</button>
-                  ))}
+
+              {/* Categories section - shows only when contact types selected (except only "אחר") */}
+              {showCategoriesSection && (
+                <div>
+                  <label className="block text-sm font-medium text-[#3a3a3d] mb-2">קטגוריות <span className="text-red-500">*</span></label>
+                  <p className="text-xs text-[#8f8f96] mb-2">
+                    מציג קטגוריות עבור: {formData.contactTypes.filter(t => t !== 'אחר').join(', ')}
+                  </p>
+                  <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto p-1">
+                    {availableCategories.map(category => (
+                      <button key={category} type="button" onClick={() => toggleCategory(category)} className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${formData.categories.includes(category) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{category}</button>
+                    ))}
+                  </div>
+                  {formData.categories.length > 0 && (
+                    <p className="text-xs text-[#8f8f96] mt-2">נבחרו: {formData.categories.length} קטגוריות</p>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Free text for "אחר" */}
+              {showOtherTextField && (
+                <div>
+                  <label className="block text-sm font-medium text-[#3a3a3d] mb-1">
+                    תיאור סוג "אחר" {isOnlyOtherType(formData.contactTypes) && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.otherText}
+                    onChange={(e) => setFormData({ ...formData, otherText: e.target.value })}
+                    placeholder="הזן תיאור..."
+                    className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]"
+                  />
+                </div>
+              )}
             </div>
           </div>
 

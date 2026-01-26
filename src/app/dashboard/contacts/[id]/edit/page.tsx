@@ -1,22 +1,29 @@
 // ============================================
 // src/app/dashboard/contacts/[id]/edit/page.tsx
-// Version: 20260124
+// Version: 20260126-V3-CATEGORIES
 // UI-015: Added dirty state warning
 // UI-025, UI-016, UI-017, UI-024: Added success toast
 // UI-013: Added error clearing on form change
+// V3-CATEGORIES: Multi-select contact types with dynamic categories
 // ============================================
 
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Save, Trash2, Loader2 } from 'lucide-react'
-import { CONTACT_TYPES, DISCIPLINES } from '@/lib/contact-constants'
+import { ArrowRight, Save, Trash2, Loader2, Info } from 'lucide-react'
+import { CONTACT_TYPES, getCategoriesForTypes, hasOtherType, isOnlyOtherType } from '@/lib/contact-constants'
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
 import { useToast } from '@/components/Toast'
 
-interface Organization { id: string; name: string; type: string | null }
+interface Organization {
+  id: string
+  name: string
+  type: string | null
+  contactTypes?: string[]
+  disciplines?: string[]
+}
 
 export default function EditContactPage() {
   const params = useParams()
@@ -29,12 +36,16 @@ export default function EditContactPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([])
   const [showDeleteModal, setShowDeleteModal] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [inheritedFromOrg, setInheritedFromOrg] = useState(false)
 
   const [formData, setFormData] = useState({
     firstName: '', lastName: '', nickname: '', phone: '', phoneAlt: '',
     email: '', emailAlt: '', linkedinUrl: '', organizationId: '',
-    role: '', department: '', contactTypes: [] as string[],
-    disciplines: [] as string[], status: 'פעיל', notes: '',
+    role: '', department: '',
+    contactTypes: [] as string[],
+    categories: [] as string[],  // UI uses categories, maps to disciplines in DB
+    otherText: '',  // for "אחר" free text
+    status: 'פעיל', notes: '',
   })
 
   // UI-015: Track original data for dirty state detection
@@ -43,6 +54,21 @@ export default function EditContactPage() {
 
   // UI-015: Warn before navigating away from unsaved changes
   useUnsavedChangesWarning(isDirty)
+
+  // Compute available categories based on selected contact types
+  const availableCategories = useMemo(() => {
+    return getCategoriesForTypes(formData.contactTypes)
+  }, [formData.contactTypes])
+
+  // When contact types change, filter out categories that are no longer available
+  useEffect(() => {
+    if (formData.categories.length > 0) {
+      const filteredCategories = formData.categories.filter(c => availableCategories.includes(c))
+      if (filteredCategories.length !== formData.categories.length) {
+        setFormData(prev => ({ ...prev, categories: filteredCategories }))
+      }
+    }
+  }, [availableCategories])
 
   useEffect(() => {
     const loadData = async () => {
@@ -54,7 +80,11 @@ export default function EditContactPage() {
   const fetchOrganizations = async () => {
     try {
       const res = await fetch('/api/organizations')
-      if (res.ok) setOrganizations(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        // Handle paginated response (API returns { items: [...], pagination: {...} })
+        setOrganizations(data.items || data)
+      }
     } catch (error) { console.error('Error fetching organizations:', error) }
   }
 
@@ -76,7 +106,8 @@ export default function EditContactPage() {
           role: contact.role || '',
           department: contact.department || '',
           contactTypes: contact.contactTypes || [],
-          disciplines: contact.disciplines || [],
+          categories: contact.disciplines || [],  // Map disciplines to categories
+          otherText: contact.otherText || '',
           status: contact.status || 'פעיל',
           notes: contact.notes || '',
         }
@@ -93,6 +124,21 @@ export default function EditContactPage() {
     } finally { setLoading(false) }
   }
 
+  // Inherit from organization (optional user action)
+  const handleInheritFromOrg = () => {
+    if (formData.organizationId) {
+      const selectedOrg = organizations.find(o => o.id === formData.organizationId)
+      if (selectedOrg && (selectedOrg.contactTypes?.length || selectedOrg.disciplines?.length)) {
+        setFormData(prev => ({
+          ...prev,
+          contactTypes: selectedOrg.contactTypes || prev.contactTypes,
+          categories: selectedOrg.disciplines || prev.categories,
+        }))
+        setInheritedFromOrg(true)
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -101,18 +147,31 @@ export default function EditContactPage() {
       setError('יש לבחור לפחות סוג איש קשר אחד')
       return
     }
-    if (formData.disciplines.length === 0) {
-      setError('יש לבחור לפחות דיסציפלינה אחת')
+
+    // If only "אחר" is selected, otherText is required instead of categories
+    if (isOnlyOtherType(formData.contactTypes)) {
+      if (!formData.otherText.trim()) {
+        setError('יש להזין תיאור עבור סוג "אחר"')
+        return
+      }
+    } else if (formData.categories.length === 0) {
+      setError('יש לבחור לפחות קטגוריה אחת')
       return
     }
 
     setSaving(true)
     setError('')
     try {
+      // Prepare data for API - map categories to disciplines field for DB compatibility
+      const updateData = {
+        ...formData,
+        disciplines: formData.categories,  // DB field is still called disciplines
+      }
+
       const res = await fetch(`/api/contacts/${contactId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(updateData),
       })
       if (!res.ok) throw new Error('Failed to update contact')
       // UI-015: Clear dirty state before navigation
@@ -139,12 +198,27 @@ export default function EditContactPage() {
     } finally { setDeleting(false) }
   }
 
-  const toggleArrayField = (field: 'contactTypes' | 'disciplines', value: string) => {
+  const toggleContactType = (type: string) => {
     // UI-013: Clear error when field is corrected
     if (error) setError('')
+    setInheritedFromOrg(false)
     setFormData(prev => ({
       ...prev,
-      [field]: prev[field].includes(value) ? prev[field].filter(v => v !== value) : [...prev[field], value]
+      contactTypes: prev.contactTypes.includes(type)
+        ? prev.contactTypes.filter(t => t !== type)
+        : [...prev.contactTypes, type]
+    }))
+  }
+
+  const toggleCategory = (category: string) => {
+    // UI-013: Clear error when field is corrected
+    if (error) setError('')
+    setInheritedFromOrg(false)
+    setFormData(prev => ({
+      ...prev,
+      categories: prev.categories.includes(category)
+        ? prev.categories.filter(c => c !== category)
+        : [...prev.categories, category]
     }))
   }
 
@@ -153,6 +227,9 @@ export default function EditContactPage() {
     if (error) setError('')
     setFormData(prev => ({ ...prev, [field]: value }))
   }
+
+  const showCategoriesSection = formData.contactTypes.length > 0 && !isOnlyOtherType(formData.contactTypes)
+  const showOtherTextField = hasOtherType(formData.contactTypes)
 
   if (loading) return <div className="flex items-center justify-center h-full"><Loader2 className="w-8 h-8 animate-spin text-[#0a3161]" /></div>
 
@@ -175,50 +252,110 @@ export default function EditContactPage() {
           <div className="bg-white rounded-xl border border-[#e2e4e8] p-6">
             <h2 className="text-lg font-semibold text-[#0a3161] mb-4">פרטים אישיים</h2>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">שם פרטי <span className="text-red-500">*</span></label><input type="text" value={formData.firstName} onChange={(e) => setFormData({ ...formData, firstName: e.target.value })} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">שם משפחה <span className="text-red-500">*</span></label><input type="text" value={formData.lastName} onChange={(e) => setFormData({ ...formData, lastName: e.target.value })} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">טלפון נייד <span className="text-red-500">*</span></label><input type="tel" value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">טלפון נוסף</label><input type="tel" value={formData.phoneAlt} onChange={(e) => setFormData({ ...formData, phoneAlt: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">אימייל</label><input type="email" value={formData.email} onChange={(e) => setFormData({ ...formData, email: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">אימייל נוסף</label><input type="email" value={formData.emailAlt} onChange={(e) => setFormData({ ...formData, emailAlt: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">שם פרטי <span className="text-red-500">*</span></label><input type="text" value={formData.firstName} onChange={(e) => handleFieldChange('firstName', e.target.value)} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">שם משפחה <span className="text-red-500">*</span></label><input type="text" value={formData.lastName} onChange={(e) => handleFieldChange('lastName', e.target.value)} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">טלפון נייד <span className="text-red-500">*</span></label><input type="tel" value={formData.phone} onChange={(e) => handleFieldChange('phone', e.target.value)} required className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">טלפון נוסף</label><input type="tel" value={formData.phoneAlt} onChange={(e) => handleFieldChange('phoneAlt', e.target.value)} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">אימייל</label><input type="email" value={formData.email} onChange={(e) => handleFieldChange('email', e.target.value)} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">אימייל נוסף</label><input type="email" value={formData.emailAlt} onChange={(e) => handleFieldChange('emailAlt', e.target.value)} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-[#e2e4e8] p-6">
             <h2 className="text-lg font-semibold text-[#0a3161] mb-4">שיוך ארגוני</h2>
             <div className="grid grid-cols-2 gap-4">
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">ארגון</label><select value={formData.organizationId} onChange={(e) => setFormData({ ...formData, organizationId: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]"><option value="">בחר ארגון</option>{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">תפקיד בארגון</label><input type="text" value={formData.role} onChange={(e) => setFormData({ ...formData, role: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
+              <div>
+                <label className="block text-sm font-medium text-[#3a3a3d] mb-1">ארגון</label>
+                <select value={formData.organizationId} onChange={(e) => handleFieldChange('organizationId', e.target.value)} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]">
+                  <option value="">בחר ארגון</option>
+                  {organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}
+                </select>
+              </div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">תפקיד בארגון</label><input type="text" value={formData.role} onChange={(e) => handleFieldChange('role', e.target.value)} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]" /></div>
             </div>
+            {formData.organizationId && (
+              <button
+                type="button"
+                onClick={handleInheritFromOrg}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+              >
+                <Info size={14} />
+                ירש סיווג מהארגון
+              </button>
+            )}
           </div>
 
+          {/* סוגי איש קשר */}
           <div className="bg-white rounded-xl border border-[#e2e4e8] p-6">
-            <h2 className="text-lg font-semibold text-[#0a3161] mb-4">קטגוריזציה</h2>
+            <h2 className="text-lg font-semibold text-[#0a3161] mb-4">סיווג</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-[#3a3a3d] mb-2">סוג איש קשר <span className="text-red-500">*</span></label>
+                <div className="flex items-center gap-2 mb-2">
+                  <label className="block text-sm font-medium text-[#3a3a3d]">סוג איש קשר <span className="text-red-500">*</span></label>
+                  {inheritedFromOrg && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">
+                      <Info size={12} />
+                      ירושה מהארגון
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-[#8f8f96] mb-2">ניתן לבחור יותר מסוג אחד</p>
                 <div className="flex flex-wrap gap-2">
                   {CONTACT_TYPES.map(type => (
-                    <button key={type} type="button" onClick={() => toggleArrayField('contactTypes', type)} className={`px-4 py-2 rounded-lg border transition-colors ${formData.contactTypes.includes(type) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{type}</button>
+                    <button key={type} type="button" onClick={() => toggleContactType(type)} className={`px-4 py-2 rounded-lg border transition-colors ${formData.contactTypes.includes(type) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{type}</button>
                   ))}
                 </div>
               </div>
-              <div>
-                <label className="block text-sm font-medium text-[#3a3a3d] mb-2">דיסציפלינה <span className="text-red-500">*</span></label>
-                <div className="flex flex-wrap gap-2">
-                  {DISCIPLINES.map(disc => (
-                    <button key={disc} type="button" onClick={() => toggleArrayField('disciplines', disc)} className={`px-4 py-2 rounded-lg border transition-colors ${formData.disciplines.includes(disc) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{disc}</button>
-                  ))}
+
+              {/* Categories section - shows only when contact types selected (except only "אחר") */}
+              {showCategoriesSection && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <label className="block text-sm font-medium text-[#3a3a3d]">קטגוריות <span className="text-red-500">*</span></label>
+                    {inheritedFromOrg && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-blue-100 text-blue-700">
+                        <Info size={12} />
+                        ירושה מהארגון
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-[#8f8f96] mb-2">
+                    מציג קטגוריות עבור: {formData.contactTypes.filter(t => t !== 'אחר').join(', ')}
+                  </p>
+                  <div className="flex flex-wrap gap-2 max-h-[300px] overflow-y-auto p-1">
+                    {availableCategories.map(category => (
+                      <button key={category} type="button" onClick={() => toggleCategory(category)} className={`px-3 py-1.5 rounded-lg border text-sm transition-colors ${formData.categories.includes(category) ? 'bg-[#0a3161] text-white border-[#0a3161]' : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161]'}`}>{category}</button>
+                    ))}
+                  </div>
+                  {formData.categories.length > 0 && (
+                    <p className="text-xs text-[#8f8f96] mt-2">נבחרו: {formData.categories.length} קטגוריות</p>
+                  )}
                 </div>
-              </div>
+              )}
+
+              {/* Free text for "אחר" */}
+              {showOtherTextField && (
+                <div>
+                  <label className="block text-sm font-medium text-[#3a3a3d] mb-1">
+                    תיאור סוג "אחר" {isOnlyOtherType(formData.contactTypes) && <span className="text-red-500">*</span>}
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.otherText}
+                    onChange={(e) => handleFieldChange('otherText', e.target.value)}
+                    placeholder="הזן תיאור..."
+                    className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]"
+                  />
+                </div>
+              )}
             </div>
           </div>
 
           <div className="bg-white rounded-xl border border-[#e2e4e8] p-6">
             <h2 className="text-lg font-semibold text-[#0a3161] mb-4">סטטוס והערות</h2>
             <div className="space-y-4">
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">סטטוס</label><select value={formData.status} onChange={(e) => setFormData({ ...formData, status: e.target.value })} className="w-full max-w-xs px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]"><option value="פעיל">פעיל</option><option value="לא פעיל">לא פעיל</option></select></div>
-              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">הערות</label><textarea value={formData.notes} onChange={(e) => setFormData({ ...formData, notes: e.target.value })} rows={4} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161] resize-none" /></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">סטטוס</label><select value={formData.status} onChange={(e) => handleFieldChange('status', e.target.value)} className="w-full max-w-xs px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161]"><option value="פעיל">פעיל</option><option value="לא פעיל">לא פעיל</option></select></div>
+              <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">הערות</label><textarea value={formData.notes} onChange={(e) => handleFieldChange('notes', e.target.value)} rows={4} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20 focus:border-[#0a3161] resize-none" /></div>
             </div>
           </div>
 
