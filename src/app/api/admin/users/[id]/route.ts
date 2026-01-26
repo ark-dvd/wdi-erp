@@ -161,6 +161,22 @@ export async function GET(
       }
     }
 
+    // Build flat permissions array for EffectivePermissionsTable component
+    const flatPermissions: { module: string; action: string; scope: string }[] = []
+    for (const [moduleKey, moduleData] of Object.entries(effectivePermissions)) {
+      if (moduleData.enabled) {
+        for (const [action, permData] of Object.entries(moduleData.permissions)) {
+          if (permData.allowed && permData.scope) {
+            flatPermissions.push({
+              module: moduleKey,
+              action,
+              scope: permData.scope,
+            })
+          }
+        }
+      }
+    }
+
     // Transform response
     const response = {
       id: user.id,
@@ -175,6 +191,7 @@ export async function GET(
       roles: user.roles.map((ur) => ur.role),
       domains: user.domainAssignments.map((da) => da.domain),
       effectivePermissions,
+      permissions: flatPermissions, // Flat array for UI component
     }
 
     return versionedResponse(response)
