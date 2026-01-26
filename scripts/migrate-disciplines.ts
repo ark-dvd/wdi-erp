@@ -14,40 +14,81 @@ async function migrateDisciplines() {
   console.log('🔄 Starting discipline migration...')
   console.log(`📋 Migration map has ${Object.keys(DISCIPLINE_MIGRATION_MAP).length} entries`)
 
-  // Get all contacts with disciplines
+  // Get all contacts with disciplines (array field)
   const contacts = await prisma.contact.findMany({
     where: {
-      discipline: { not: null }
+      disciplines: { isEmpty: false }
+    },
+    select: {
+      id: true,
+      firstName: true,
+      lastName: true,
+      disciplines: true
+    }
+  })
+
+  // Get all organizations with disciplines
+  const organizations = await prisma.organization.findMany({
+    where: {
+      disciplines: { isEmpty: false }
     },
     select: {
       id: true,
       name: true,
-      discipline: true
+      disciplines: true
     }
   })
 
-  console.log(`📊 Found ${contacts.length} contacts with disciplines`)
+  console.log(`📊 Found ${contacts.length} contacts and ${organizations.length} organizations with disciplines`)
 
   let updatedCount = 0
   let skippedCount = 0
   const errors: string[] = []
 
+  // Migrate contacts
   for (const contact of contacts) {
-    const oldDiscipline = contact.discipline
-    if (!oldDiscipline) continue
+    const oldDisciplines = contact.disciplines
+    const newDisciplines = oldDisciplines.map(d => DISCIPLINE_MIGRATION_MAP[d] || d)
 
-    const newDiscipline = DISCIPLINE_MIGRATION_MAP[oldDiscipline]
+    // Check if any discipline changed
+    const hasChanges = oldDisciplines.some((d, i) => d !== newDisciplines[i])
 
-    if (newDiscipline && newDiscipline !== oldDiscipline) {
+    if (hasChanges) {
       try {
         await prisma.contact.update({
           where: { id: contact.id },
-          data: { discipline: newDiscipline }
+          data: { disciplines: newDisciplines }
         })
-        console.log(`✅ Updated: "${contact.name}" - "${oldDiscipline}" → "${newDiscipline}"`)
+        console.log(`✅ Contact: "${contact.firstName} ${contact.lastName}" - updated ${oldDisciplines.length} discipline(s)`)
         updatedCount++
       } catch (err) {
         const errorMsg = `Failed to update contact ${contact.id}: ${err}`
+        console.error(`❌ ${errorMsg}`)
+        errors.push(errorMsg)
+      }
+    } else {
+      skippedCount++
+    }
+  }
+
+  // Migrate organizations
+  for (const org of organizations) {
+    const oldDisciplines = org.disciplines
+    const newDisciplines = oldDisciplines.map(d => DISCIPLINE_MIGRATION_MAP[d] || d)
+
+    // Check if any discipline changed
+    const hasChanges = oldDisciplines.some((d, i) => d !== newDisciplines[i])
+
+    if (hasChanges) {
+      try {
+        await prisma.organization.update({
+          where: { id: org.id },
+          data: { disciplines: newDisciplines }
+        })
+        console.log(`✅ Organization: "${org.name}" - updated ${oldDisciplines.length} discipline(s)`)
+        updatedCount++
+      } catch (err) {
+        const errorMsg = `Failed to update organization ${org.id}: ${err}`
         console.error(`❌ ${errorMsg}`)
         errors.push(errorMsg)
       }
