@@ -236,17 +236,30 @@ The application version is automatically generated at build time and includes th
 
 **Staging Build:**
 ```bash
-GIT_HASH=$(git rev-parse --short HEAD) BUILD_ENV=S gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp-staging:latest
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_GIT_HASH=$(git rev-parse --short HEAD),_ENV=staging
 ```
 
 **Production Build:**
 ```bash
-GIT_HASH=$(git rev-parse --short HEAD) BUILD_ENV=P gcloud builds submit --tag gcr.io/watchful-audio-479919-b9/wdi-erp:latest
+gcloud builds submit --config=cloudbuild.yaml \
+  --substitutions=_GIT_HASH=$(git rev-parse --short HEAD),_ENV=production
 ```
 
-Environment variables:
-- `GIT_HASH` = Short Git commit hash (7 characters) - must be passed from host since Docker has no git
-- `BUILD_ENV` = Environment indicator: `S` for Staging, `P` for Production
+**How it works:**
+1. The git hash is passed as a substitution variable to Cloud Build
+2. `cloudbuild.yaml` passes it as a Docker build argument (`--build-arg GIT_HASH=...`)
+3. The Dockerfile sets `ENV GIT_HASH=$GIT_HASH` during build
+4. `next.config.mjs` reads from `process.env.GIT_HASH` and embeds it in the app version
+
+**Fallback mechanism:**
+- If `GIT_HASH` env var is not set, tries `git rev-parse --short HEAD`
+- If git command fails (no .git directory), reads from `.git-hash` file
+- `.gcloudignore` explicitly includes `.git-hash` for backwards compatibility
+
+Environment indicators:
+- `_ENV=staging` → Image tagged as `wdi-erp-staging`
+- `_ENV=production` → Image tagged as `wdi-erp-production`
 
 ---
 

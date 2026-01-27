@@ -12,7 +12,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Save, Building2, Loader2, Info } from 'lucide-react'
+import { ArrowRight, Save, Building2, Loader2, Info, Search, X, ChevronDown } from 'lucide-react'
 import { ORG_TYPES, CONTACT_TYPES, getCategoriesForTypes, hasOtherType, isOnlyOtherType } from '@/lib/contact-constants'
 import { useUnsavedChangesWarning } from '@/hooks/useUnsavedChangesWarning'
 import { useToast } from '@/components/Toast'
@@ -37,8 +37,32 @@ export default function NewContactPage() {
   const [orgMode, setOrgMode] = useState<'existing' | 'new' | 'independent'>('existing')
   const [inheritedFromOrg, setInheritedFromOrg] = useState(false)
 
+  // Searchable organization dropdown state
+  const [orgSearch, setOrgSearch] = useState('')
+  const [showOrgDropdown, setShowOrgDropdown] = useState(false)
+
   // UI-015: Track if form has been modified
   const [isDirty, setIsDirty] = useState(false)
+
+  // Close org dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.org-dropdown-container')) {
+        setShowOrgDropdown(false)
+      }
+    }
+    if (showOrgDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showOrgDropdown])
+
+  // Filter organizations by search
+  const filteredOrganizations = useMemo(() => {
+    if (!orgSearch) return organizations
+    return organizations.filter(o => o.name.includes(orgSearch))
+  }, [organizations, orgSearch])
 
   // UI-015: Warn before navigating away from unsaved changes
   useUnsavedChangesWarning(isDirty)
@@ -248,7 +272,75 @@ export default function NewContactPage() {
 
             {orgMode === 'existing' && (
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">ארגון</label><select value={formData.organizationId} onChange={(e) => updateFormData({ organizationId: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">בחר ארגון</option>{organizations.map(org => <option key={org.id} value={org.id}>{org.name}</option>)}</select></div>
+                <div>
+                  <label className="block text-sm font-medium text-[#3a3a3d] mb-1">ארגון</label>
+                  {/* Searchable organization dropdown */}
+                  <div className="relative org-dropdown-container">
+                    <div
+                      className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg bg-white cursor-pointer flex items-center justify-between"
+                      onClick={() => setShowOrgDropdown(!showOrgDropdown)}
+                    >
+                      <span className={formData.organizationId ? 'text-[#3a3a3d]' : 'text-[#8f8f96]'}>
+                        {formData.organizationId
+                          ? organizations.find(o => o.id === formData.organizationId)?.name
+                          : 'בחר ארגון'}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        {formData.organizationId && (
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); updateFormData({ organizationId: '' }) }}
+                            className="text-[#8f8f96] hover:text-[#3a3a3d] p-1"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                        <ChevronDown size={16} className="text-[#8f8f96]" />
+                      </div>
+                    </div>
+                    {showOrgDropdown && (
+                      <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-[#e2e4e8] rounded-lg shadow-lg z-50 max-h-[300px] overflow-hidden flex flex-col">
+                        <div className="p-2 border-b border-[#e2e4e8] sticky top-0 bg-white">
+                          <div className="relative">
+                            <Search size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8f8f96]" />
+                            <input
+                              type="text"
+                              placeholder="חיפוש ארגון..."
+                              value={orgSearch}
+                              onChange={(e) => setOrgSearch(e.target.value)}
+                              className="w-full pr-9 pl-3 py-2 border border-[#e2e4e8] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20"
+                              onClick={(e) => e.stopPropagation()}
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        <div className="overflow-y-auto flex-1">
+                          <div
+                            className="px-4 py-2 hover:bg-[#f5f6f8] cursor-pointer text-sm text-[#8f8f96]"
+                            onClick={() => { updateFormData({ organizationId: '' }); setShowOrgDropdown(false); setOrgSearch('') }}
+                          >
+                            ללא ארגון
+                          </div>
+                          {filteredOrganizations.length === 0 ? (
+                            <div className="px-4 py-2 text-sm text-[#8f8f96]">לא נמצאו תוצאות</div>
+                          ) : filteredOrganizations.map(org => (
+                            <div
+                              key={org.id}
+                              className={`px-4 py-2 hover:bg-[#f5f6f8] cursor-pointer text-sm ${formData.organizationId === org.id ? 'bg-[#0a3161]/10 text-[#0a3161]' : ''}`}
+                              onClick={() => { updateFormData({ organizationId: org.id }); setShowOrgDropdown(false); setOrgSearch('') }}
+                            >
+                              {org.name}
+                              {org.type && <span className="text-xs text-[#8f8f96] mr-2">({org.type})</span>}
+                            </div>
+                          ))}
+                        </div>
+                        <div className="p-2 border-t border-[#e2e4e8] text-xs text-[#8f8f96] text-center">
+                          {filteredOrganizations.length} ארגונים
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
                 <div><label className="block text-sm font-medium text-[#3a3a3d] mb-1">תפקיד</label><input type="text" value={formData.role} onChange={(e) => updateFormData({ role: e.target.value })} className="w-full px-4 py-2 border border-[#e2e4e8] rounded-lg" /></div>
               </div>
             )}
