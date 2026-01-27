@@ -1,22 +1,23 @@
-// Version: 20260124
+// ============================================
+// src/app/api/admin/import-contacts/save/route.ts
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // FIXED: Wrap entire import in transaction - all or nothing
-// OBSERVABILITY: Added logCrud for import-save audit trail
+// ============================================
+
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
+import { requirePermission } from '@/lib/permissions'
 
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const userRole = (session.user as any).role
-    if (!['owner', 'executive', 'trust_officer'].includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לייבוא' }, { status: 403 })
-    }
+    // RBAC v2: Check create permission for contacts (admin import requires create permission)
+    const denied = await requirePermission(session, 'contacts', 'create')
+    if (denied) return denied
 
     const { contacts, sourceContext } = await request.json()
 
@@ -184,7 +185,7 @@ export async function POST(request: Request) {
           skippedRecords: result.skipped,
           details: result.details,
           status: 'completed',
-          importedById: (session.user as any).id
+          importedById: (session!.user as any).id
         }
       })
 
@@ -253,13 +254,13 @@ async function createOrUpdateContact(tx: TxClient, data: {
   if (existing) {
     // עדכון איש קשר קיים - רק שדות שחסרים
     const updateData: any = {}
-    
+
     if (!existing.phone && data.phone) updateData.phone = data.phone
     if (!existing.email && data.email) updateData.email = data.email
     if (!existing.role && data.role) updateData.role = data.role
     if (!existing.notes && data.notes) updateData.notes = data.notes
     if (!existing.organizationId && data.organizationId) updateData.organizationId = data.organizationId
-    
+
     // עדכון contactTypes - מיזוג
     if (data.contactTypes && data.contactTypes.length > 0) {
       const existingTypes = existing.contactTypes || []
@@ -268,7 +269,7 @@ async function createOrUpdateContact(tx: TxClient, data: {
         updateData.contactTypes = newTypes
       }
     }
-    
+
     // עדכון disciplines - מיזוג
     if (data.disciplines && data.disciplines.length > 0) {
       const existingDisc = existing.disciplines || []

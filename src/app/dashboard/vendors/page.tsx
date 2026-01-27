@@ -98,10 +98,11 @@ export default function VendorsPage() {
 
   const fetchAllOrganizations = async () => {
     try {
-      const res = await fetch('/api/organizations');
+      // RBAC v2: Use dropdown=true to get all organizations without pagination
+      const res = await fetch('/api/organizations?dropdown=true');
       const data = await res.json();
-      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-      setOrganizations(data.items || (Array.isArray(data) ? data : []));
+      // dropdown=true returns array directly, not paginated
+      setOrganizations(Array.isArray(data) ? data : (data.items || []));
     } catch (err) {
       console.error('שגיאה בטעינת ארגונים:', err);
     }
