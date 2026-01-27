@@ -13,7 +13,7 @@ import { auth } from '@/lib/auth'
 import { TicketStatus } from '@prisma/client'
 
 // Roles that can manage vehicle data
-const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {

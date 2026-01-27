@@ -7,8 +7,8 @@ import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { supportsTextExtraction } from '@/lib/text-extraction'
 
-// Roles that can create events on projects
-const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can create events on projects (RBAC v2 per DOC-014 §6.3)
+const PROJECTS_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'domain_head', 'project_manager', 'project_coordinator']
 
 export async function GET(
   request: NextRequest,

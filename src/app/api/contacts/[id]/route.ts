@@ -8,12 +8,10 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
-// Roles that can modify/delete contact data (using canonical RBAC role names)
+// Roles that can modify/delete contact data (RBAC v2 canonical names per DOC-013 §4.1)
 const CONTACTS_WRITE_ROLES = [
-  'owner', 'executive', 'trust_officer', 'finance_officer',
-  'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff',
-  // Legacy role names for backwards compatibility
-  'founder', 'admin', 'ceo', 'office_manager', 'project_manager'
+  'owner', 'executive', 'trust_officer', 'pmo', 'finance_officer',
+  'domain_head', 'project_manager', 'project_coordinator', 'administration'
 ]
 
 export async function GET(

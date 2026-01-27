@@ -76,13 +76,13 @@ export function getAccessLevel(
     return 'domain'
   }
 
-  // Project scope roles
-  if (roleNames.includes('senior_pm') || roleNames.includes('project_coordinator')) {
+  // Project scope roles (RBAC v2)
+  if (roleNames.includes('project_manager') || roleNames.includes('project_coordinator')) {
     return 'project'
   }
 
-  // Limited access (operations_staff, all_employees)
-  if (roleNames.includes('operations_staff') || roleNames.includes('all_employees')) {
+  // Limited access (administration, all_employees) - RBAC v2
+  if (roleNames.includes('administration') || roleNames.includes('all_employees')) {
     return 'limited'
   }
 

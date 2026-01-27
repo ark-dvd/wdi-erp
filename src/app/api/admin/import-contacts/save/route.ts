@@ -14,7 +14,7 @@ export async function POST(request: Request) {
     }
 
     const userRole = (session.user as any).role
-    if (!['founder', 'ceo', 'office_manager'].includes(userRole)) {
+    if (!['owner', 'executive', 'trust_officer'].includes(userRole)) {
       return NextResponse.json({ error: 'אין הרשאה לייבוא' }, { status: 403 })
     }
 
