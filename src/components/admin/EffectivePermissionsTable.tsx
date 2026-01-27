@@ -33,11 +33,11 @@ const CANONICAL_MODULES = [
   { key: 'equipment', label: 'ציוד', enabled: true },
   { key: 'vehicles', label: 'רכבים', enabled: true },
   { key: 'vendors', label: 'דירוג ספקים', enabled: true },
-  { key: 'org_directory', label: 'אנשי קשר', enabled: true },
+  { key: 'contacts', label: 'אנשי קשר', enabled: true },
   { key: 'knowledge_repository', label: 'מאגר מידע', enabled: true },
   { key: 'agent', label: 'WDI Agent', enabled: true },
   { key: 'admin', label: 'Admin Console', enabled: true },
-  { key: 'finance', label: 'פיננסי', enabled: false }, // Placeholder - disabled
+  { key: 'financial', label: 'פיננסי', enabled: false }, // Placeholder - disabled
 ]
 
 const OPERATIONS = [

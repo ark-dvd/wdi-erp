@@ -25,16 +25,16 @@ import {
 // CANONICAL MODULES (DOC-013)
 // ================================================
 
-const CANONICAL_MODULES: { key: Module | 'finance'; enabled: boolean }[] = [
+const CANONICAL_MODULES: { key: Module; enabled: boolean }[] = [
   { key: 'events', enabled: true },
   { key: 'projects', enabled: true },
   { key: 'hr', enabled: true },
-  { key: 'org_directory', enabled: true },
+  { key: 'contacts', enabled: true },
   { key: 'vendors', enabled: true },
   { key: 'equipment', enabled: true },
   { key: 'vehicles', enabled: true },
   { key: 'knowledge_repository', enabled: true },
-  { key: 'finance', enabled: false }, // Placeholder - inactive
+  { key: 'financial', enabled: false }, // Placeholder - inactive
   { key: 'agent', enabled: true },
   { key: 'admin', enabled: true },
 ]

@@ -246,7 +246,7 @@ export function createNotAuthorizedResponse(options: {
 }): { state: 'NOT_AUTHORIZED'; message: string; httpStatus: 403 } {
   return {
     state: 'NOT_AUTHORIZED',
-    message: 'אין לי הרשאה להציג את המידע שביקשת.',
+    message: 'אין לך הרשאה מתאימה.',  // DOC-013 §8.2
     httpStatus: 403,
   }
 }
@@ -262,7 +262,7 @@ export function createPartialResponse(options: {
 }): { state: 'PARTIAL'; message: string; response: string; httpStatus: 200 } {
   return {
     state: 'PARTIAL',
-    message: 'בחלק מהבקשה אין לי הרשאה להציג מידע.',
+    message: 'בחלק מהבקשה אין לך הרשאה להציג מידע.',  // DOC-013 §8.2
     response: options.textResponse,
     httpStatus: 200,
   }

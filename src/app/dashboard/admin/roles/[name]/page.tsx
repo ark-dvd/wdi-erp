@@ -52,7 +52,7 @@ interface RoleDetail {
 // RBAC admin roles that can access this page (DOC-013 §10.2)
 const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
 
-// Canonical modules from Design Document
+// Canonical modules from Design Document (aligned with seed-permissions-v2.ts)
 const CANONICAL_MODULES = [
   { key: 'projects', label: 'פרויקטים', enabled: true },
   { key: 'hr', label: 'כוח אדם', enabled: true },
@@ -60,11 +60,11 @@ const CANONICAL_MODULES = [
   { key: 'equipment', label: 'ציוד', enabled: true },
   { key: 'vehicles', label: 'רכבים', enabled: true },
   { key: 'vendors', label: 'דירוג ספקים', enabled: true },
-  { key: 'org_directory', label: 'אנשי קשר', enabled: true },
+  { key: 'contacts', label: 'אנשי קשר', enabled: true },
   { key: 'knowledge_repository', label: 'מאגר מידע', enabled: true },
   { key: 'agent', label: 'WDI Agent', enabled: true },
   { key: 'admin', label: 'Admin Console', enabled: true },
-  { key: 'finance', label: 'פיננסי', enabled: false }, // Placeholder
+  { key: 'financial', label: 'פיננסי', enabled: false }, // Placeholder
 ]
 
 // Role color schemes
