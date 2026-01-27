@@ -212,7 +212,7 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
     for (const rp of userRole.role.permissions) {
       permissions.push({
         module: rp.permission.module,
-        action: rp.permission.action,
+        action: rp.permission.action.toUpperCase(),  // Normalize to uppercase for Operation type
         scope: rp.permission.scope,
       })
     }

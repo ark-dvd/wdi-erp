@@ -26,7 +26,9 @@ const cstTime = new Date(now.getTime() + (cstOffset - now.getTimezoneOffset()) *
 const pad = (n) => String(n).padStart(2, '0');
 
 // Format: <hash>-E-YYYY.MM.DD.HHMM (CST)
-const buildEnv = process.env.BUILD_ENV || 'S';
+// BUILD_ENV: 'S' for staging, 'P' for production
+const envValue = process.env.BUILD_ENV || 'staging';
+const buildEnv = envValue === 'production' || envValue === 'P' ? 'P' : 'S';
 const buildVersion = gitHash + '-' + buildEnv + '-' + [
   cstTime.getFullYear(),
   pad(cstTime.getMonth() + 1),
