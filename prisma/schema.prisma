@@ -90,8 +90,8 @@ model Permission {
   id          String           @id @default(cuid())
   module      String
   action      String
-  // RBAC v1: Scope dimension per DOC-013 §5
-  scope       String           @default("ALL") // ALL, DOMAIN, PROJECT, OWN, SELF
+  // RBAC v2: Scope dimension per DOC-013 §5.1
+  scope       String           @default("ALL") // ALL, DOMAIN, ASSIGNED, OWN, SELF, MAIN_PAGE, CONTACTS
   description String?
   roles       RolePermission[]
   createdAt   DateTime         @default(now())
