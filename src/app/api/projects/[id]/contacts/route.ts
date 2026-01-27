@@ -1,22 +1,22 @@
-// Version: 20260124
-// Added: logCrud for CREATE
-// SECURITY: Added role-based authorization for POST
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Roles that can link contacts to projects (RBAC v2 per DOC-014 §6.1)
-const PROJECTS_WRITE_ROLES = ['owner', 'executive', 'domain_head', 'project_manager', 'project_coordinator', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params
+
+    // RBAC v2: Check read permission for project contacts
+    const denied = await requirePermission(session, 'projects', 'read', { id })
+    if (denied) return denied
 
     // Get the project to check its level
     const project = await prisma.project.findUnique({
@@ -72,19 +72,15 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params
 
-    const userRole = (session.user as any)?.role
+    // RBAC v2: Check update permission for project (to add contacts)
+    const denied = await requirePermission(session, 'projects', 'update', { id })
+    if (denied) return denied
 
-    // Only authorized roles can link contacts to projects
-    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לשייך אנשי קשר לפרויקט' }, { status: 403 })
-    }
-
-    const userId = (session.user as any)?.id || null
+    const userId = (session!.user as any)?.id || null
     const data = await request.json()
 
     // Check if contact already linked to this project

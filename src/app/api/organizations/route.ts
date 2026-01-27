@@ -1,11 +1,11 @@
-// Version: 20260124-MAYBACH
-// Added: logCrud for CREATE
-// SECURITY: Added role-based authorization for POST
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { requirePermission } from '@/lib/permissions'
 import {
   parsePagination,
   calculateSkip,
@@ -21,12 +21,6 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-
-// Roles that can create/modify organization data (RBAC v2 canonical names per DOC-013 §4.1)
-const ORGS_WRITE_ROLES = [
-  'owner', 'executive', 'trust_officer', 'pmo', 'finance_officer',
-  'domain_head', 'project_manager', 'project_coordinator', 'administration'
-]
 
 export async function GET(request: Request) {
   try {
@@ -106,16 +100,12 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session) return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
 
-    const userRole = (session.user as any)?.role
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'organizations', 'create')
+    if (denied) return denied
 
-    // Only authorized roles can create organizations
-    if (!ORGS_WRITE_ROLES.includes(userRole)) {
-      return versionedResponse({ error: 'אין הרשאה ליצור ארגונים' }, { status: 403 })
-    }
-
-    const userId = (session.user as any)?.id || null
+    const userId = (session!.user as any)?.id || null
     const data = await request.json()
 
     // R2: Field-level validation

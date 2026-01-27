@@ -1,10 +1,7 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260125-RBAC-V1
-// RBAC v1: Canonical roles per DOC-013
-// FIXED: Wrap POST in transaction for atomicity
-// SECURITY: Added role-based authorization for POST
-// Security: Removed idNumber from GET response (PII)
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
@@ -12,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { requirePermission } from '@/lib/permissions'
 import {
   parsePagination,
   calculateSkip,
@@ -27,13 +25,6 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { hasAnyRole, type CanonicalRole } from '@/lib/authorization'
-
-// RBAC v1: Canonical roles that can create/modify employee data (DOC-014 §4.2)
-const HR_WRITE_ROLES: CanonicalRole[] = ['owner', 'trust_officer']
-
-// RBAC v1: Canonical roles that can read sensitive HR data (DOC-014 §4.2)
-const HR_SENSITIVE_READ_ROLES: CanonicalRole[] = ['owner', 'executive', 'trust_officer']
 
 
 export async function GET(request: Request) {
@@ -141,19 +132,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    // RBAC v1: Check multi-role authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-
-    // RBAC v1: Only authorized roles can create employees (DOC-014 §4.2)
-    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
-    if (!canWrite) {
-      return versionedResponse({ error: 'אין הרשאה ליצור עובדים' }, { status: 403 })
-    }
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'hr', 'create')
+    if (denied) return denied
 
     const data = await request.json()
 
