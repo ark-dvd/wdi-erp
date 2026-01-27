@@ -14,9 +14,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Build argument for git hash (passed from Cloud Build or build command)
+# Build arguments (passed from Cloud Build or build command)
 ARG GIT_HASH=unknown
+ARG BUILD_ENV=S
 ENV GIT_HASH=$GIT_HASH
+ENV BUILD_ENV=$BUILD_ENV
 
 # Build
 ENV NEXT_TELEMETRY_DISABLED 1

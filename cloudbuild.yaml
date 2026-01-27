@@ -8,12 +8,14 @@ substitutions:
   _ENV: 'staging'
 
 steps:
-  # Build the Docker image with GIT_HASH as build arg
+  # Build the Docker image with GIT_HASH and BUILD_ENV as build args
   - name: 'gcr.io/cloud-builders/docker'
     args:
       - 'build'
       - '--build-arg'
       - 'GIT_HASH=${_GIT_HASH}'
+      - '--build-arg'
+      - 'BUILD_ENV=${_ENV}'
       - '-t'
       - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:latest'
       - '-t'

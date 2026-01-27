@@ -24,10 +24,10 @@ interface ModulePermissionCardProps {
 }
 
 const OPERATIONS = [
-  { key: 'READ', label: 'צפייה' },
-  { key: 'CREATE', label: 'יצירה' },
-  { key: 'UPDATE', label: 'עריכה' },
-  { key: 'DELETE', label: 'מחיקה' },
+  { key: 'read', label: 'צפייה' },
+  { key: 'create', label: 'יצירה' },
+  { key: 'update', label: 'עריכה' },
+  { key: 'delete', label: 'מחיקה' },
 ]
 
 const SCOPE_LABELS: Record<string, string> = {
@@ -69,8 +69,8 @@ export function ModulePermissionCard({ module, permissions, note }: ModulePermis
         {OPERATIONS.map((op) => {
           const permission = getPermission(op.key)
 
-          // Special case: Agent doesn't have UPDATE/DELETE
-          if (module.key === 'agent' && (op.key === 'UPDATE' || op.key === 'DELETE')) {
+          // Special case: Agent doesn't have update/delete
+          if (module.key === 'agent' && (op.key === 'update' || op.key === 'delete')) {
             return (
               <div key={op.key} className="flex items-center justify-between text-sm">
                 <span className="text-gray-500">{op.label}</span>
