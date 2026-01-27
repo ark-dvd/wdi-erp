@@ -7,7 +7,12 @@
       "Bash(npm run build:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push)"
+      "Bash(git push)",
+      "Bash(git rev-parse:*)",
+      "Bash(powershell \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; ''Done''\")",
+      "Bash(npx prisma generate:*)",
+      "Bash(git push:*)",
+      "Bash(npx eslint:*)"
     ]
   }
 }
