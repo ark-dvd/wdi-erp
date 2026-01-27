@@ -1,13 +1,14 @@
 'use client'
 
 // /home/user/wdi-erp/src/app/dashboard/contacts/page.tsx
-// Version: 20260125-SERVER-PAGINATION
-// Implements server-side pagination and search
+// Version: 20260126-DYNAMIC-CATEGORIES
+// Implements server-side pagination, search, and dynamic category filtering
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { Search, Plus, Trash2, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, Plus, Trash2, Edit, ChevronUp, ChevronDown, User, Building2, Phone, Mail, FolderKanban, Globe, Loader2, Star, ChevronLeft, ChevronRight, X } from 'lucide-react'
+import { CONTACT_TYPES, ORG_TYPES, getCategoriesForTypes } from '@/lib/contact-constants'
 
 interface Organization {
   id: string
@@ -47,10 +48,6 @@ type ContactSortField = 'name' | 'organization' | 'role' | 'type' | 'rating' | '
 type OrgSortField = 'name' | 'type' | 'rating' | 'contacts' | 'updatedAt'
 type SortDirection = 'asc' | 'desc'
 
-const CONTACT_TYPES = ['לקוח', 'ספק', 'יועץ', 'קבלן', 'רשות', 'מפקח', 'אחר']
-const DISCIPLINES = ['אדריכלות', 'קונסטרוקציה', 'חשמל', 'אינסטלציה', 'מיזוג', 'בטיחות', 'נגישות', 'תנועה', 'קרקע', 'אקוסטיקה', 'אחר']
-const ORG_TYPES = ['חברה פרטית', 'חברה ציבורית', 'עמותה', 'רשות ממשלתית', 'רשות מקומית', 'עצמאי']
-
 export default function ContactsPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -72,6 +69,25 @@ export default function ContactsPage() {
   const [orgSortField, setOrgSortField] = useState<OrgSortField>('name')
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc')
 
+  // Category filter with search
+  const [categorySearch, setCategorySearch] = useState('')
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
+
+  // Close category dropdown on click outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement
+      if (!target.closest('.category-dropdown-container')) {
+        setShowCategoryDropdown(false)
+        setCategorySearch('')
+      }
+    }
+    if (showCategoryDropdown) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+  }, [showCategoryDropdown])
+
   // Pagination state
   const [contactsPage, setContactsPage] = useState(1)
   const [orgsPage, setOrgsPage] = useState(1)
@@ -91,6 +107,45 @@ export default function ContactsPage() {
     }, 300)
     return () => clearTimeout(timer)
   }, [search])
+
+  // Fetch initial counts for both tabs on page load
+  useEffect(() => {
+    const fetchInitialCounts = async () => {
+      try {
+        // Fetch both counts in parallel
+        const [contactsRes, orgsRes] = await Promise.all([
+          fetch('/api/contacts?page=1&limit=1'),
+          fetch('/api/organizations?page=1&limit=1')
+        ])
+        if (contactsRes.ok) {
+          const data = await contactsRes.json()
+          setContactsTotal(data.pagination?.total || 0)
+        }
+        if (orgsRes.ok) {
+          const data = await orgsRes.json()
+          setOrgsTotal(data.pagination?.total || 0)
+        }
+      } catch (error) {
+        console.error('Error fetching initial counts:', error)
+      }
+    }
+    fetchInitialCounts()
+  }, [])
+
+  // Compute available categories based on selected type filter
+  const availableCategories = useMemo(() => {
+    if (!typeFilter) {
+      // If no type selected, show all categories (from all types)
+      return getCategoriesForTypes([...CONTACT_TYPES].filter(t => t !== 'אחר'))
+    }
+    return getCategoriesForTypes([typeFilter])
+  }, [typeFilter])
+
+  // Filter categories by search
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch) return availableCategories
+    return availableCategories.filter(c => c.includes(categorySearch))
+  }, [availableCategories, categorySearch])
 
   // Fetch data when filters/pagination change
   useEffect(() => {
@@ -216,11 +271,16 @@ export default function ContactsPage() {
   // Filter change handlers - reset to page 1
   const handleTypeFilterChange = (value: string) => {
     setTypeFilter(value)
+    // Reset category filter when type changes (categories depend on type)
+    setDisciplineFilter('')
+    setCategorySearch('')
     setContactsPage(1)
   }
 
-  const handleDisciplineFilterChange = (value: string) => {
+  const handleCategoryFilterChange = (value: string) => {
     setDisciplineFilter(value)
+    setCategorySearch('')
+    setShowCategoryDropdown(false)
     setContactsPage(1)
   }
 
@@ -327,12 +387,77 @@ export default function ContactsPage() {
           </div>
           {activeTab === 'contacts' ? (
             <>
-              <select value={typeFilter} onChange={(e) => handleTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{CONTACT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
-              <select value={disciplineFilter} onChange={(e) => handleDisciplineFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הדיסציפלינות</option>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}</select>
-              <select value={statusFilter} onChange={(e) => handleStatusFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסטטוסים</option><option value="פעיל">פעיל</option><option value="לא פעיל">לא פעיל</option></select>
+              <select value={typeFilter} onChange={(e) => handleTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg">
+                <option value="">כל הסוגים</option>
+                {CONTACT_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+              </select>
+              {/* Searchable category dropdown */}
+              <div className="relative category-dropdown-container">
+                <div
+                  className="px-4 py-2 border border-[#e2e4e8] rounded-lg bg-white min-w-[180px] cursor-pointer flex items-center justify-between gap-2"
+                  onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+                >
+                  <span className={disciplineFilter ? 'text-[#3a3a3d]' : 'text-[#8f8f96]'}>
+                    {disciplineFilter || 'כל הקטגוריות'}
+                  </span>
+                  {disciplineFilter && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleCategoryFilterChange('') }}
+                      className="text-[#8f8f96] hover:text-[#3a3a3d]"
+                    >
+                      <X size={14} />
+                    </button>
+                  )}
+                </div>
+                {showCategoryDropdown && (
+                  <div className="absolute top-full mt-1 left-0 right-0 bg-white border border-[#e2e4e8] rounded-lg shadow-lg z-50 max-h-[300px] overflow-hidden flex flex-col">
+                    <div className="p-2 border-b border-[#e2e4e8] sticky top-0 bg-white">
+                      <input
+                        type="text"
+                        placeholder="חיפוש קטגוריה..."
+                        value={categorySearch}
+                        onChange={(e) => setCategorySearch(e.target.value)}
+                        className="w-full px-3 py-2 border border-[#e2e4e8] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#0a3161]/20"
+                        onClick={(e) => e.stopPropagation()}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="overflow-y-auto flex-1">
+                      <div
+                        className="px-4 py-2 hover:bg-[#f5f6f8] cursor-pointer text-sm text-[#8f8f96]"
+                        onClick={() => handleCategoryFilterChange('')}
+                      >
+                        כל הקטגוריות
+                      </div>
+                      {filteredCategories.length === 0 ? (
+                        <div className="px-4 py-2 text-sm text-[#8f8f96]">לא נמצאו תוצאות</div>
+                      ) : filteredCategories.map(category => (
+                        <div
+                          key={category}
+                          className={`px-4 py-2 hover:bg-[#f5f6f8] cursor-pointer text-sm ${disciplineFilter === category ? 'bg-[#0a3161]/10 text-[#0a3161]' : ''}`}
+                          onClick={() => handleCategoryFilterChange(category)}
+                        >
+                          {category}
+                        </div>
+                      ))}
+                    </div>
+                    <div className="p-2 border-t border-[#e2e4e8] text-xs text-[#8f8f96] text-center">
+                      {filteredCategories.length} קטגוריות
+                    </div>
+                  </div>
+                )}
+              </div>
+              <select value={statusFilter} onChange={(e) => handleStatusFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg">
+                <option value="">כל הסטטוסים</option>
+                <option value="פעיל">פעיל</option>
+                <option value="לא פעיל">לא פעיל</option>
+              </select>
             </>
           ) : (
-            <select value={orgTypeFilter} onChange={(e) => handleOrgTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg"><option value="">כל הסוגים</option>{ORG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}</select>
+            <select value={orgTypeFilter} onChange={(e) => handleOrgTypeFilterChange(e.target.value)} className="px-4 py-2 border border-[#e2e4e8] rounded-lg">
+              <option value="">כל הסוגים</option>
+              {ORG_TYPES.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
           )}
         </div>
         {activeTab === 'contacts' ? (

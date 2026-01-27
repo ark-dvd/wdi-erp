@@ -1,0 +1,39 @@
+# Cloud Build configuration for WDI ERP
+# Usage:
+#   Staging: gcloud builds submit --substitutions=_GIT_HASH=$(git rev-parse --short HEAD),_ENV=staging
+#   Production: gcloud builds submit --substitutions=_GIT_HASH=$(git rev-parse --short HEAD),_ENV=production
+
+substitutions:
+  _GIT_HASH: 'unknown'
+  _ENV: 'staging'
+
+steps:
+  # Build the Docker image with GIT_HASH as build arg
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '--build-arg'
+      - 'GIT_HASH=${_GIT_HASH}'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:latest'
+      - '-t'
+      - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:${_GIT_HASH}'
+      - '.'
+
+  # Push the image
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:latest'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:${_GIT_HASH}'
+
+images:
+  - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:latest'
+  - 'gcr.io/$PROJECT_ID/wdi-erp-${_ENV}:${_GIT_HASH}'
+
+options:
+  logging: CLOUD_LOGGING_ONLY

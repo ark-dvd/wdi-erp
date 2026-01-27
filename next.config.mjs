@@ -1,12 +1,21 @@
 import { execSync } from 'child_process';
+import { readFileSync, existsSync } from 'fs';
 
-// Get git hash - prefer env var (for Docker builds), fallback to git command
+// Get git hash - priority: 1) env var, 2) git command, 3) .git-hash file
 let gitHash = process.env.GIT_HASH || 'unknown';
 if (gitHash === 'unknown') {
   try {
+    // Try git command first (local dev)
     gitHash = execSync('git rev-parse --short HEAD').toString().trim();
   } catch (e) {
-    console.warn('Could not get git hash');
+    // Try reading from file (Docker build where .git-hash was created before submit)
+    try {
+      if (existsSync('.git-hash')) {
+        gitHash = readFileSync('.git-hash', 'utf8').trim();
+      }
+    } catch (e2) {
+      console.warn('Could not get git hash from git or .git-hash file');
+    }
   }
 }
 
