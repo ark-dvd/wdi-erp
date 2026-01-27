@@ -99,7 +99,13 @@ const roleColorSchemes: Record<string, { bg: string; border: string; icon: strin
     icon: 'text-orange-600',
     badge: 'bg-orange-100 text-orange-800',
   },
-  senior_pm: {
+  pmo: {
+    bg: 'bg-indigo-50',
+    border: 'border-indigo-200',
+    icon: 'text-indigo-600',
+    badge: 'bg-indigo-100 text-indigo-800',
+  },
+  project_manager: {
     bg: 'bg-cyan-50',
     border: 'border-cyan-200',
     icon: 'text-cyan-600',
@@ -111,7 +117,7 @@ const roleColorSchemes: Record<string, { bg: string; border: string; icon: strin
     icon: 'text-teal-600',
     badge: 'bg-teal-100 text-teal-800',
   },
-  operations_staff: {
+  administration: {
     bg: 'bg-gray-50',
     border: 'border-gray-200',
     icon: 'text-gray-600',
@@ -125,42 +131,47 @@ const roleColorSchemes: Record<string, { bg: string; border: string; icon: strin
   },
 }
 
-// Default scope labels per role (based on DOC-013)
+// Default scope labels per role (RBAC v2 per DOC-013 §5.1)
 const roleScopeLabels: Record<string, { scope: string; label: string }> = {
   owner: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
   executive: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
   trust_officer: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
+  pmo: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
   finance_officer: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
   domain_head: { scope: 'DOMAIN', label: 'תחום (DOMAIN)' },
-  senior_pm: { scope: 'PROJECT', label: 'פרויקט (PROJECT)' },
-  project_coordinator: { scope: 'PROJECT', label: 'פרויקט (PROJECT)' },
-  operations_staff: { scope: 'OWN', label: 'בעלות (OWN)' },
+  project_manager: { scope: 'ASSIGNED', label: 'פרויקטים מוקצים (ASSIGNED)' },
+  project_coordinator: { scope: 'ASSIGNED', label: 'פרויקטים מוקצים (ASSIGNED)' },
+  administration: { scope: 'ALL', label: 'גישה מלאה (ALL)' },
   all_employees: { scope: 'SELF', label: 'עצמי (SELF)' },
 }
 
-// Role descriptions in Hebrew
+// Role descriptions in Hebrew (RBAC v2 per DOC-013 §4.1)
 const roleDescriptions: Record<string, string> = {
   owner: 'גישה מלאה לכל המערכת ללא הגבלות',
   executive: 'גישה רחבה לניהול עסקי ותפעולי',
-  trust_officer: 'ניהול הרשאות משתמשים והגדרות מערכת',
+  trust_officer: 'ניהול משרד ומשאבי אנוש',
+  pmo: 'ניהול תיק פרויקטים ארגוני',
   finance_officer: 'גישה לנתונים פיננסיים ושכר',
   domain_head: 'ניהול תחום עסקי ופרויקטים בתחום',
-  senior_pm: 'ניהול פרויקטים והקצאת משאבים',
+  project_manager: 'ניהול פרויקטים מוקצים',
   project_coordinator: 'תיאום פרויקטים ומעקב',
-  operations_staff: 'תפעול שוטף ותיעוד',
+  administration: 'ניהול ציוד, רכבים, ספקים ואנשי קשר',
   all_employees: 'צפייה בסיסית במידע ארגוני',
 }
 
-// Module-specific notes for certain roles
+// Module-specific notes for certain roles (RBAC v2)
 const moduleNotes: Record<string, Record<string, string>> = {
   domain_head: {
-    hr: 'צפייה במידע בסיסי בלבד (שם, תפקיד, טלפון)',
+    hr: 'צפייה במידע בסיסי בלבד (MAIN_PAGE)',
   },
-  senior_pm: {
-    hr: 'צפייה במידע בסיסי בלבד (שם, תפקיד, טלפון)',
+  pmo: {
+    hr: 'צפייה במידע בסיסי + כרטיס עצמי (MAIN_PAGE + SELF)',
+  },
+  project_manager: {
+    hr: 'צפייה במידע בסיסי + כרטיס עצמי (MAIN_PAGE + SELF)',
   },
   project_coordinator: {
-    hr: 'צפייה במידע בסיסי בלבד (שם, תפקיד, טלפון)',
+    hr: 'צפייה במידע בסיסי + כרטיס עצמי (MAIN_PAGE + SELF)',
   },
 }
 
