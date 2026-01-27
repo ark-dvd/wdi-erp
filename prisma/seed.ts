@@ -1,8 +1,8 @@
 // ================================================
-// WDI ERP - RBAC v1 Canonical Seed
-// Version: 20260125-RBAC-V1
-// Implements: DOC-013 RBAC Authorization Matrix v1.1
-// Implements: DOC-014 RBAC Authorization Matrix v1.0
+// WDI ERP - RBAC v2 Canonical Seed
+// Version: 20260126-RBAC-V2
+// Implements: DOC-013 RBAC Authorization Matrix v2.0
+// Implements: DOC-014 RBAC Authorization Matrix v2.0
 // ================================================
 
 import { PrismaClient } from '@prisma/client'
@@ -15,13 +15,14 @@ const prisma = new PrismaClient()
 
 const CANONICAL_ROLES = [
   { name: 'owner', displayName: 'בעלים', description: 'גישה מלאה לכל המערכת', level: 1 },
-  { name: 'executive', displayName: 'מנכ"ל', description: 'הנהלה בכירה עם גישה תפעולית מלאה', level: 2 },
-  { name: 'trust_officer', displayName: 'מנהל משרד', description: 'מנהל משרד / רכז משאבי אנוש', level: 3 },
+  { name: 'executive', displayName: 'מנכ״ל', description: 'הנהלה בכירה עם גישה תפעולית מלאה', level: 2 },
+  { name: 'trust_officer', displayName: 'מנהל/ת משרד', description: 'מנהל משרד / רכז משאבי אנוש', level: 3 },
+  { name: 'pmo', displayName: 'PMO', description: 'ניהול תיק פרויקטים ארגוני', level: 4 },
   { name: 'finance_officer', displayName: 'מנהל כספים', description: 'פיקוח פיננסי', level: 3 },
   { name: 'domain_head', displayName: 'ראש תחום', description: 'מנהל תחום פעילות', level: 4 },
-  { name: 'senior_pm', displayName: 'מנהל פרויקט בכיר', description: 'ניהול פרויקטים בכיר', level: 5 },
-  { name: 'project_coordinator', displayName: 'רכז פרויקט', description: 'רכז פרויקט', level: 6 },
-  { name: 'operations_staff', displayName: 'צוות תפעול', description: 'עובד תפעול', level: 7 },
+  { name: 'project_manager', displayName: 'מנהל פרויקט', description: 'ניהול פרויקטים', level: 5 },
+  { name: 'project_coordinator', displayName: 'מתאם פרויקט', description: 'תיאום פרויקטים', level: 6 },
+  { name: 'administration', displayName: 'אדמיניסטרציה', description: 'תמיכה אדמיניסטרטיבית', level: 7 },
   { name: 'all_employees', displayName: 'כל העובדים', description: 'תפקיד בסיס לכל עובד מאומת', level: 100 },
 ] as const
 
@@ -73,7 +74,7 @@ interface PermissionGrant {
 // Build full permission matrix from DOC-014
 const PERMISSION_MATRIX: PermissionGrant[] = [
   // === org_directory (§4.1) ===
-  { module: 'org_directory', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'org_directory', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'org_directory', action: 'CREATE', scope: 'ALL', roles: ['owner'] },
   { module: 'org_directory', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'org_directory', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
@@ -83,8 +84,8 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'hr', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer'], notes: 'Full sensitive HR access' },
   { module: 'hr', action: 'READ', scope: 'ALL', roles: ['finance_officer'], notes: 'Compensation fields only' },
   { module: 'hr', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'], notes: 'HR Metadata only' },
-  { module: 'hr', action: 'READ', scope: 'PROJECT', roles: ['senior_pm'], notes: 'HR Metadata only' },
-  { module: 'hr', action: 'READ', scope: 'SELF', roles: ['project_coordinator', 'operations_staff', 'all_employees'], notes: 'Own record only' },
+  { module: 'hr', action: 'READ', scope: 'PROJECT', roles: ['project_manager'], notes: 'HR Metadata only' },
+  { module: 'hr', action: 'READ', scope: 'SELF', roles: ['project_coordinator', 'administration', 'all_employees'], notes: 'Own record only' },
   { module: 'hr', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'hr', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'hr', action: 'DELETE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -93,38 +94,38 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   // === projects (§4.3) ===
   { module: 'projects', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
   { module: 'projects', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'projects', action: 'READ', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'projects', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'projects', action: 'CREATE', scope: 'ALL', roles: ['owner'] },
   { module: 'projects', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
   { module: 'projects', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive'] },
   { module: 'projects', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'projects', action: 'UPDATE', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator'] },
+  { module: 'projects', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
   { module: 'projects', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
   { module: 'projects', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === events (§4.4) ===
   { module: 'events', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
   { module: 'events', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'READ', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'events', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'events', action: 'CREATE', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer'] },
   { module: 'events', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'CREATE', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'], notes: 'Field-level operational logging' },
+  { module: 'events', action: 'CREATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'], notes: 'Field-level operational logging' },
   { module: 'events', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive'] },
   { module: 'events', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'UPDATE', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator'] },
+  { module: 'events', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
   { module: 'events', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
-  { module: 'events', action: 'DELETE', scope: 'PROJECT', roles: ['senior_pm'] },
+  { module: 'events', action: 'DELETE', scope: 'PROJECT', roles: ['project_manager'] },
   { module: 'events', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === vendors (§4.5) ===
-  { module: 'vendors', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'vendors', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'vendors', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'vendors', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
   { module: 'vendors', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
   { module: 'vendors', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === vehicles (§4.6) ===
-  { module: 'vehicles', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'vehicles', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'vehicles', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
   { module: 'vehicles', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'vehicles', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -133,7 +134,7 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'vehicles', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === equipment (§4.7) ===
-  { module: 'equipment', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'equipment', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'equipment', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
   { module: 'equipment', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'equipment', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -144,13 +145,13 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   // === documents (§4.8) ===
   { module: 'documents', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
   { module: 'documents', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'READ', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'documents', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'documents', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'documents', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'CREATE', scope: 'PROJECT', roles: ['senior_pm', 'project_coordinator'] },
+  { module: 'documents', action: 'CREATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
   { module: 'documents', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'documents', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'UPDATE', scope: 'PROJECT', roles: ['senior_pm'] },
+  { module: 'documents', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager'] },
   { module: 'documents', action: 'DELETE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'documents', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
@@ -162,7 +163,7 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'admin', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === agent (§4.10) ===
-  { module: 'agent', action: 'QUERY', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'senior_pm', 'project_coordinator', 'operations_staff', 'all_employees'] },
+  { module: 'agent', action: 'QUERY', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
 
   // === knowledge_repository (§4.11) - Placeholder, no permissions yet ===
 ]
@@ -172,17 +173,19 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
 // ================================================
 
 const LEGACY_TO_CANONICAL_MAP: Record<string, string> = {
+  // Legacy v1 names → Canonical v2 names
   'founder': 'owner',
   'ceo': 'executive',
   'office_manager': 'trust_officer',
   'department_manager': 'domain_head',
-  'project_manager': 'senior_pm',
-  'secretary': 'operations_staff',
+  'senior_pm': 'project_manager',        // v1→v2 rename
+  'operations_staff': 'administration',  // v1→v2 rename
+  'secretary': 'administration',
   'employee': 'all_employees',
 }
 
 async function main() {
-  console.log('🌱 Starting RBAC v1 canonical seed...')
+  console.log('🌱 Starting RBAC v2 canonical seed...')
 
   // === STEP 1: Clear existing RBAC data ===
   console.log('🗑️  Clearing existing RBAC data...')
@@ -327,7 +330,7 @@ async function main() {
     console.log('   ✓ Arik Davidi is Owner with full access')
   }
 
-  console.log('✅ RBAC v1 seed completed successfully!')
+  console.log('✅ RBAC v2 seed completed successfully!')
   console.log('')
   console.log('📊 Summary:')
   console.log(`   Roles: ${CANONICAL_ROLES.length}`)
