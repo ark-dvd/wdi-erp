@@ -12,7 +12,7 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 
 // Roles that can manage vehicle services
-const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
 
 export async function GET(
   request: NextRequest,

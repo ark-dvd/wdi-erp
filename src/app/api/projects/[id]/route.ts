@@ -6,8 +6,8 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
-// Roles that can modify/delete project data
-const PROJECTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can modify/delete project data (RBAC v2 per DOC-014 §6.1)
+const PROJECTS_WRITE_ROLES = ['owner', 'executive', 'domain_head', 'project_manager', 'project_coordinator']
 
 export async function GET(
   request: Request,

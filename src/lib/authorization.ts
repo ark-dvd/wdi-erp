@@ -15,11 +15,12 @@ export type CanonicalRole =
   | 'owner'
   | 'executive'
   | 'trust_officer'
+  | 'pmo'
   | 'finance_officer'
   | 'domain_head'
-  | 'senior_pm'
+  | 'project_manager'
   | 'project_coordinator'
-  | 'operations_staff'
+  | 'administration'
   | 'all_employees'
 
 export type Scope = 'ALL' | 'DOMAIN' | 'PROJECT' | 'OWN' | 'SELF'
@@ -466,16 +467,17 @@ export function getPrimaryRole(session: ExtendedSession): string | null {
   const roles = session.user?.roles
   if (!roles || roles.length === 0) return null
 
-  // Return the role with lowest level (highest privilege)
+  // Return the role with lowest level (highest privilege) - RBAC v2 per DOC-013 §4.1
   const roleOrder: CanonicalRole[] = [
     'owner',
     'executive',
     'trust_officer',
+    'pmo',
     'finance_officer',
     'domain_head',
-    'senior_pm',
+    'project_manager',
     'project_coordinator',
-    'operations_staff',
+    'administration',
     'all_employees',
   ]
 

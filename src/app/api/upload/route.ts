@@ -10,8 +10,8 @@ import { Storage } from '@google-cloud/storage'
 import { auth } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
 
-// Roles that can upload files (broad set for multi-module support)
-const UPLOAD_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager', 'hr_manager']
+// Roles that can upload files (RBAC v2 per DOC-014)
+const UPLOAD_ROLES = ['owner', 'executive', 'trust_officer', 'pmo', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration']
 
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'

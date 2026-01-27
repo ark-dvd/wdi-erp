@@ -388,16 +388,30 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Senior PM: Project-scoped access
-  senior_pm: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },  // PROJECT scope applied server-side
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+  // PMO: Cross-project visibility (RBAC v2)
+  pmo: {
+    contacts: { canRead: true, canWrite: true },
+    projects: { canRead: true, canWrite: false },
+    hr: { canRead: false, canWrite: false },  // MAIN_PAGE + SELF only
     organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },  // OWN scope
+    equipment: { canRead: true, canWrite: false },  // OWN scope
     events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: true },
+    users: { canRead: false, canWrite: false },
+    activityLog: { canRead: false, canWrite: false },
+  },
+
+  // Project Manager: Assigned projects (RBAC v2)
+  project_manager: {
+    contacts: { canRead: true, canWrite: true },
+    projects: { canRead: true, canWrite: false },  // ASSIGNED scope applied server-side
+    hr: { canRead: false, canWrite: false },  // MAIN_PAGE + SELF only
+    organizations: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: false },  // OWN scope
+    equipment: { canRead: true, canWrite: false },  // OWN scope
+    events: { canRead: true, canWrite: false },
+    reviews: { canRead: true, canWrite: true },
     users: { canRead: false, canWrite: false },
     activityLog: { canRead: false, canWrite: false },
   },
@@ -416,16 +430,16 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Operations Staff: Project-scoped access
-  operations_staff: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+  // Administration: Equipment/vehicles/vendors/contacts (RBAC v2)
+  administration: {
+    contacts: { canRead: true, canWrite: true },
+    projects: { canRead: true, canWrite: false },  // CONTACTS scope only
+    hr: { canRead: false, canWrite: false },  // CONTACTS scope only
     organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
+    vehicles: { canRead: true, canWrite: true },
+    equipment: { canRead: true, canWrite: true },
+    events: { canRead: false, canWrite: false },
+    reviews: { canRead: true, canWrite: true },
     users: { canRead: false, canWrite: false },
     activityLog: { canRead: false, canWrite: false },
   },
@@ -445,7 +459,7 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
   },
 }
 
-// Legacy compatibility: Map old role names to canonical roles
+// Legacy compatibility: Map old role names to RBAC v2 canonical roles
 const LEGACY_ROLE_MAP: Record<string, CanonicalRole> = {
   'ADMIN': 'owner',
   'MANAGER': 'trust_officer',
@@ -454,8 +468,9 @@ const LEGACY_ROLE_MAP: Record<string, CanonicalRole> = {
   'ceo': 'executive',
   'office_manager': 'trust_officer',
   'department_manager': 'domain_head',
-  'project_manager': 'senior_pm',
-  'secretary': 'operations_staff',
+  'senior_pm': 'project_manager',        // v1→v2 rename
+  'operations_staff': 'administration',  // v1→v2 rename
+  'secretary': 'administration',
   'employee': 'all_employees',
 }
 

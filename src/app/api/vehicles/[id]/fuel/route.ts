@@ -12,7 +12,7 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 
 // Roles that can manage vehicle fuel logs
-const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({

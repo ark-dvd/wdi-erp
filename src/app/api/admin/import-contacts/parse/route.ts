@@ -229,7 +229,7 @@ export async function POST(request: NextRequest) {
     }
     
     const userRole = (session.user as any).role
-    if (userRole !== 'founder') {
+    if (userRole !== 'owner') {
       return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
     }
 

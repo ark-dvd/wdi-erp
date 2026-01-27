@@ -10,8 +10,8 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
-// Roles that can manage events (same as projects)
-const EVENTS_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager', 'project_manager']
+// Roles that can manage events (RBAC v2 per DOC-014 §6.3)
+const EVENTS_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'domain_head', 'project_manager', 'project_coordinator']
 
 export async function GET(
   request: NextRequest,

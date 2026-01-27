@@ -12,7 +12,7 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 
 // Roles that can manage vehicle accidents
-const VEHICLES_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
 
 // פונקציית עזר - מציאת העובד שהחזיק ברכב בתאריך מסוים
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {

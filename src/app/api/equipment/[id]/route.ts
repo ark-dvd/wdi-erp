@@ -13,8 +13,8 @@ import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
 import { equipmentTypeLabels, equipmentStatusLabels } from '@/lib/equipment-labels'
 
-// Roles that can manage equipment data
-const EQUIPMENT_WRITE_ROLES = ['founder', 'admin', 'ceo', 'office_manager']
+// Roles that can manage equipment data (RBAC v2 per DOC-014 §6.4)
+const EQUIPMENT_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
 
 export async function GET(
   request: NextRequest,

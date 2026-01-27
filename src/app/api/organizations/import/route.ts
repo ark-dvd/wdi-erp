@@ -9,8 +9,8 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 
-// Elevated roles for bulk import operations
-const ORGS_IMPORT_ROLES = ['founder', 'ceo', 'office_manager']
+// Elevated roles for bulk import operations (RBAC v2 per DOC-014)
+const ORGS_IMPORT_ROLES = ['owner', 'executive', 'trust_officer']
 
 interface OrganizationImport {
   name: string
