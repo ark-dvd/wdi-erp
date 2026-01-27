@@ -19,12 +19,12 @@ const CANONICAL_MODULES = [
   'events',
   'projects',
   'hr',
-  'org_directory',
+  'contacts',            // Aligned with seed-permissions-v2.ts
   'vendors',
   'equipment',
   'vehicles',
   'knowledge_repository',
-  'finance', // Placeholder - inactive
+  'financial',           // Aligned with seed-permissions-v2.ts (placeholder - inactive)
   'agent',
   'admin',
 ] as const
@@ -116,7 +116,7 @@ export async function GET(
     for (const module of CANONICAL_MODULES) {
       permissionsByModule[module] = {
         module,
-        enabled: module !== 'finance', // Finance is inactive
+        enabled: module !== 'financial', // Financial is inactive
         permissions: [],
       }
     }

@@ -28,7 +28,7 @@ export type Scope = 'ALL' | 'DOMAIN' | 'PROJECT' | 'OWN' | 'SELF'
 export type Operation = 'READ' | 'CREATE' | 'UPDATE' | 'DELETE' | 'ADMIN' | 'QUERY'
 
 export type Module =
-  | 'org_directory'
+  | 'contacts'           // Aligned with seed-permissions-v2.ts
   | 'hr'
   | 'projects'
   | 'events'
@@ -39,6 +39,7 @@ export type Module =
   | 'admin'
   | 'agent'
   | 'knowledge_repository'
+  | 'financial'          // Aligned with seed-permissions-v2.ts
 
 // ================================================
 // HR METADATA FIELDS (DOC-013 §2.1, §6.3)
