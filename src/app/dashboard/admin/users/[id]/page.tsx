@@ -75,11 +75,12 @@ const roleColors: Record<string, string> = {
   owner: 'bg-purple-100 text-purple-800 border-purple-200',
   executive: 'bg-red-100 text-red-800 border-red-200',
   trust_officer: 'bg-blue-100 text-blue-800 border-blue-200',
+  pmo: 'bg-indigo-100 text-indigo-800 border-indigo-200',
   finance_officer: 'bg-green-100 text-green-800 border-green-200',
   domain_head: 'bg-orange-100 text-orange-800 border-orange-200',
-  senior_pm: 'bg-cyan-100 text-cyan-800 border-cyan-200',
+  project_manager: 'bg-cyan-100 text-cyan-800 border-cyan-200',
   project_coordinator: 'bg-teal-100 text-teal-800 border-teal-200',
-  operations_staff: 'bg-gray-100 text-gray-700 border-gray-200',
+  administration: 'bg-gray-100 text-gray-700 border-gray-200',
   all_employees: 'bg-slate-100 text-slate-600 border-slate-200',
 }
 
