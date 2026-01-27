@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Projects API Route
-// Version: 20260125-RBAC-V1-CENTRAL
-// RBAC v1: Central authorization via loadUserAuthContext + evaluateAuthorization
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { requirePermission, getPermissionFilter } from '@/lib/permissions'
 import {
   parsePagination,
   calculateSkip,
@@ -24,7 +25,6 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { loadUserAuthContext, evaluateAuthorization } from '@/lib/authorization'
 
 async function generateProjectNumber(): Promise<string> {
   let attempts = 0
@@ -96,29 +96,12 @@ async function addManagersToProject(projectId: string, managerIds: string[], tx:
 export async function GET(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'projects', 'read')
+    if (denied) return denied
 
-    // RBAC v1: Central authorization
-    const ctx = await loadUserAuthContext(userId)
-    if (!ctx) {
-      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
-    }
-
-    const authResult = await evaluateAuthorization(ctx, {
-      module: 'projects',
-      operation: 'READ',
-    })
-
-    if (!authResult.authorized) {
-      return versionedResponse({ error: 'אין הרשאה לצפות בפרויקטים' }, { status: 403 })
-    }
+    const userId = (session!.user as any)?.id
 
     const { searchParams } = new URL(request.url)
 
@@ -150,13 +133,10 @@ export async function GET(request: Request) {
     if (category) where.category = category
     if (level === 'main') where.parentId = null
 
-    // RBAC v1: Apply scope-based filtering (DOC-013 §5)
-    if (authResult.effectiveScope !== 'ALL' && authResult.scopeFilter) {
-      if (authResult.effectiveScope === 'DOMAIN' && authResult.scopeFilter.domainIds) {
-        where.domainId = { in: authResult.scopeFilter.domainIds }
-      } else if (authResult.effectiveScope === 'PROJECT' && authResult.scopeFilter.projectIds) {
-        where.id = { in: authResult.scopeFilter.projectIds }
-      }
+    // RBAC v2: Apply scope-based filtering (DOC-013 §5)
+    const permFilter = await getPermissionFilter(userId, 'projects')
+    if (permFilter && permFilter.scope !== 'ALL') {
+      Object.assign(where, permFilter.where)
     }
 
     // R1: Count total for pagination
@@ -233,29 +213,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const userId = (session.user as any)?.id
-    if (!userId) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // RBAC v1: Central authorization
-    const ctx = await loadUserAuthContext(userId)
-    if (!ctx) {
-      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
-    }
-
-    const authResult = await evaluateAuthorization(ctx, {
-      module: 'projects',
-      operation: 'CREATE',
-    })
-
-    if (!authResult.authorized) {
-      return versionedResponse({ error: 'אין הרשאה ליצור פרויקטים' }, { status: 403 })
-    }
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'projects', 'create')
+    if (denied) return denied
 
     const data = await request.json()
 
