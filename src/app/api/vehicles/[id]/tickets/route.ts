@@ -1,9 +1,7 @@
 // ============================================
 // src/app/api/vehicles/[id]/tickets/route.ts
-// Version: 20260124
-// Added: auth check for all functions
-// Added: logCrud for CREATE, UPDATE, DELETE
-// SECURITY: Added role-based authorization for POST, PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -11,9 +9,7 @@ import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { TicketStatus } from '@prisma/client'
-
-// Roles that can manage vehicle tickets
-const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -31,12 +27,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'vehicles', 'read', { id: params.id })
+    if (denied) return denied
+
     const tickets = await prisma.vehicleTicket.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -53,34 +50,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can create tickets
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה להוסיף דוחות' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'vehicles', 'create', { id: params.id })
+    if (denied) return denied
+
     const data = await request.json()
-    
-    const vehicle = await prisma.vehicle.findUnique({ 
+
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true, manufacturer: true, model: true }
     })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
-    
+
     const ticketDate = new Date(data.date)
-    
-    // מציאת העובד שהחזיק ברכב בתאריך העבירה
+
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, ticketDate)
-    
+
     const ticket = await prisma.vehicleTicket.create({
       data: {
         vehicleId: params.id,
@@ -99,8 +89,7 @@ export async function POST(
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
-    
-    // Logging - added
+
     await logCrud('CREATE', 'vehicles', 'ticket', ticket.id,
       `דוח ${vehicle.licensePlate} - ${data.ticketType}`, {
       vehicleId: params.id,
@@ -109,7 +98,7 @@ export async function POST(
       fineAmount: data.fineAmount,
       location: data.location,
     })
-    
+
     return NextResponse.json(ticket, { status: 201 })
   } catch (error) {
     console.error('Error creating ticket:', error)
@@ -117,40 +106,31 @@ export async function POST(
   }
 }
 
-// עדכון סטטוס דוח (תשלום/ערעור)
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can update tickets
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לעדכן דוחות' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'vehicles', 'update', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
     const data = await request.json()
-    
-    // תמיכה גם בפורמט הישן (ticketId בגוף הבקשה) וגם החדש (ב-query string)
+
     const id = ticketId || data.ticketId
     if (!id) {
       return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
     }
-    
-    // Get vehicle info for logging
+
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true }
     })
-    
+
     const ticket = await prisma.vehicleTicket.update({
       where: { id },
       data: {
@@ -173,8 +153,7 @@ export async function PUT(
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
-    
-    // Logging - added
+
     await logCrud('UPDATE', 'vehicles', 'ticket', id,
       `דוח ${vehicle?.licensePlate} - ${data.ticketType || ticket.ticketType}`, {
       vehicleId: params.id,
@@ -182,7 +161,7 @@ export async function PUT(
       status: data.status,
       fineAmount: data.fineAmount,
     })
-    
+
     return NextResponse.json(ticket)
   } catch (error) {
     console.error('Error updating ticket:', error)
@@ -194,37 +173,29 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can delete tickets
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה למחוק דוחות' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'vehicles', 'delete', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const ticketId = searchParams.get('ticketId')
-    
+
     if (!ticketId) {
       return NextResponse.json({ error: 'ticketId is required' }, { status: 400 })
     }
-    
-    // Get info for logging
+
     const ticket = await prisma.vehicleTicket.findUnique({
       where: { id: ticketId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
-    
+
     await prisma.vehicleTicket.delete({
       where: { id: ticketId }
     })
-    
-    // Logging - added
+
     if (ticket) {
       await logCrud('DELETE', 'vehicles', 'ticket', ticketId,
         `דוח ${ticket.vehicle.licensePlate} - ${ticket.ticketType}`, {
@@ -232,7 +203,7 @@ export async function DELETE(
         ticketType: ticket.ticketType,
       })
     }
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting ticket:', error)

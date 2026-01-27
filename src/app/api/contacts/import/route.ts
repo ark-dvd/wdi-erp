@@ -1,16 +1,15 @@
+// ============================================
 // src/app/api/contacts/import/route.ts
-// Version: 20260124
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // FIXED: Wrap entire import in transaction - all or nothing
-// SECURITY: Added role-based authorization for bulk import
-// OBSERVABILITY: Added logCrud for bulk import
+// ============================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Elevated roles for bulk import operations (RBAC v2 per DOC-014)
-const CONTACTS_IMPORT_ROLES = ['owner', 'executive', 'trust_officer']
+import { requirePermission } from '@/lib/permissions'
 
 interface ContactImport {
   firstName: string
@@ -28,18 +27,12 @@ interface ContactImport {
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const userRole = (session.user as any)?.role
+    // RBAC v2: Check create permission for contacts (bulk import requires create permission)
+    const denied = await requirePermission(session, 'contacts', 'create')
+    if (denied) return denied
 
-    // Only elevated roles can perform bulk imports
-    if (!CONTACTS_IMPORT_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לייבוא אנשי קשר' }, { status: 403 })
-    }
-
-    const userId = (session.user as any)?.id || null
+    const userId = (session!.user as any)?.id || null
     const body = await request.json()
     const { contacts } = body as { contacts: ContactImport[] }
 

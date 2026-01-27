@@ -1,16 +1,15 @@
+// ============================================
 // src/app/api/organizations/import/route.ts
-// Version: 20260124
-// Added: logCrud for bulk import
-// SECURITY: Added role-based authorization for bulk import
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // IDEMPOTENCY: Wrapped in transaction for atomicity (all-or-nothing)
+// ============================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Elevated roles for bulk import operations (RBAC v2 per DOC-014)
-const ORGS_IMPORT_ROLES = ['owner', 'executive', 'trust_officer']
+import { requirePermission } from '@/lib/permissions'
 
 interface OrganizationImport {
   name: string
@@ -27,18 +26,12 @@ interface OrganizationImport {
 export async function POST(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
-    const userRole = (session.user as any)?.role
+    // RBAC v2: Check create permission for organizations (bulk import requires create permission)
+    const denied = await requirePermission(session, 'organizations', 'create')
+    if (denied) return denied
 
-    // Only elevated roles can perform bulk imports
-    if (!ORGS_IMPORT_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לייבוא ארגונים' }, { status: 403 })
-    }
-
-    const userId = (session.user as any)?.id || null
+    const userId = (session!.user as any)?.id || null
     const body = await request.json()
     const { organizations } = body as { organizations: OrganizationImport[] }
 

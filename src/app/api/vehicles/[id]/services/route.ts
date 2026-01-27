@@ -1,29 +1,26 @@
 // ============================================
 // src/app/api/vehicles/[id]/services/route.ts
-// Version: 20260124
-// Added: auth check for all functions
-// Added: logCrud for CREATE, UPDATE, DELETE
-// SECURITY: Added role-based authorization for POST, PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
-
-// Roles that can manage vehicle services
-const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'vehicles', 'read', { id: params.id })
+    if (denied) return denied
+
     const services = await prisma.vehicleService.findMany({
       where: { vehicleId: params.id },
       orderBy: { serviceDate: 'desc' }
@@ -39,31 +36,25 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can create services
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה להוסיף טיפולים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'vehicles', 'create', { id: params.id })
+    if (denied) return denied
+
     const data = await request.json()
-    
-    const vehicle = await prisma.vehicle.findUnique({ 
+
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true, manufacturer: true, model: true, currentKm: true }
     })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
-    
+
     const mileage = data.mileage ? parseInt(data.mileage) : null
-    
+
     const service = await prisma.vehicleService.create({
       data: {
         vehicleId: params.id,
@@ -76,7 +67,7 @@ export async function POST(
         invoiceUrl: data.invoiceUrl || null,
       }
     })
-    
+
     const updateData: any = { lastServiceDate: new Date(data.serviceDate) }
     if (mileage) {
       updateData.lastServiceKm = mileage
@@ -84,10 +75,9 @@ export async function POST(
         updateData.currentKm = mileage
       }
     }
-    
+
     await prisma.vehicle.update({ where: { id: params.id }, data: updateData })
-    
-    // Logging - added
+
     await logCrud('CREATE', 'vehicles', 'service', service.id,
       `טיפול ${vehicle.licensePlate} - ${data.serviceType}`, {
       vehicleId: params.id,
@@ -96,7 +86,7 @@ export async function POST(
       cost: data.cost,
       garage: data.garage,
     })
-    
+
     return NextResponse.json(service, { status: 201 })
   } catch (error) {
     console.error('Error creating service:', error)
@@ -108,34 +98,27 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can update services
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לעדכן טיפולים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'vehicles', 'update', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const serviceId = searchParams.get('serviceId')
-    
+
     if (!serviceId) {
       return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
     }
-    
+
     const data = await request.json()
-    
-    // Get vehicle info for logging
+
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true }
     })
-    
+
     const service = await prisma.vehicleService.update({
       where: { id: serviceId },
       data: {
@@ -148,15 +131,14 @@ export async function PUT(
         invoiceUrl: data.invoiceUrl || null,
       }
     })
-    
-    // Logging - added
+
     await logCrud('UPDATE', 'vehicles', 'service', serviceId,
       `טיפול ${vehicle?.licensePlate} - ${data.serviceType}`, {
       vehicleId: params.id,
       serviceType: data.serviceType,
       cost: data.cost,
     })
-    
+
     return NextResponse.json(service)
   } catch (error) {
     console.error('Error updating service:', error)
@@ -168,37 +150,29 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can delete services
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה למחוק טיפולים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'vehicles', 'delete', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const serviceId = searchParams.get('serviceId')
-    
+
     if (!serviceId) {
       return NextResponse.json({ error: 'serviceId is required' }, { status: 400 })
     }
-    
-    // Get info for logging
+
     const service = await prisma.vehicleService.findUnique({
       where: { id: serviceId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
-    
+
     await prisma.vehicleService.delete({
       where: { id: serviceId }
     })
-    
-    // Logging - added
+
     if (service) {
       await logCrud('DELETE', 'vehicles', 'service', serviceId,
         `טיפול ${service.vehicle.licensePlate} - ${service.serviceType}`, {
@@ -206,7 +180,7 @@ export async function DELETE(
         serviceType: service.serviceType,
       })
     }
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting service:', error)

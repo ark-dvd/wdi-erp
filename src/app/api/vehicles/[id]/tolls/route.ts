@@ -1,18 +1,14 @@
 // ============================================
 // src/app/api/vehicles/[id]/tolls/route.ts
-// Version: 20260124
-// Added: auth check for all functions
-// Added: logCrud for CREATE, UPDATE, DELETE
-// SECURITY: Added role-based authorization for POST, PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
-
-// Roles that can manage vehicle toll records
-const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 async function findEmployeeByDate(vehicleId: string, date: Date): Promise<string | null> {
   const assignment = await prisma.vehicleAssignment.findFirst({
@@ -30,12 +26,13 @@ export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'vehicles', 'read', { id: params.id })
+    if (denied) return denied
+
     const tolls = await prisma.vehicleTollRoad.findMany({
       where: { vehicleId: params.id },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } },
@@ -52,34 +49,27 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can create toll records
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה להוסיף נסיעות כביש אגרה' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check create permission
+    const denied = await requirePermission(session, 'vehicles', 'create', { id: params.id })
+    if (denied) return denied
+
     const data = await request.json()
-    
-    const vehicle = await prisma.vehicle.findUnique({ 
+
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true, manufacturer: true, model: true }
     })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
-    
+
     const tollDate = new Date(data.date)
-    
-    // מציאת העובד שהחזיק ברכב בתאריך הנסיעה
+
     const employeeId = data.employeeId || await findEmployeeByDate(params.id, tollDate)
-    
+
     const toll = await prisma.vehicleTollRoad.create({
       data: {
         vehicleId: params.id,
@@ -94,8 +84,7 @@ export async function POST(
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
-    
-    // Logging - added
+
     await logCrud('CREATE', 'vehicles', 'toll', toll.id,
       `כביש אגרה ${vehicle.licensePlate} - ${data.road}`, {
       vehicleId: params.id,
@@ -103,7 +92,7 @@ export async function POST(
       road: data.road,
       cost: data.cost,
     })
-    
+
     return NextResponse.json(toll, { status: 201 })
   } catch (error) {
     console.error('Error creating toll road:', error)
@@ -115,34 +104,27 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can update toll records
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לעדכן נסיעות כביש אגרה' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'vehicles', 'update', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const tollId = searchParams.get('tollId')
-    
+
     if (!tollId) {
       return NextResponse.json({ error: 'tollId is required' }, { status: 400 })
     }
-    
+
     const data = await request.json()
-    
-    // Get vehicle info for logging
+
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       select: { licensePlate: true }
     })
-    
+
     const toll = await prisma.vehicleTollRoad.update({
       where: { id: tollId },
       data: {
@@ -157,15 +139,14 @@ export async function PUT(
       },
       include: { employee: { select: { id: true, firstName: true, lastName: true } } }
     })
-    
-    // Logging - added
+
     await logCrud('UPDATE', 'vehicles', 'toll', tollId,
       `כביש אגרה ${vehicle?.licensePlate} - ${data.road}`, {
       vehicleId: params.id,
       road: data.road,
       cost: data.cost,
     })
-    
+
     return NextResponse.json(toll)
   } catch (error) {
     console.error('Error updating toll road:', error)
@@ -177,37 +158,29 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can delete toll records
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה למחוק נסיעות כביש אגרה' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'vehicles', 'delete', { id: params.id })
+    if (denied) return denied
+
     const { searchParams } = new URL(request.url)
     const tollId = searchParams.get('tollId')
-    
+
     if (!tollId) {
       return NextResponse.json({ error: 'tollId is required' }, { status: 400 })
     }
-    
-    // Get info for logging
+
     const toll = await prisma.vehicleTollRoad.findUnique({
       where: { id: tollId },
       include: { vehicle: { select: { licensePlate: true } } }
     })
-    
+
     await prisma.vehicleTollRoad.delete({
       where: { id: tollId }
     })
-    
-    // Logging - added
+
     if (toll) {
       await logCrud('DELETE', 'vehicles', 'toll', tollId,
         `כביש אגרה ${toll.vehicle.licensePlate} - ${toll.road}`, {
@@ -215,7 +188,7 @@ export async function DELETE(
         road: toll.road,
       })
     }
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error deleting toll road:', error)

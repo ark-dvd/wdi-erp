@@ -1,56 +1,46 @@
 // ============================================
 // src/app/api/vehicles/[id]/assign/route.ts
-// Version: 20260124
-// Added: auth check for all functions
-// Added: logCrud for ASSIGN, UNASSIGN
-// SECURITY: Added role-based authorization for POST, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
-
-// Roles that can manage vehicle assignments
-const VEHICLES_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can assign vehicles
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לשייך רכבים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check create permission for vehicle assignments
+    const denied = await requirePermission(session, 'vehicles', 'create', { id: params.id })
+    if (denied) return denied
+
     const { employeeId, currentKm, notes } = await request.json()
-    
+
     if (!employeeId) {
       return NextResponse.json({ error: 'חובה לבחור עובד' }, { status: 400 })
     }
-    
+
     const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       include: { currentDriver: true }
     })
-    
+
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
-    
+
     const employee = await prisma.employee.findUnique({ where: { id: employeeId } })
     if (!employee || employee.status !== 'פעיל') {
       return NextResponse.json({ error: 'עובד לא נמצא או לא פעיל' }, { status: 400 })
     }
-    
+
     const existingVehicle = await prisma.vehicle.findFirst({
       where: { currentDriverId: employeeId, NOT: { id: params.id } }
     })
@@ -60,13 +50,13 @@ export async function POST(
         { status: 400 }
       )
     }
-    
+
     const now = new Date()
     const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
-    const previousDriverName = vehicle.currentDriver 
+    const previousDriverName = vehicle.currentDriver
       ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
       : null
-    
+
     await prisma.$transaction(async (tx) => {
       if (vehicle.currentDriverId) {
         await tx.vehicleAssignment.updateMany({
@@ -74,7 +64,7 @@ export async function POST(
           data: { endDate: now, endKm: kmValue }
         })
       }
-      
+
       await tx.vehicleAssignment.create({
         data: {
           vehicleId: params.id,
@@ -84,19 +74,18 @@ export async function POST(
           notes: notes || null,
         }
       })
-      
+
       await tx.vehicle.update({
         where: { id: params.id },
         data: { currentDriverId: employeeId, currentKm: kmValue }
       })
     })
-    
+
     const updatedVehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       include: { currentDriver: { select: { id: true, firstName: true, lastName: true, phone: true } } }
     })
-    
-    // Logging - added
+
     await logCrud('CREATE', 'vehicles', 'assignment', params.id,
       `שיוך ${vehicle.licensePlate} ל${employee.firstName} ${employee.lastName}`, {
       vehicleId: params.id,
@@ -106,7 +95,7 @@ export async function POST(
       previousDriver: previousDriverName,
       startKm: kmValue,
     })
-    
+
     return NextResponse.json(updatedVehicle)
   } catch (error) {
     console.error('Error assigning vehicle:', error)
@@ -118,53 +107,46 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can unassign vehicles
-  if (!VEHICLES_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לבטל שיוך רכבים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check delete permission for vehicle assignments
+    const denied = await requirePermission(session, 'vehicles', 'delete', { id: params.id })
+    if (denied) return denied
+
     const { currentKm, notes } = await request.json().catch(() => ({}))
-    
-    const vehicle = await prisma.vehicle.findUnique({ 
+
+    const vehicle = await prisma.vehicle.findUnique({
       where: { id: params.id },
       include: { currentDriver: { select: { firstName: true, lastName: true } } }
     })
     if (!vehicle) {
       return NextResponse.json({ error: 'רכב לא נמצא' }, { status: 404 })
     }
-    
+
     if (!vehicle.currentDriverId) {
       return NextResponse.json({ error: 'הרכב לא משויך לאף עובד' }, { status: 400 })
     }
-    
-    const driverName = vehicle.currentDriver 
+
+    const driverName = vehicle.currentDriver
       ? `${vehicle.currentDriver.firstName} ${vehicle.currentDriver.lastName}`
       : 'unknown'
-    
+
     const now = new Date()
     const kmValue = currentKm ? parseInt(currentKm) : vehicle.currentKm
-    
+
     await prisma.$transaction(async (tx) => {
       await tx.vehicleAssignment.updateMany({
         where: { vehicleId: params.id, employeeId: vehicle.currentDriverId!, endDate: null },
         data: { endDate: now, endKm: kmValue, notes: notes ? `${notes} (ביטול שיוך)` : 'ביטול שיוך' }
       })
-      
+
       await tx.vehicle.update({
         where: { id: params.id },
         data: { currentDriverId: null, currentKm: kmValue }
       })
     })
-    
-    // Logging - added
+
     await logCrud('DELETE', 'vehicles', 'assignment', params.id,
       `ביטול שיוך ${vehicle.licensePlate} מ${driverName}`, {
       vehicleId: params.id,
@@ -172,7 +154,7 @@ export async function DELETE(
       previousDriver: driverName,
       endKm: kmValue,
     })
-    
+
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('Error unassigning vehicle:', error)

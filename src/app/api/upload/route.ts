@@ -1,35 +1,26 @@
 // ============================================
 // src/app/api/upload/route.ts
-// Version: 20260124
-// Added: logActivity for UPLOAD
-// SECURITY: Added role-based authorization for POST
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
 import { auth } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
-
-// Roles that can upload files (RBAC v2 per DOC-014)
-const UPLOAD_ROLES = ['owner', 'executive', 'trust_officer', 'pmo', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
 
 export async function POST(request: Request) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can upload files
-  if (!UPLOAD_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה להעלות קבצים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check create permission for files (any user who can create content can upload files)
+    const denied = await requirePermission(session, 'files', 'create')
+    if (denied) return denied
+
     const formData = await request.formData()
     const file = formData.get('file') as File
     const folder = formData.get('folder') as string || 'uploads'
