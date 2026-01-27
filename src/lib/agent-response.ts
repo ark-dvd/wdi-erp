@@ -284,8 +284,9 @@ export function createNoResultsResponse(options: {
 
 // ============================================================================
 // R1: Permission vs Data Distinction
-// RBAC v1: Uses canonical roles from DOC-013
-// CRITICAL: Agent is PROHIBITED from HR access (DOC-013 M-003)
+// RBAC v2: Uses canonical roles from DOC-013 v2.0
+// DOC-013 A-001: Agent can access exactly the data the user has READ permission for
+// HR access per role follows DOC-013 §7 permission matrix
 // ============================================================================
 
 import type { CanonicalRole, Module } from './authorization'
@@ -311,18 +312,20 @@ const AGENT_MODULE_MAP: Record<string, Module> = {
 }
 
 /**
- * RBAC v1 Module Permissions by Canonical Role
- * Source: DOC-014 §4.10 Agent Authorization Matrix
+ * RBAC v2 Module Permissions by Canonical Role
+ * Source: DOC-013 v2.0 §7 Role Permission Matrix
  *
- * CRITICAL: Agent is READ-ONLY and CANNOT access HR (DOC-013 §9, M-003)
- * The Agent MUST NOT access hr module under any circumstances.
+ * DOC-013 A-001: Agent can access exactly the data the user has READ permission for.
+ * Agent is READ-ONLY (canWrite: false for all modules).
+ * HR access follows DOC-013 §7 role-specific permissions.
  */
 const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermissions>> = {
-  // Owner: Full read access to all modules (Agent is still read-only)
+  // Owner: Full read access to all modules (DOC-013 §7.3)
+  // WDI Agent: "✅ All data"
   owner: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED per DOC-013 M-003
+    hr: { canRead: true, canWrite: false },  // DOC-013 §7.3: כח אדם ✅
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -332,11 +335,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: true, canWrite: false },
   },
 
-  // Executive: Full read access to all modules
+  // Executive: Full read access to all modules (DOC-013 §7.4)
+  // WDI Agent: "✅ Per read permissions"
   executive: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    hr: { canRead: true, canWrite: false },  // DOC-013 §7.4: כח אדם ✅
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -346,11 +350,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: true, canWrite: false },
   },
 
-  // Trust Officer: Full read access
+  // Trust Officer: Full HR read access (DOC-013 §7.5)
+  // WDI Agent: "✅ Per read permissions"
   trust_officer: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    hr: { canRead: true, canWrite: false },  // DOC-013 §7.5: כח אדם ✅
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -360,11 +365,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: true, canWrite: false },
   },
 
-  // Finance Officer: Read access to most modules
+  // Finance Officer: Full HR read access (DOC-013 §7.7)
+  // WDI Agent: "✅ Per read permissions"
   finance_officer: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    hr: { canRead: true, canWrite: false },  // DOC-013 §7.7: כח אדם ✅
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -374,11 +380,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Domain Head: Domain-scoped access (Agent queries via ProjectKnowledgeView)
+  // Domain Head: Domain-scoped access (DOC-013 §7.8)
+  // HR: "⚠️ Main page only" - Agent can't enforce MAIN_PAGE scope
   domain_head: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },  // DOMAIN scope applied server-side
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.8: MAIN_PAGE scope only - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -388,11 +395,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // PMO: Cross-project visibility (RBAC v2)
+  // PMO: Cross-project visibility (DOC-013 §7.6)
+  // HR: "⚠️ Main page + own card" - Agent can't enforce SELF scope
   pmo: {
     contacts: { canRead: true, canWrite: true },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // MAIN_PAGE + SELF only
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.6: MAIN_PAGE + SELF - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },  // OWN scope
     equipment: { canRead: true, canWrite: false },  // OWN scope
@@ -402,11 +410,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Project Manager: Assigned projects (RBAC v2)
+  // Project Manager: Assigned projects (DOC-013 §7.9)
+  // HR: "⚠️ Main page + own card" - Agent can't enforce SELF scope
   project_manager: {
     contacts: { canRead: true, canWrite: true },
     projects: { canRead: true, canWrite: false },  // ASSIGNED scope applied server-side
-    hr: { canRead: false, canWrite: false },  // MAIN_PAGE + SELF only
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.9: MAIN_PAGE + SELF - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },  // OWN scope
     equipment: { canRead: true, canWrite: false },  // OWN scope
@@ -416,11 +425,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Project Coordinator: Project-scoped access
+  // Project Coordinator: Project-scoped access (DOC-013 §7.10)
+  // HR: "⚠️ Own card only" - Agent can't enforce SELF scope
   project_coordinator: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.10: SELF only - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -430,11 +440,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // Administration: Equipment/vehicles/vendors/contacts (RBAC v2)
+  // Administration: Equipment/vehicles/vendors/contacts (DOC-013 §7.11)
+  // HR: "⚠️ Contacts scope" - Agent can't enforce CONTACTS scope
   administration: {
     contacts: { canRead: true, canWrite: true },
     projects: { canRead: true, canWrite: false },  // CONTACTS scope only
-    hr: { canRead: false, canWrite: false },  // CONTACTS scope only
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.11: CONTACTS scope - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: true },
     equipment: { canRead: true, canWrite: true },
@@ -444,11 +455,12 @@ const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermi
     activityLog: { canRead: false, canWrite: false },
   },
 
-  // All Employees: Baseline access (all authenticated users)
+  // All Employees: Baseline access (DOC-013 §7.12)
+  // HR: "⚠️ Own card only" - Agent can't enforce SELF scope
   all_employees: {
     contacts: { canRead: true, canWrite: false },
     projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // PROHIBITED - only MyProfileView via Agent
+    hr: { canRead: false, canWrite: false },  // DOC-013 §7.12: SELF only - Agent can't enforce
     organizations: { canRead: true, canWrite: false },
     vehicles: { canRead: true, canWrite: false },
     equipment: { canRead: true, canWrite: false },
@@ -520,11 +532,8 @@ export function hasModuleAccess(
   module: string,
   operation: 'read' | 'write' = 'read'
 ): boolean {
-  // CRITICAL: HR is always prohibited for Agent (DOC-013 M-003)
-  if (module.toLowerCase() === 'hr') {
-    return false
-  }
-
+  // DOC-013 A-001: Agent can access exactly the data the user has READ permission for
+  // HR access is determined by AGENT_MODULE_PERMISSIONS per role (not hardcoded)
   const permission = checkModulePermission(role, module, operation)
   if (!permission) return false
   return operation === 'read' ? permission.canRead : permission.canWrite
