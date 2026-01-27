@@ -1,29 +1,24 @@
-// /home/user/wdi-erp/src/app/api/contacts/[id]/route.ts
-// Version: 20260124
-// SECURITY: Added role-based authorization for PUT, DELETE
-// Added: logCrud for UPDATE, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Roles that can modify/delete contact data (RBAC v2 canonical names per DOC-013 §4.1)
-const CONTACTS_WRITE_ROLES = [
-  'owner', 'executive', 'trust_officer', 'pmo', 'finance_officer',
-  'domain_head', 'project_manager', 'project_coordinator', 'administration'
-]
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { id } = await params
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'contacts', 'read', { id })
+    if (denied) return denied
+
     const contact = await prisma.contact.findUnique({
       where: { id },
       include: {
@@ -84,19 +79,15 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params
 
-    const userRole = (session.user as any)?.role
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'contacts', 'update', { id })
+    if (denied) return denied
 
-    // Only authorized roles can update contacts
-    if (!CONTACTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לעדכן אנשי קשר' }, { status: 403 })
-    }
-
-    const userId = (session.user as any)?.id || null
+    const userId = (session!.user as any)?.id || null
     const data = await request.json()
     const contact = await prisma.contact.update({
       where: { id },
@@ -140,17 +131,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { id } = await params
 
-    const userRole = (session.user as any)?.role
-
-    // Only authorized roles can delete contacts
-    if (!CONTACTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה למחוק אנשי קשר' }, { status: 403 })
-    }
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'contacts', 'delete', { id })
+    if (denied) return denied
 
     // Get contact info before delete for logging
     const contact = await prisma.contact.findUnique({

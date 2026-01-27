@@ -1,25 +1,21 @@
 // ================================================
 // WDI ERP - HR [id] API Route
-// Version: 20260125-RBAC-V1
-// RBAC v1: Canonical roles per DOC-013
-// SECURITY FIX: Removed idNumber/grossSalary from GET response
-// SECURITY FIX: Added role-based access for sensitive data
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
+// SECURITY: Sensitive data filtering based on roles
 // ================================================
 
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-import type { CanonicalRole } from '@/lib/authorization'
+import { requirePermission, hasRole } from '@/lib/permissions'
 
-// RBAC v1: Canonical roles that can write HR data (DOC-014 §4.2)
-const HR_WRITE_ROLES: CanonicalRole[] = ['owner', 'trust_officer']
-
-// RBAC v1: Canonical roles that can read sensitive HR data (DOC-014 §4.2)
-const HR_SENSITIVE_READ_ROLES: CanonicalRole[] = ['owner', 'executive', 'trust_officer']
+// Roles that can read sensitive HR data (DOC-014 §4.2)
+const HR_SENSITIVE_READ_ROLES = ['owner', 'executive', 'trust_officer']
 
 // Finance Officer can see compensation fields only (DOC-014 §4.2)
-const HR_COMPENSATION_READ_ROLES: CanonicalRole[] = ['finance_officer']
+const HR_COMPENSATION_READ_ROLES = ['finance_officer']
 
 
 export async function GET(
@@ -28,14 +24,16 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id } = await params
-    // RBAC v1: Check multi-role authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'hr', 'read', { id, employeeId: id })
+    if (denied) return denied
+
+    // Get user roles for sensitivity filtering
+    const userId = (session!.user as any)?.id
+    const userRoles = (session!.user as any)?.roles || []
+    const userRoleNames: string[] = userRoles.map((r: { name: string }) => r.name)
 
     const employee = await prisma.employee.findUnique({
       where: { id },
@@ -145,21 +143,11 @@ export async function PUT(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // RBAC v1: Check multi-role authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-
-    // RBAC v1: Only authorized roles can update employee data (DOC-014 §4.2)
-    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
-    if (!canWrite) {
-      return NextResponse.json({ error: 'אין הרשאה לעדכן נתוני עובדים' }, { status: 403 })
-    }
-
     const { id } = await params
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'hr', 'update', { id, employeeId: id })
+    if (denied) return denied
     const data = await request.json()
 
     const existingEmployee = await prisma.employee.findUnique({
@@ -247,21 +235,11 @@ export async function DELETE(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    // RBAC v1: Check multi-role authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-
-    // RBAC v1: Only authorized roles can delete employees (DOC-014 §4.2)
-    const canWrite = userRoleNames.some(r => HR_WRITE_ROLES.includes(r))
-    if (!canWrite) {
-      return NextResponse.json({ error: 'אין הרשאה למחוק עובדים' }, { status: 403 })
-    }
-
     const { id } = await params
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'hr', 'delete', { id, employeeId: id })
+    if (denied) return denied
 
     const existingEmployee = await prisma.employee.findUnique({
       where: { id },

@@ -1,17 +1,14 @@
 // ============================================
 // src/app/api/events/[id]/route.ts
-// Version: 20260124
-// Added: logCrud for UPDATE, DELETE
-// SECURITY: Added role-based authorization for PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Roles that can manage events (RBAC v2 per DOC-014 §6.3)
-const EVENTS_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'domain_head', 'project_manager', 'project_coordinator']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
@@ -19,9 +16,11 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
     const { id } = await params
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'events', 'read', { id })
+    if (denied) return denied
 
     const event = await prisma.projectEvent.findUnique({
       where: { id },
@@ -45,18 +44,13 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can update events
-  if (!EVENTS_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לעדכן אירועים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
     const { id } = await params
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'events', 'update', { id })
+    if (denied) return denied
     const data = await request.json()
 
     // Get event with project info for logging
@@ -92,18 +86,13 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await auth()
-  if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can delete events
-  if (!EVENTS_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה למחוק אירועים' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
     const { id } = await params
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'events', 'delete', { id })
+    if (denied) return denied
 
     // Get event info before delete for logging
     const event = await prisma.projectEvent.findUnique({

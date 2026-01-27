@@ -1,13 +1,10 @@
-// Version: 20260124
-// FIXED: Wrap PUT/DELETE in transaction for atomicity
-// SECURITY: Added role-based authorization for PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-
-// Roles that can modify/delete project data (RBAC v2 per DOC-014 §6.1)
-const PROJECTS_WRITE_ROLES = ['owner', 'executive', 'domain_head', 'project_manager', 'project_coordinator']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: Request,
@@ -15,11 +12,11 @@ export async function GET(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { id } = await params
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'projects', 'read', { id })
+    if (denied) return denied
 
     const project = await prisma.project.findUnique({
       where: { id },
@@ -128,18 +125,11 @@ export async function PUT(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userRole = (session.user as any)?.role
-
-    // Only authorized roles can update projects
-    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה לעדכן פרויקטים' }, { status: 403 })
-    }
-
     const { id } = await params
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'projects', 'update', { id })
+    if (denied) return denied
     const data = await request.json()
     const { managerIds, ...projectData } = data
 
@@ -161,7 +151,7 @@ export async function PUT(
     }
 
     // Get current user ID for updatedById
-    const userId = (session.user as any)?.id
+    const userId = (session!.user as any)?.id
 
     const project = await prisma.$transaction(async (tx) => {
       const project = await tx.project.update({
@@ -182,7 +172,7 @@ export async function PUT(
           services: projectData.services || undefined,
           buildingTypes: projectData.buildingTypes || undefined,
           deliveryMethods: projectData.deliveryMethods || undefined,
-          updatedById: (session.user as any).id || null,
+          updatedById: (session!.user as any).id || null,
         },
       })
 
@@ -219,18 +209,11 @@ export async function DELETE(
 ) {
   try {
     const session = await auth()
-    if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
-    const userRole = (session.user as any)?.role
-
-    // Only authorized roles can delete projects
-    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה למחוק פרויקטים' }, { status: 403 })
-    }
-
     const { id } = await params
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'projects', 'delete', { id })
+    if (denied) return denied
 
     const existingProject = await prisma.project.findUnique({
       where: { id },

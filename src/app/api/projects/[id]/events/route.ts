@@ -1,14 +1,11 @@
-// Version: 20260124
-// Added: logCrud for CREATE, async text extraction trigger
-// SECURITY: Added role-based authorization for POST
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { supportsTextExtraction } from '@/lib/text-extraction'
-
-// Roles that can create events on projects (RBAC v2 per DOC-014 §6.3)
-const PROJECTS_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'domain_head', 'project_manager', 'project_coordinator']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
@@ -68,19 +65,13 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params
   try {
     const session = await auth()
-    if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    const { id } = await params
 
-    const userRole = (session.user as any)?.role
-
-    // Only authorized roles can create events
-    if (!PROJECTS_WRITE_ROLES.includes(userRole)) {
-      return NextResponse.json({ error: 'אין הרשאה ליצור אירועים' }, { status: 403 })
-    }
+    // RBAC v2: Check create permission for events on this project
+    const denied = await requirePermission(session, 'events', 'create', { projectId: id })
+    if (denied) return denied
 
     const data = await request.json()
     if (!data.eventType || !data.description) {
@@ -99,7 +90,7 @@ export async function POST(
         eventDate: data.eventDate ? new Date(data.eventDate) : new Date(),
         eventType: data.eventType,
         description: data.description,
-        createdById: (session.user as any).id || null,
+        createdById: (session!.user as any).id || null,
         files: data.files && data.files.length > 0 ? {
           create: data.files.map((file: any) => ({
             fileUrl: file.fileUrl,

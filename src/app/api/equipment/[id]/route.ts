@@ -1,9 +1,7 @@
 // ============================================
 // src/app/api/equipment/[id]/route.ts
-// Version: 20260124
-// Equipment module - single item API
-// FIXED: Import labels from lib instead of route
-// SECURITY: Added role-based authorization for PUT, DELETE
+// Version: 20260127
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -12,20 +10,19 @@ import { logCrud } from '@/lib/activity'
 import { auth } from '@/lib/auth'
 import { EquipmentStatus, EquipmentType } from '@prisma/client'
 import { equipmentTypeLabels, equipmentStatusLabels } from '@/lib/equipment-labels'
-
-// Roles that can manage equipment data (RBAC v2 per DOC-014 §6.4)
-const EQUIPMENT_WRITE_ROLES = ['owner', 'executive', 'trust_officer', 'administration']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check read permission
+    const denied = await requirePermission(session, 'equipment', 'read', { id: params.id })
+    if (denied) return denied
+
     const equipment = await prisma.equipment.findUnique({
       where: { id: params.id },
       include: {
@@ -85,20 +82,14 @@ export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can update equipment
-  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה לעדכן ציוד' }, { status: 403 })
-  }
-
   try {
-    const userId = (session.user as any)?.id || null
+    const session = await auth()
+
+    // RBAC v2: Check update permission
+    const denied = await requirePermission(session, 'equipment', 'update', { id: params.id })
+    if (denied) return denied
+
+    const userId = (session!.user as any)?.id || null
     const data = await request.json()
     
     const existing = await prisma.equipment.findUnique({
@@ -227,19 +218,12 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await auth()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  const userRole = (session.user as any)?.role
-
-  // Only authorized roles can delete equipment
-  if (!EQUIPMENT_WRITE_ROLES.includes(userRole)) {
-    return NextResponse.json({ error: 'אין הרשאה למחוק ציוד' }, { status: 403 })
-  }
-
   try {
+    const session = await auth()
+
+    // RBAC v2: Check delete permission
+    const denied = await requirePermission(session, 'equipment', 'delete', { id: params.id })
+    if (denied) return denied
     const equipment = await prisma.equipment.findUnique({
       where: { id: params.id }
     })
