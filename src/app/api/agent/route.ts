@@ -359,13 +359,15 @@ export async function POST(request: NextRequest) {
 
     if (hasPermissionDenials && !hasData) {
       // ALL requested intents were blocked by permissions
+      // DOC-013 §8.2: Use "אין לך" (you don't have) not "אין לי" (I don't have)
       finalState = 'NOT_AUTHORIZED';
-      finalMessage = 'אין לי הרשאה להציג את המידע שביקשת.';
+      finalMessage = 'אין לך הרשאה מתאימה.';
       httpStatus = 403;
     } else if (hasPermissionDenials && hasData) {
       // Some data returned, some blocked by permissions
+      // DOC-013 §8.2: Use "אין לך" (you don't have) not "אין לי" (I don't have)
       finalState = 'PARTIAL';
-      finalMessage = 'בחלק מהבקשה אין לי הרשאה להציג מידע.';
+      finalMessage = 'בחלק מהבקשה אין לך הרשאה להציג מידע.';
     } else if (!hasPermissionDenials && !hasData) {
       // No permissions issues, but no data found
       finalState = 'NO_RESULTS';
