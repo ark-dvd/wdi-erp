@@ -14,8 +14,10 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
+import { requirePermission } from '@/lib/permissions'
 
-// Version: 20260124-MAYBACH
+// Version: 20260128-RBAC-V2
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R3-FilterStrictness, R4-Sorting, R5-Versioning
 
 export async function GET(request: Request) {
@@ -23,6 +25,10 @@ export async function GET(request: Request) {
   if (!session) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
+
+  // RBAC v2: Check read permission for events
+  const denied = await requirePermission(session, 'events', 'read')
+  if (denied) return denied
 
   try {
     const { searchParams } = new URL(request.url)
