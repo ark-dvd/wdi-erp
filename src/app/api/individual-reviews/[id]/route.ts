@@ -1,5 +1,6 @@
 // /app/api/individual-reviews/[id]/route.ts
-// Version: 20260111-140700
+// Version: 20260128-RBAC-V2
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // FIXED: Wrap PUT/DELETE in transaction for atomicity
 // Added: logCrud for UPDATE, DELETE
 
@@ -7,6 +8,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
 import { logCrud } from '@/lib/activity';
+import { requirePermission } from '@/lib/permissions';
 
 const CRITERIA_FIELDS = [
   'accountability', 'boqQuality', 'specQuality', 'planQuality',
@@ -30,6 +32,10 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check read permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'read');
+    if (denied) return denied;
 
     const review = await prisma.individualReview.findUnique({
       where: { id: params.id },
@@ -68,6 +74,10 @@ export async function PUT(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check update permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'update');
+    if (denied) return denied;
 
     const review = await prisma.individualReview.findUnique({
       where: { id: params.id },
@@ -154,6 +164,10 @@ export async function DELETE(
     if (!session?.user?.id) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check delete permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'delete');
+    if (denied) return denied;
 
     const review = await prisma.individualReview.findUnique({
       where: { id: params.id },

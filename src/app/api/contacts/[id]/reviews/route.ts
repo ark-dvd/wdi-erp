@@ -1,9 +1,11 @@
 // src/app/api/contacts/[id]/reviews/route.ts
-// Version: 20251221-073100
+// Version: 20260128-RBAC-V2
+// RBAC v2: Use permission system from DOC-013/DOC-014
 
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { auth } from '@/lib/auth';
+import { requirePermission } from '@/lib/permissions';
 
 export async function GET(
   request: NextRequest,
@@ -14,6 +16,10 @@ export async function GET(
     if (!session?.user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check read permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'read');
+    if (denied) return denied;
 
     const reviews = await prisma.individualReview.findMany({
       where: { contactId: params.id },

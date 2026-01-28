@@ -1,5 +1,6 @@
 // src/app/api/individual-reviews/route.ts
-// Version: 20260124-MAYBACH
+// Version: 20260128-RBAC-V2
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // FIXED: Wrap POST in transaction for atomicity
 // Added: logCrud for CREATE
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
@@ -8,6 +9,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { logCrud } from '@/lib/activity';
+import { requirePermission } from '@/lib/permissions';
 import {
   parsePagination,
   calculateSkip,
@@ -42,6 +44,10 @@ export async function GET(request: NextRequest) {
     if (!session) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check read permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'read');
+    if (denied) return denied;
 
     const { searchParams } = new URL(request.url);
 
@@ -112,6 +118,10 @@ export async function POST(request: NextRequest) {
     if (!session?.user?.email) {
       return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
     }
+
+    // RBAC v2: Check create permission for vendors (vendor ratings)
+    const denied = await requirePermission(session, 'vendors', 'create');
+    if (denied) return denied;
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
