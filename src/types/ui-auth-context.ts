@@ -4,7 +4,7 @@
 // Shared type contract between backend and frontend
 // ================================================
 
-export type ModuleScope = 'ALL' | 'DOMAIN' | 'PROJECT'
+export type ModuleScope = 'ALL' | 'DOMAIN' | 'ASSIGNED'
 
 export interface ProjectsModule {
   read: boolean

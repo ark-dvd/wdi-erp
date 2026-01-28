@@ -15,8 +15,8 @@ export async function GET(
     const session = await auth()
     const { id } = await params
 
-    // RBAC v2: Check read permission
-    const denied = await requirePermission(session, 'organizations', 'read', { id })
+    // RBAC v2: Check read permission (organizations use 'contacts' module per DOC-013 §6.1)
+    const denied = await requirePermission(session, 'contacts', 'read', { id })
     if (denied) return denied
 
     const organization = await prisma.organization.findUnique({
@@ -79,8 +79,8 @@ export async function PUT(
     const session = await auth()
     const { id } = await params
 
-    // RBAC v2: Check update permission
-    const denied = await requirePermission(session, 'organizations', 'update', { id })
+    // RBAC v2: Check update permission (organizations use 'contacts' module per DOC-013 §6.1)
+    const denied = await requirePermission(session, 'contacts', 'update', { id })
     if (denied) return denied
 
     const userId = (session!.user as any)?.id || null
@@ -126,8 +126,8 @@ export async function DELETE(
     const session = await auth()
     const { id } = await params
 
-    // RBAC v2: Check delete permission
-    const denied = await requirePermission(session, 'organizations', 'delete', { id })
+    // RBAC v2: Check delete permission (organizations use 'contacts' module per DOC-013 §6.1)
+    const denied = await requirePermission(session, 'contacts', 'delete', { id })
     if (denied) return denied
 
     // Get org info before delete for logging

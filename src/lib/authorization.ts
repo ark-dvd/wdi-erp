@@ -23,23 +23,22 @@ export type CanonicalRole =
   | 'administration'
   | 'all_employees'
 
-export type Scope = 'ALL' | 'DOMAIN' | 'PROJECT' | 'OWN' | 'SELF'
+export type Scope = 'ALL' | 'DOMAIN' | 'ASSIGNED' | 'OWN' | 'SELF' | 'MAIN_PAGE'
 
 export type Operation = 'READ' | 'CREATE' | 'UPDATE' | 'DELETE' | 'ADMIN' | 'QUERY'
 
 export type Module =
-  | 'contacts'           // Aligned with seed-permissions-v2.ts
-  | 'hr'
+  | 'events'               // Canonical per DOC-013 §6.1
   | 'projects'
-  | 'events'
+  | 'hr'
+  | 'contacts'
   | 'vendors'
   | 'vehicles'
   | 'equipment'
-  | 'documents'
-  | 'admin'
-  | 'agent'
   | 'knowledge_repository'
-  | 'financial'          // Aligned with seed-permissions-v2.ts
+  | 'financial'
+  | 'agent'
+  | 'admin'
 
 // ================================================
 // HR METADATA FIELDS (DOC-013 §2.1, §6.3)
@@ -121,9 +120,10 @@ export interface AuthorizationCheck {
 const SCOPE_PRECEDENCE: Record<Scope, number> = {
   'ALL': 1,
   'DOMAIN': 2,
-  'PROJECT': 3,
+  'ASSIGNED': 3,
   'OWN': 4,
   'SELF': 5,
+  'MAIN_PAGE': 6,
 }
 
 function getBroadestScope(scopes: Scope[]): Scope | null {
@@ -306,7 +306,7 @@ function checkEntityWithinScope(
         scopeFilter: { domainIds: context.assignedDomainIds },
       }
 
-    case 'PROJECT':
+    case 'ASSIGNED':
       // Entity must be in assigned projects OR visibility grants (for READ only)
       const allProjectIds = [
         ...context.assignedProjectIds,
@@ -322,6 +322,10 @@ function checkEntityWithinScope(
         authorized: true,
         scopeFilter: { projectIds: allProjectIds },
       }
+
+    case 'MAIN_PAGE':
+      // Main page access - read-only, limited data
+      return { authorized: true }
 
     case 'OWN':
       // Entity must be created by or assigned to user
@@ -386,7 +390,7 @@ export function canWriteToProject(projectId: string, context: UserAuthContext): 
 
 /**
  * Get HR data projection based on scope
- * DOMAIN and PROJECT scope return metadata only
+ * DOMAIN and ASSIGNED scope return metadata only
  */
 export function getHrProjection(scope: Scope): 'FULL' | 'METADATA' {
   switch (scope) {
@@ -395,8 +399,9 @@ export function getHrProjection(scope: Scope): 'FULL' | 'METADATA' {
     case 'SELF':
       return 'FULL'  // Own record
     case 'DOMAIN':
-    case 'PROJECT':
+    case 'ASSIGNED':
     case 'OWN':
+    case 'MAIN_PAGE':
       return 'METADATA'  // M-005, M-006
     default:
       return 'METADATA'
