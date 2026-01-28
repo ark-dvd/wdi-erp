@@ -27,13 +27,14 @@ const CRITERIA_CONFIG = [
 interface IndividualReview {
   id: string;
   contactId: string;
-  projectId: string;
+  projectId: string | null;
+  externalProjectName: string | null;
   reviewerId: string;
   avgRating: number;
   generalNotes: string | null;
   createdAt: string;
   contact: { id: string; firstName: string; lastName: string; organizationId: string | null; organization: { id: string; name: string } | null };
-  project: { id: string; projectNumber: string; name: string };
+  project: { id: string; projectNumber: string; name: string } | null;
   reviewer: { id: string; name: string | null; email: string | null };
   [key: string]: any;
 }
@@ -212,7 +213,11 @@ export default function EditIndividualReviewPage() {
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
             <span className="text-gray-500">פרויקט:</span>
-            <span className="mr-2 font-medium">#{review.project.projectNumber} {review.project.name}</span>
+            {review.project ? (
+              <span className="mr-2 font-medium">#{review.project.projectNumber} {review.project.name}</span>
+            ) : (
+              <span className="mr-2 font-medium text-orange-600">{review.externalProjectName} (חיצוני)</span>
+            )}
           </div>
           <div>
             <span className="text-gray-500">תאריך יצירה:</span>

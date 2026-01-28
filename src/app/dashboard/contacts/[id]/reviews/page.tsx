@@ -28,9 +28,10 @@ interface IndividualReview {
   id: string;
   avgRating: number | null;
   createdAt: string;
+  externalProjectName: string | null;
   vendorReview: {
     id: string;
-    project: { id: string; projectNumber: string; name: string };
+    project: { id: string; projectNumber: string; name: string } | null;
     reviewer: { employee: { firstName: string; lastName: string } | null };
   };
   [key: string]: any;
@@ -204,13 +205,19 @@ export default function ContactReviewsPage() {
                     <span className="text-xl font-bold">{review.avgRating?.toFixed(1) || '-'}</span>
                   </div>
                   <div className="text-right">
-                    <Link 
-                      href={`/dashboard/projects/${review.vendorReview.project.id}`}
-                      className="text-blue-600 hover:underline font-medium"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      #{review.vendorReview.project.projectNumber} {review.vendorReview.project.name}
-                    </Link>
+                    {review.vendorReview.project ? (
+                      <Link
+                        href={`/dashboard/projects/${review.vendorReview.project.id}`}
+                        className="text-blue-600 hover:underline font-medium"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        #{review.vendorReview.project.projectNumber} {review.vendorReview.project.name}
+                      </Link>
+                    ) : (
+                      <span className="text-orange-600 font-medium">
+                        {review.externalProjectName} (חיצוני)
+                      </span>
+                    )}
                     <div className="text-sm text-gray-500">
                       דורג ע"י {getReviewerName(review.vendorReview.reviewer)} • {formatDate(review.createdAt)}
                     </div>

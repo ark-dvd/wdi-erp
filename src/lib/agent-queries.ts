@@ -1241,8 +1241,8 @@ export async function getVendorRatings(params: {
     contactName: `${r.contact.firstName} ${r.contact.lastName}`,
     organizationName: r.contact.organization?.name || 'עצמאי',
     avgRating: r.avgRating,
-    projectName: r.project.name,
-    projectNumber: r.project.projectNumber,
+    projectName: r.project?.name || (r as any).externalProjectName || 'פרויקט חיצוני',
+    projectNumber: r.project?.projectNumber || 'חיצוני',
     reviewerName: r.reviewer?.employee
       ? `${r.reviewer.employee.firstName} ${r.reviewer.employee.lastName}`
       : r.reviewer?.name || 'לא ידוע',
