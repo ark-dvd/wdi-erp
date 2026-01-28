@@ -276,7 +276,7 @@ async function main() {
     }
     roleToUsersBefore.get(backup.roleName)!.push(backup.userEmail)
   }
-  for (const [roleName, users] of roleToUsersBefore) {
+  for (const [roleName, users] of Array.from(roleToUsersBefore.entries())) {
     roleCountsBefore.push({ roleName, count: users.length, users })
   }
 
@@ -413,7 +413,7 @@ async function main() {
       const restoredUsers: { email: string; oldRoles: string[]; newRoles: string[] }[] = []
       let totalRestored = 0
 
-      for (const [userId, userData] of userRolesMap) {
+      for (const [userId, userData] of Array.from(userRolesMap.entries())) {
         const { email, roles: oldRoles } = userData
         const newRoles: string[] = []
         const failedMappings: string[] = []
