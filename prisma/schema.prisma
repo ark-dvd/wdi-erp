@@ -878,13 +878,14 @@ model ImportLog {
 
 model IndividualReview {
   id              String   @id @default(cuid())
-  
+
   reviewerId      String
   reviewer        User     @relation("IndividualReviewReviewer", fields: [reviewerId], references: [id])
   contactId       String
   contact         Contact  @relation(fields: [contactId], references: [id])
-  projectId       String
-  project         Project  @relation(fields: [projectId], references: [id])
+  projectId       String?
+  project         Project?  @relation(fields: [projectId], references: [id])
+  externalProjectName String?  // For projects not in system ("פרויקט חיצוני")
   
   accountability        Int
   accountabilityNote    String?  @db.Text
@@ -917,7 +918,10 @@ model IndividualReview {
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   
+  // Note: When projectId is null, externalProjectName should be used
+  // PostgreSQL treats NULL as distinct in unique constraints
   @@unique([reviewerId, contactId, projectId])
+  @@index([reviewerId, contactId, externalProjectName])
 }
 
 // ============================================

@@ -66,6 +66,8 @@ export default function VendorsPage() {
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [isExternalProject, setIsExternalProject] = useState(false);
+  const [externalProjectName, setExternalProjectName] = useState('');
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [rating, setRating] = useState<IndividualRating>({});
@@ -73,7 +75,7 @@ export default function VendorsPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  
+
   // Search filters
   const [projectSearch, setProjectSearch] = useState('');
   const [orgSearch, setOrgSearch] = useState('');
@@ -190,16 +192,32 @@ export default function VendorsPage() {
 
   const handleSubmit = async () => {
     if (!validateRatings()) return;
-    
+
+    // Validate project selection
+    if (!isExternalProject && !selectedProject) {
+      setError('יש לבחור פרויקט');
+      return;
+    }
+    if (isExternalProject && !externalProjectName.trim()) {
+      setError('יש להזין שם פרויקט חיצוני');
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
-    
+
     try {
       const payload: any = {
         contactId: selectedContact!.id,
-        projectId: selectedProject!.id,
         generalNotes: rating.generalNotes || null,
       };
+
+      // Either projectId or externalProjectName
+      if (isExternalProject) {
+        payload.externalProjectName = externalProjectName.trim();
+      } else {
+        payload.projectId = selectedProject!.id;
+      }
       
       for (const c of CRITERIA) {
         payload[c.key] = typeof rating[c.key] === 'number' ? rating[c.key] : 0;
@@ -284,38 +302,83 @@ export default function VendorsPage() {
   const renderStep1 = () => (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">שלב 1: בחירת פרויקט</h2>
-      
-      <input
-        type="text"
-        placeholder="🔍 חיפוש פרויקט..."
-        value={projectSearch}
-        onChange={e => setProjectSearch(e.target.value)}
-        className="w-full px-4 py-2 border rounded-lg"
-      />
-      
-      <div className="grid gap-3 max-h-96 overflow-y-auto">
-        {filteredProjects.map(project => (
-          <button
-            key={project.id}
-            onClick={() => {
-              setSelectedProject(project);
-              setStep(2);
+
+      {/* External Project Option */}
+      <div className="p-4 border-2 border-dashed border-orange-300 rounded-lg bg-orange-50">
+        <label className="flex items-center gap-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isExternalProject}
+            onChange={(e) => {
+              setIsExternalProject(e.target.checked);
+              if (e.target.checked) {
+                setSelectedProject(null);
+              } else {
+                setExternalProjectName('');
+              }
             }}
-            className={`p-4 border rounded-lg text-right hover:bg-blue-50 transition-colors ${
-              selectedProject?.id === project.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-            }`}
-            style={{ marginRight: `${project.indent * 24}px` }}
-          >
-            <div className="font-medium">
-              {project.indent > 0 && <span className="text-gray-400 mr-1">{'└'} </span>}
-              {project.projectNumber} - {project.name}
-            </div>
-          </button>
-        ))}
-        {filteredProjects.length === 0 && (
-          <div className="p-4 text-gray-500 text-center">לא נמצאו פרויקטים</div>
+            className="w-5 h-5 text-orange-600 border-orange-300 rounded focus:ring-orange-500"
+          />
+          <span className="font-medium text-orange-800">פרויקט חיצוני (לא במערכת)</span>
+        </label>
+        {isExternalProject && (
+          <div className="mt-3">
+            <input
+              type="text"
+              placeholder="הזן שם פרויקט חיצוני..."
+              value={externalProjectName}
+              onChange={e => setExternalProjectName(e.target.value)}
+              className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+            />
+            {externalProjectName.trim() && (
+              <button
+                onClick={() => setStep(2)}
+                className="mt-3 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+              >
+                המשך לבחירת ארגון ←
+              </button>
+            )}
+          </div>
         )}
       </div>
+
+      {!isExternalProject && (
+        <>
+          <input
+            type="text"
+            placeholder="🔍 חיפוש פרויקט..."
+            value={projectSearch}
+            onChange={e => setProjectSearch(e.target.value)}
+            className="w-full px-4 py-2 border rounded-lg"
+          />
+
+          <div className="grid gap-3 max-h-96 overflow-y-auto">
+            {filteredProjects.map(project => (
+              <button
+                key={project.id}
+                onClick={() => {
+                  setSelectedProject(project);
+                  setIsExternalProject(false);
+                  setExternalProjectName('');
+                  setStep(2);
+                }}
+                className={`p-4 border rounded-lg text-right hover:bg-blue-50 transition-colors ${
+                  selectedProject?.id === project.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+                }`}
+                style={{ marginRight: `${project.indent * 24}px` }}
+              >
+                <div className="font-medium">
+                  {project.indent > 0 && <span className="text-gray-400 mr-1">{'└'} </span>}
+                  {project.projectNumber} - {project.name}
+                </div>
+              </button>
+            ))}
+            {filteredProjects.length === 0 && (
+              <div className="p-4 text-gray-500 text-center">לא נמצאו פרויקטים</div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 
@@ -453,7 +516,11 @@ export default function VendorsPage() {
       <div className="space-y-6">
         <h2 className="text-xl font-semibold">שלב 4: דירוג {selectedContact?.firstName} {selectedContact?.lastName}</h2>
         <p className="text-gray-600">
-          פרויקט: {selectedProject?.projectNumber} | ארגון: {selectedOrg?.name}
+          פרויקט: {isExternalProject ? (
+            <span className="text-orange-600 font-medium">{externalProjectName} (חיצוני)</span>
+          ) : (
+            selectedProject?.projectNumber
+          )} | ארגון: {selectedOrg?.name}
         </p>
         <p className="text-sm text-orange-600">* יש לדרג לפחות 6 קריטריונים מתוך 12 (לחיצה על אותו כוכב מאפסת)</p>
         
