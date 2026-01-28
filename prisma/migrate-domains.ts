@@ -1,16 +1,23 @@
 /**
  * Domain Migration Script
- * Version: 20260128
+ * Version: 20260128-v2
  * Purpose: Properly set up Domain RBAC infrastructure
  *
  * This script:
  * 1. Creates domains if they don't exist (בטחוני, מסחרי, תעשייתי)
  * 2. Lists all projects needing domainId assignment
  * 3. Lists all users with domain_head role needing UserDomainAssignment
- * 4. Assigns domains based on project category mapping
- * 5. Creates UserDomainAssignment for domain_head users
+ * 4. Pass 1: Assigns domains to projects based on category mapping
+ * 5. Pass 2: Buildings/quarters inherit domain from parent project
+ * 6. Summary and next steps
+ *
+ * Inheritance logic:
+ * - 3414-A-02 (no category) → inherits from 3414 (בטחוני → security)
+ * - 6043-02 (no category) → inherits from 6043 (תשתיות → industrial)
+ * - 9286-A-02 (no category) → inherits from 9286 (ציבורי → commercial)
  *
  * Run: npx ts-node prisma/migrate-domains.ts
+ * Apply: npx ts-node prisma/migrate-domains.ts --apply
  */
 
 import { PrismaClient } from '@prisma/client'
@@ -214,7 +221,7 @@ async function main() {
   // STEP 4: Perform automatic domain assignment based on category
   // ═══════════════════════════════════════════════════════════════════════
   console.log('┌─────────────────────────────────────────────────────────────┐')
-  console.log('│ STEP 4: Automatic Domain Assignment (Projects)             │')
+  console.log('│ STEP 4: Automatic Domain Assignment (Top-Level Projects)   │')
   console.log('└─────────────────────────────────────────────────────────────┘')
 
   const args = process.argv.slice(2)
@@ -227,13 +234,15 @@ async function main() {
     console.log('\n   🚀 APPLY MODE - Making changes to database\n')
   }
 
-  let projectsUpdated = 0
+  let projectsUpdatedByCategory = 0
   let projectsSkipped = 0
+
+  // PASS 1: Assign domains to projects that have a category
+  console.log('   --- Pass 1: Assign by category ---\n')
 
   for (const project of projectsWithoutDomain) {
     if (!project.category) {
-      console.log(`   ⏭️  SKIP: ${project.projectNumber} - No category, needs manual assignment`)
-      projectsSkipped++
+      // Will be handled in Pass 2 (inheritance)
       continue
     }
 
@@ -253,21 +262,110 @@ async function main() {
     }
 
     if (dryRun) {
-      console.log(`   📝 WOULD UPDATE: ${project.projectNumber} → ${domainName}`)
+      console.log(`   📝 WOULD UPDATE: ${project.projectNumber} → ${domainName} (by category)`)
     } else {
       await prisma.project.update({
         where: { id: project.id },
         data: { domainId }
       })
-      console.log(`   ✓ UPDATED: ${project.projectNumber} → ${domainName}`)
+      console.log(`   ✓ UPDATED: ${project.projectNumber} → ${domainName} (by category)`)
     }
-    projectsUpdated++
+    projectsUpdatedByCategory++
   }
 
-  console.log(`\n   Summary: ${projectsUpdated} projects ${dryRun ? 'would be' : ''} updated, ${projectsSkipped} skipped`)
+  console.log(`\n   Pass 1 Summary: ${projectsUpdatedByCategory} projects ${dryRun ? 'would be' : ''} updated by category`)
 
   // ═══════════════════════════════════════════════════════════════════════
-  // STEP 5: Summary and next steps
+  // STEP 5: Inherit domain from parent for buildings/quarters
+  // ═══════════════════════════════════════════════════════════════════════
+  console.log('')
+  console.log('┌─────────────────────────────────────────────────────────────┐')
+  console.log('│ STEP 5: Domain Inheritance (Buildings/Quarters)            │')
+  console.log('└─────────────────────────────────────────────────────────────┘')
+  console.log('\n   --- Pass 2: Inherit from parent ---\n')
+
+  // Re-fetch projects without domain (some may have been updated in Pass 1)
+  const projectsStillWithoutDomain = await prisma.project.findMany({
+    where: { domainId: null },
+    select: {
+      id: true,
+      projectNumber: true,
+      name: true,
+      category: true,
+      level: true,
+      state: true,
+      parentId: true,
+    },
+    orderBy: { projectNumber: 'asc' }
+  })
+
+  let projectsUpdatedByInheritance = 0
+  let projectsNeedingManual = 0
+
+  for (const project of projectsStillWithoutDomain) {
+    if (!project.parentId) {
+      // Top-level project without category - needs manual assignment
+      console.log(`   ⚠️  MANUAL: ${project.projectNumber} - Top-level project without category`)
+      projectsNeedingManual++
+      continue
+    }
+
+    // Find parent and get its domain
+    const parent = await prisma.project.findUnique({
+      where: { id: project.parentId },
+      select: { projectNumber: true, domainId: true, domain: { select: { name: true, displayName: true } } }
+    })
+
+    if (!parent) {
+      console.log(`   ❌ ERROR: ${project.projectNumber} - Parent not found`)
+      continue
+    }
+
+    if (!parent.domainId) {
+      // Parent also has no domain - try grandparent
+      const grandparent = await prisma.project.findFirst({
+        where: { children: { some: { id: project.parentId } } },
+        select: { projectNumber: true, domainId: true, domain: { select: { name: true, displayName: true } } }
+      })
+
+      if (grandparent?.domainId) {
+        if (dryRun) {
+          console.log(`   📝 WOULD UPDATE: ${project.projectNumber} → ${grandparent.domain?.name} (inherited from grandparent ${grandparent.projectNumber})`)
+        } else {
+          await prisma.project.update({
+            where: { id: project.id },
+            data: { domainId: grandparent.domainId }
+          })
+          console.log(`   ✓ UPDATED: ${project.projectNumber} → ${grandparent.domain?.name} (inherited from grandparent ${grandparent.projectNumber})`)
+        }
+        projectsUpdatedByInheritance++
+      } else {
+        console.log(`   ⚠️  MANUAL: ${project.projectNumber} - Parent ${parent.projectNumber} has no domain`)
+        projectsNeedingManual++
+      }
+      continue
+    }
+
+    // Inherit from parent
+    if (dryRun) {
+      console.log(`   📝 WOULD UPDATE: ${project.projectNumber} → ${parent.domain?.name} (inherited from ${parent.projectNumber})`)
+    } else {
+      await prisma.project.update({
+        where: { id: project.id },
+        data: { domainId: parent.domainId }
+      })
+      console.log(`   ✓ UPDATED: ${project.projectNumber} → ${parent.domain?.name} (inherited from ${parent.projectNumber})`)
+    }
+    projectsUpdatedByInheritance++
+  }
+
+  console.log(`\n   Pass 2 Summary: ${projectsUpdatedByInheritance} projects ${dryRun ? 'would be' : ''} updated by inheritance`)
+
+  const totalUpdated = projectsUpdatedByCategory + projectsUpdatedByInheritance
+  console.log(`\n   Total: ${totalUpdated} projects ${dryRun ? 'would be' : ''} updated, ${projectsNeedingManual} need manual assignment`)
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // STEP 6: Summary and next steps
   // ═══════════════════════════════════════════════════════════════════════
   console.log('')
   console.log('┌─────────────────────────────────────────────────────────────┐')
@@ -276,7 +374,9 @@ async function main() {
   console.log('')
   console.log('   Domain Infrastructure Status:')
   console.log(`   • Domains created: ${Object.keys(domainMap).length}`)
-  console.log(`   • Projects without domain: ${projectsWithoutDomain.length}`)
+  console.log(`   • Projects updated by category: ${projectsUpdatedByCategory}`)
+  console.log(`   • Projects updated by inheritance: ${projectsUpdatedByInheritance}`)
+  console.log(`   • Projects needing manual assignment: ${projectsNeedingManual}`)
   console.log('')
 
   if (dryRun) {
@@ -286,7 +386,7 @@ async function main() {
   }
 
   console.log('   Manual steps required:')
-  console.log('   1. Projects without category need manual domain assignment')
+  console.log('   1. Top-level projects without category need manual domain assignment')
   console.log('   2. Domain head users need domain assignment via Admin Console')
   console.log('   3. Verify RBAC permissions after migration')
   console.log('')
