@@ -12,7 +12,15 @@
       "Bash(powershell \"Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force; ''Done''\")",
       "Bash(npx prisma generate:*)",
       "Bash(git push:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(for file in src/app/api/vehicles/[id]/route.ts src/app/api/vehicles/[id]/accidents/route.ts src/app/api/vehicles/[id]/assign/route.ts src/app/api/vehicles/[id]/fuel/route.ts src/app/api/vehicles/[id]/parking/route.ts src/app/api/vehicles/[id]/services/route.ts src/app/api/vehicles/[id]/tickets/route.ts src/app/api/vehicles/[id]/tolls/route.ts)",
+      "Bash(do sed -i \"s/const VEHICLES_WRITE_ROLES = \\\\[''founder'', ''admin'', ''ceo'', ''office_manager''\\\\]/const VEHICLES_WRITE_ROLES = [''owner'', ''executive'', ''trust_officer'', ''administration'']/\" \"$file\")",
+      "Bash(echo:*)",
+      "Bash(done)",
+      "Bash(npx prisma db execute:*)",
+      "Bash(ls:*)",
+      "Bash(find src/app/api -name \"route.ts\" -exec echo \"=== {} ===\" ; -exec grep -l \"requirePermission\\\\|WRITE_ROLES\\\\|allowedRoles\" {} ;)",
+      "Bash(wc:*)"
     ]
   }
 }
