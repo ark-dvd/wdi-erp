@@ -258,6 +258,7 @@ export async function POST(request: Request) {
           projectNumber,
           name: projectData.name,
           address: projectData.address || null,
+          domainId: projectData.domainId || null,
           category: projectData.category || null,
           client: projectData.client || null,
           phase: projectData.phase || null,
