@@ -42,7 +42,10 @@ export async function POST(
 
     const { id: targetUserId } = await params
     const data = await request.json()
-    const { roleId, domainId } = data
+    const { roleId, domainId, domainIds } = data
+
+    // Support both single domainId and multiple domainIds
+    const domainsToAssign: string[] = domainIds || (domainId ? [domainId] : [])
 
     // Validate input
     if (!roleId) {
@@ -110,32 +113,34 @@ export async function POST(
       },
     })
 
-    // If domain_head and domainId provided, create domain assignment
-    if (roleToAssign.name === 'domain_head' && domainId) {
-      // Verify domain exists
-      const domain = await prisma.domain.findUnique({
-        where: { id: domainId },
-      })
-
-      if (domain) {
-        // Check if assignment already exists
-        const existingDomainAssignment = await prisma.userDomainAssignment.findUnique({
-          where: {
-            userId_domainId: {
-              userId: targetUserId,
-              domainId,
-            },
-          },
+    // If domain_head and domains provided, create domain assignments
+    if (roleToAssign.name === 'domain_head' && domainsToAssign.length > 0) {
+      for (const dId of domainsToAssign) {
+        // Verify domain exists
+        const domain = await prisma.domain.findUnique({
+          where: { id: dId },
         })
 
-        if (!existingDomainAssignment) {
-          await prisma.userDomainAssignment.create({
-            data: {
-              userId: targetUserId,
-              domainId,
-              createdBy: actorUserId,
+        if (domain) {
+          // Check if assignment already exists
+          const existingDomainAssignment = await prisma.userDomainAssignment.findUnique({
+            where: {
+              userId_domainId: {
+                userId: targetUserId,
+                domainId: dId,
+              },
             },
           })
+
+          if (!existingDomainAssignment) {
+            await prisma.userDomainAssignment.create({
+              data: {
+                userId: targetUserId,
+                domainId: dId,
+                createdBy: actorUserId,
+              },
+            })
+          }
         }
       }
     }
@@ -164,6 +169,7 @@ export async function POST(
         action: 'assign',
         roleAssigned: roleToAssign.name,
         roleDisplayName: roleToAssign.displayName,
+        domainsAssigned: domainsToAssign.length > 0 ? domainsToAssign : undefined,
         previousRoles,
         newRoles,
       }
