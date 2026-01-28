@@ -217,7 +217,7 @@ interface UserRoleBackup {
   userEmail: string
   roleId: string
   roleName: string
-  assignedAt: Date
+  createdAt: Date
 }
 
 interface RoleCount {
@@ -255,7 +255,7 @@ async function main() {
     userEmail: ur.user.email || 'NO_EMAIL',
     roleId: ur.role.id,
     roleName: ur.role.name,
-    assignedAt: ur.assignedAt,
+    createdAt: ur.createdAt,
   }))
 
   // Build user → roles mapping for restoration
