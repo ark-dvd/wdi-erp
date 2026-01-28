@@ -48,6 +48,12 @@ interface ParentProject {
   services: string[]
 }
 
+interface Domain {
+  id: string
+  name: string
+  displayName: string
+}
+
 // ==========================================
 // Constants
 // ==========================================
@@ -58,6 +64,7 @@ const STATES = ['פעיל', 'מושהה', 'הושלם', 'בוטל']
 
 const SERVICES = [
   'ניהול תכנון',
+  'תכנון כוללני',
   'מסמכי דרישות, אפיון ופרוגרמה',
   'ייצוג בעלי עניין',
   'ניהול ביצוע ופיקוח',
@@ -120,9 +127,10 @@ export default function NewProjectPage() {
   const addType = searchParams?.get('type') // 'building' or 'quarter'
   
   const [employees, setEmployees] = useState<any[]>([])
+  const [domains, setDomains] = useState<Domain[]>([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  
+
   // Parent project data (when adding to existing)
   const [parentProject, setParentProject] = useState<ParentProject | null>(null)
   const [loadingParent, setLoadingParent] = useState(false)
@@ -135,7 +143,8 @@ export default function NewProjectPage() {
   const [form, setForm] = useState({
     name: '',
     address: '',
-    category: '',
+    domainId: '',
+    category: [] as string[],  // B04: Changed to multi-select array
     client: '',
     phase: '',
     state: 'פעיל',
@@ -169,6 +178,7 @@ export default function NewProjectPage() {
 
   useEffect(() => {
     fetchEmployees()
+    fetchDomains()
   }, [])
 
   // Fetch parent project when adding to existing
@@ -187,6 +197,18 @@ export default function NewProjectPage() {
       }
     } catch (error) {
       console.error('Error:', error)
+    }
+  }
+
+  const fetchDomains = async () => {
+    try {
+      const res = await fetch('/api/admin/domains')
+      if (res.ok) {
+        const data = await res.json()
+        setDomains(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching domains:', error)
     }
   }
 
@@ -436,6 +458,10 @@ export default function NewProjectPage() {
       setError('שם הפרויקט הוא שדה חובה')
       return
     }
+    if (!form.domainId) {
+      setError('תחום הוא שדה חובה')
+      return
+    }
 
     setSaving(true)
     setError('')
@@ -444,7 +470,8 @@ export default function NewProjectPage() {
       const payload: any = {
         name: form.name,
         address: form.address || null,
-        category: form.category || null,
+        domainId: form.domainId || null,
+        category: form.category.length > 0 ? form.category.join(', ') : null,  // B04: Convert array to comma-separated string
         client: form.client || null,
         phase: form.phase || null,
         state: form.state || 'פעיל',
@@ -976,14 +1003,40 @@ export default function NewProjectPage() {
             </div>
           </div>
 
-          {/* Category */}
+          {/* Domain - Required */}
+          <div className="card">
+            <h2 className="text-lg font-semibold mb-2 text-[#3a3a3d]">
+              תחום <span className="text-red-500">*</span>
+            </h2>
+            <div className="flex flex-wrap gap-2">
+              {domains.map((domain) => (
+                <button
+                  key={domain.id}
+                  type="button"
+                  onClick={() => setForm({ ...form, domainId: domain.id })}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    form.domainId === domain.id
+                      ? 'bg-[#0a3161] text-white border-[#0a3161]'
+                      : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161] hover:bg-[#f5f6f8]'
+                  }`}
+                >
+                  {domain.displayName}
+                </button>
+              ))}
+            </div>
+            {!form.domainId && (
+              <p className="text-sm text-red-500 mt-2">יש לבחור תחום</p>
+            )}
+          </div>
+
+          {/* Category - Multi-select */}
           <div className="card">
             <h2 className="text-lg font-semibold mb-2 text-[#3a3a3d]">קטגוריה</h2>
             <TagSelector
               options={CATEGORIES}
-              selected={form.category ? [form.category] : []}
-              onChange={(selected) => setForm({ ...form, category: selected[0] || '' })}
-              multiple={false}
+              selected={form.category}
+              onChange={(selected) => setForm({ ...form, category: selected })}
+              multiple={true}
               columns={3}
             />
           </div>

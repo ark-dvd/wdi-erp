@@ -4,13 +4,21 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface Project {
   id: string;
   projectNumber: string;
   name: string;
+  children?: Project[];
+}
+
+interface FlatProject {
+  id: string;
+  projectNumber: string;
+  name: string;
+  indent: number;
 }
 
 interface Organization {
@@ -70,6 +78,25 @@ export default function VendorsPage() {
   const [projectSearch, setProjectSearch] = useState('');
   const [orgSearch, setOrgSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
+
+  // Flatten project hierarchy to include quarters and buildings
+  const flatProjects: FlatProject[] = useMemo(() => {
+    const result: FlatProject[] = [];
+    projects.forEach(p => {
+      result.push({ id: p.id, projectNumber: p.projectNumber, name: p.name, indent: 0 });
+      if (p.children) {
+        p.children.forEach((c: Project) => {
+          result.push({ id: c.id, projectNumber: c.projectNumber, name: c.name, indent: 1 });
+          if (c.children) {
+            c.children.forEach((b: Project) => {
+              result.push({ id: b.id, projectNumber: b.projectNumber, name: b.name, indent: 2 });
+            });
+          }
+        });
+      }
+    });
+    return result;
+  }, [projects]);
 
   useEffect(() => {
     fetchProjects();
@@ -240,8 +267,8 @@ export default function VendorsPage() {
     );
   };
 
-  // Filtered lists
-  const filteredProjects = projects.filter(p => 
+  // Filtered lists - use flattened projects with hierarchy
+  const filteredProjects = flatProjects.filter(p =>
     p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
     p.projectNumber.includes(projectSearch)
   );
@@ -277,8 +304,12 @@ export default function VendorsPage() {
             className={`p-4 border rounded-lg text-right hover:bg-blue-50 transition-colors ${
               selectedProject?.id === project.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
             }`}
+            style={{ marginRight: `${project.indent * 24}px` }}
           >
-            <div className="font-medium">{project.projectNumber} - {project.name}</div>
+            <div className="font-medium">
+              {project.indent > 0 && <span className="text-gray-400 mr-1">{'└'} </span>}
+              {project.projectNumber} - {project.name}
+            </div>
           </button>
         ))}
         {filteredProjects.length === 0 && (

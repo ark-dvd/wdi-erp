@@ -41,6 +41,12 @@ interface Role {
   level: number
 }
 
+interface Domain {
+  id: string
+  name: string
+  displayName: string
+}
+
 interface Permission {
   module: string
   action: string
@@ -99,12 +105,14 @@ export default function AdminUserDetailPage() {
   // State
   const [user, setUser] = useState<UserDetail | null>(null)
   const [allRoles, setAllRoles] = useState<Role[]>([])
+  const [allDomains, setAllDomains] = useState<Domain[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   // Action states
   const [addingRole, setAddingRole] = useState(false)
   const [selectedRoleToAdd, setSelectedRoleToAdd] = useState<string>('')
+  const [selectedDomainForRole, setSelectedDomainForRole] = useState<string>('')
   const [removingRoleId, setRemovingRoleId] = useState<string | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
@@ -136,6 +144,7 @@ export default function AdminUserDetailPage() {
     if (canManageRoles && userId) {
       fetchUser()
       fetchRoles()
+      fetchDomains()
     }
   }, [canManageRoles, userId])
 
@@ -174,6 +183,18 @@ export default function AdminUserDetailPage() {
     }
   }
 
+  const fetchDomains = async () => {
+    try {
+      const res = await fetch('/api/admin/domains')
+      if (res.ok) {
+        const data = await res.json()
+        setAllDomains(data || [])
+      }
+    } catch (err) {
+      console.error('Failed to fetch domains')
+    }
+  }
+
   // ================================================
   // ACTIONS
   // ================================================
@@ -181,12 +202,24 @@ export default function AdminUserDetailPage() {
   const handleAddRole = async () => {
     if (!selectedRoleToAdd || !user) return
 
+    // Check if domain_head requires domain selection
+    const selectedRole = allRoles.find(r => r.id === selectedRoleToAdd)
+    if (selectedRole?.name === 'domain_head' && !selectedDomainForRole) {
+      alert('יש לבחור תחום עבור ראש תחום')
+      return
+    }
+
     setActionLoading(true)
     try {
+      const body: { roleId: string; domainId?: string } = { roleId: selectedRoleToAdd }
+      if (selectedRole?.name === 'domain_head' && selectedDomainForRole) {
+        body.domainId = selectedDomainForRole
+      }
+
       const res = await fetch(`/api/admin/users/${userId}/roles`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ roleId: selectedRoleToAdd }),
+        body: JSON.stringify(body),
       })
 
       if (!res.ok) {
@@ -197,6 +230,7 @@ export default function AdminUserDetailPage() {
 
       await fetchUser()
       setSelectedRoleToAdd('')
+      setSelectedDomainForRole('')
       setAddingRole(false)
     } catch (err) {
       console.error('Failed to add role:', err)
@@ -298,6 +332,10 @@ export default function AdminUserDetailPage() {
       role.name !== 'all_employees' &&
       !user?.roles.some((ur) => ur.id === role.id)
   )
+
+  // Check if selected role requires domain selection
+  const selectedRoleObject = allRoles.find(r => r.id === selectedRoleToAdd)
+  const needsDomainSelection = selectedRoleObject?.name === 'domain_head'
 
   // Check if user has owner role
   const userHasOwnerRole = user?.roles.some((r) => r.name === 'owner')
@@ -483,29 +521,52 @@ export default function AdminUserDetailPage() {
           <div>
             <p className="text-sm text-gray-500 mb-3">הוספת תפקיד:</p>
             {availableRolesToAdd.length > 0 ? (
-              <div className="flex items-center gap-3">
-                <select
-                  value={selectedRoleToAdd}
-                  onChange={(e) => setSelectedRoleToAdd(e.target.value)}
-                  className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">בחר תפקיד להוספה...</option>
-                  {availableRolesToAdd
-                    .filter((role) => canAddRole(role.name))
-                    .map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.displayName}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  onClick={handleAddRole}
-                  disabled={!selectedRoleToAdd || actionLoading}
-                  className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-                >
-                  <Plus className="w-4 h-4" />
-                  הוסף
-                </button>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <select
+                    value={selectedRoleToAdd}
+                    onChange={(e) => {
+                      setSelectedRoleToAdd(e.target.value)
+                      setSelectedDomainForRole('') // Reset domain when role changes
+                    }}
+                    className="flex-1 px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="">בחר תפקיד להוספה...</option>
+                    {availableRolesToAdd
+                      .filter((role) => canAddRole(role.name))
+                      .map((role) => (
+                        <option key={role.id} value={role.id}>
+                          {role.displayName}
+                        </option>
+                      ))}
+                  </select>
+                  <button
+                    onClick={handleAddRole}
+                    disabled={!selectedRoleToAdd || actionLoading || (needsDomainSelection && !selectedDomainForRole)}
+                    className="px-4 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    הוסף
+                  </button>
+                </div>
+                {/* Domain selection for domain_head role */}
+                {needsDomainSelection && (
+                  <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                    <p className="text-sm text-orange-800 mb-2">יש לבחור תחום עבור ראש תחום:</p>
+                    <select
+                      value={selectedDomainForRole}
+                      onChange={(e) => setSelectedDomainForRole(e.target.value)}
+                      className="w-full px-4 py-2.5 bg-white border border-orange-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                    >
+                      <option value="">בחר תחום...</option>
+                      {allDomains.map((domain) => (
+                        <option key={domain.id} value={domain.id}>
+                          {domain.displayName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
               </div>
             ) : (
               <p className="text-sm text-gray-400">למשתמש יש את כל התפקידים האפשריים</p>
