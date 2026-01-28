@@ -30,24 +30,24 @@ const CANONICAL_ROLES = [
 // CANONICAL SCOPES (DOC-013 §5.1)
 // ================================================
 
-type Scope = 'ALL' | 'DOMAIN' | 'PROJECT' | 'OWN' | 'SELF'
+type Scope = 'ALL' | 'DOMAIN' | 'ASSIGNED' | 'OWN' | 'SELF' | 'MAIN_PAGE'
 
 // ================================================
 // CANONICAL MODULES (DOC-013 §6.1)
 // ================================================
 
 const CANONICAL_MODULES = [
-  'org_directory',  // ספר הארגון
-  'hr',             // משאבי אנוש
-  'projects',       // פרויקטים
-  'events',         // אירועים
-  'vendors',        // ספקים
-  'vehicles',       // רכבים
-  'equipment',      // ציוד
-  'documents',      // מסמכים
-  'admin',          // ניהול מערכת
-  'agent',          // סוכן WDI
-  'knowledge_repository', // מאגר המידע (placeholder)
+  'events',               // אירועים
+  'projects',             // פרויקטים
+  'hr',                   // משאבי אנוש
+  'contacts',             // אנשי קשר וארגונים
+  'vendors',              // ספקים
+  'vehicles',             // רכבים
+  'equipment',            // ציוד
+  'knowledge_repository', // מאגר המידע
+  'financial',            // כספים
+  'agent',                // סוכן WDI
+  'admin',                // ניהול מערכת
 ] as const
 
 type Module = typeof CANONICAL_MODULES[number]
@@ -71,20 +71,20 @@ interface PermissionGrant {
   notes?: string
 }
 
-// Build full permission matrix from DOC-014
+// Build full permission matrix from DOC-014 - Canonical aligned
 const PERMISSION_MATRIX: PermissionGrant[] = [
-  // === org_directory (§4.1) ===
-  { module: 'org_directory', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
-  { module: 'org_directory', action: 'CREATE', scope: 'ALL', roles: ['owner'] },
-  { module: 'org_directory', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
-  { module: 'org_directory', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
-  { module: 'org_directory', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
+  // === contacts (§4.1) - Contacts and Organizations ===
+  { module: 'contacts', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'contacts', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
+  { module: 'contacts', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
+  { module: 'contacts', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
+  { module: 'contacts', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === hr (§4.2) ===
   { module: 'hr', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer'], notes: 'Full sensitive HR access' },
   { module: 'hr', action: 'READ', scope: 'ALL', roles: ['finance_officer'], notes: 'Compensation fields only' },
   { module: 'hr', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'], notes: 'HR Metadata only' },
-  { module: 'hr', action: 'READ', scope: 'PROJECT', roles: ['project_manager'], notes: 'HR Metadata only' },
+  { module: 'hr', action: 'READ', scope: 'ASSIGNED', roles: ['project_manager'], notes: 'HR Metadata only' },
   { module: 'hr', action: 'READ', scope: 'SELF', roles: ['project_coordinator', 'administration', 'all_employees'], notes: 'Own record only' },
   { module: 'hr', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'hr', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -92,40 +92,40 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'hr', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === projects (§4.3) ===
-  { module: 'projects', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
+  { module: 'projects', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo'] },
   { module: 'projects', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'projects', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
-  { module: 'projects', action: 'CREATE', scope: 'ALL', roles: ['owner'] },
+  { module: 'projects', action: 'READ', scope: 'ASSIGNED', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'projects', action: 'CREATE', scope: 'ALL', roles: ['owner', 'pmo'] },
   { module: 'projects', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'projects', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive'] },
+  { module: 'projects', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive', 'pmo'] },
   { module: 'projects', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'projects', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
+  { module: 'projects', action: 'UPDATE', scope: 'ASSIGNED', roles: ['project_manager', 'project_coordinator'] },
   { module: 'projects', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
   { module: 'projects', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === events (§4.4) ===
-  { module: 'events', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
+  { module: 'events', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo'] },
   { module: 'events', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
-  { module: 'events', action: 'CREATE', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer'] },
+  { module: 'events', action: 'READ', scope: 'ASSIGNED', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'events', action: 'CREATE', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'pmo'] },
   { module: 'events', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'CREATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'], notes: 'Field-level operational logging' },
-  { module: 'events', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive'] },
+  { module: 'events', action: 'CREATE', scope: 'ASSIGNED', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'], notes: 'Field-level operational logging' },
+  { module: 'events', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive', 'pmo'] },
   { module: 'events', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'events', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
+  { module: 'events', action: 'UPDATE', scope: 'ASSIGNED', roles: ['project_manager', 'project_coordinator'] },
   { module: 'events', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
-  { module: 'events', action: 'DELETE', scope: 'PROJECT', roles: ['project_manager'] },
+  { module: 'events', action: 'DELETE', scope: 'ASSIGNED', roles: ['project_manager'] },
   { module: 'events', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === vendors (§4.5) ===
-  { module: 'vendors', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'vendors', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'vendors', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'vendors', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
   { module: 'vendors', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
   { module: 'vendors', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === vehicles (§4.6) ===
-  { module: 'vehicles', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'vehicles', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'vehicles', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
   { module: 'vehicles', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'vehicles', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -134,7 +134,7 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'vehicles', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
   // === equipment (§4.7) ===
-  { module: 'equipment', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'equipment', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
   { module: 'equipment', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
   { module: 'equipment', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'equipment', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
@@ -142,30 +142,31 @@ const PERMISSION_MATRIX: PermissionGrant[] = [
   { module: 'equipment', action: 'DELETE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
   { module: 'equipment', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
-  // === documents (§4.8) ===
-  { module: 'documents', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer'] },
-  { module: 'documents', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'READ', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator', 'administration', 'all_employees'] },
-  { module: 'documents', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
-  { module: 'documents', action: 'CREATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'CREATE', scope: 'PROJECT', roles: ['project_manager', 'project_coordinator'] },
-  { module: 'documents', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
-  { module: 'documents', action: 'UPDATE', scope: 'DOMAIN', roles: ['domain_head'] },
-  { module: 'documents', action: 'UPDATE', scope: 'PROJECT', roles: ['project_manager'] },
-  { module: 'documents', action: 'DELETE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
-  { module: 'documents', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
+  // === financial (§4.8) ===
+  { module: 'financial', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo'] },
+  { module: 'financial', action: 'READ', scope: 'DOMAIN', roles: ['domain_head'] },
+  { module: 'financial', action: 'READ', scope: 'ASSIGNED', roles: ['project_manager'] },
+  { module: 'financial', action: 'CREATE', scope: 'ALL', roles: ['owner', 'finance_officer'] },
+  { module: 'financial', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'finance_officer'] },
+  { module: 'financial', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
+  { module: 'financial', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
-  // === admin (§4.9) ===
+  // === knowledge_repository (§4.9) ===
+  { module: 'knowledge_repository', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
+  { module: 'knowledge_repository', action: 'CREATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
+  { module: 'knowledge_repository', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'] },
+  { module: 'knowledge_repository', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
+  { module: 'knowledge_repository', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
+
+  // === admin (§4.10) ===
   { module: 'admin', action: 'READ', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer'] },
   { module: 'admin', action: 'CREATE', scope: 'ALL', roles: ['owner'] },
   { module: 'admin', action: 'UPDATE', scope: 'ALL', roles: ['owner', 'trust_officer'], notes: 'Trust Officer cannot modify Owner or own permissions' },
   { module: 'admin', action: 'DELETE', scope: 'ALL', roles: ['owner'] },
   { module: 'admin', action: 'ADMIN', scope: 'ALL', roles: ['owner'] },
 
-  // === agent (§4.10) ===
-  { module: 'agent', action: 'QUERY', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
-
-  // === knowledge_repository (§4.11) - Placeholder, no permissions yet ===
+  // === agent (§4.11) ===
+  { module: 'agent', action: 'QUERY', scope: 'ALL', roles: ['owner', 'executive', 'trust_officer', 'finance_officer', 'pmo', 'domain_head', 'project_manager', 'project_coordinator', 'administration', 'all_employees'] },
 ]
 
 // ================================================

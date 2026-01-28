@@ -8,7 +8,6 @@ import { NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
 import { auth } from '@/lib/auth'
 import { logActivity } from '@/lib/activity'
-import { requirePermission } from '@/lib/permissions'
 
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
@@ -17,9 +16,11 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
 
-    // RBAC v2: Check create permission for files (any user who can create content can upload files)
-    const denied = await requirePermission(session, 'files', 'create')
-    if (denied) return denied
+    // Authentication only - upload is a utility endpoint
+    // Permission follows parent entity (HR, Projects, etc.), not a separate 'files' module
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
     const formData = await request.formData()
     const file = formData.get('file') as File

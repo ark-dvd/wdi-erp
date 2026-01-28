@@ -17,7 +17,7 @@ import {
 // TYPE DEFINITIONS
 // ================================================
 
-type ModuleScope = 'ALL' | 'DOMAIN' | 'PROJECT'
+type ModuleScope = 'ALL' | 'DOMAIN' | 'ASSIGNED'
 
 interface ProjectsModule {
   read: boolean
@@ -64,9 +64,9 @@ interface UIAuthContext {
 function toModuleScope(scope: Scope | undefined): ModuleScope {
   if (scope === 'ALL') return 'ALL'
   if (scope === 'DOMAIN') return 'DOMAIN'
-  if (scope === 'PROJECT') return 'PROJECT'
-  // OWN and SELF map to PROJECT-level for UI purposes
-  return 'PROJECT'
+  if (scope === 'ASSIGNED') return 'ASSIGNED'
+  // OWN, SELF, MAIN_PAGE map to ASSIGNED-level for UI purposes
+  return 'ASSIGNED'
 }
 
 // ================================================

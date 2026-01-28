@@ -27,8 +27,8 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
 
-    // RBAC v2: Check create permission for organizations (bulk import requires create permission)
-    const denied = await requirePermission(session, 'organizations', 'create')
+    // RBAC v2: Check create permission (organizations use 'contacts' module per DOC-013 §6.1)
+    const denied = await requirePermission(session, 'contacts', 'create')
     if (denied) return denied
 
     const userId = (session!.user as any)?.id || null
