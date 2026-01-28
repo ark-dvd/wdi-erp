@@ -112,7 +112,7 @@ export default function EditProjectPage() {
       const res = await fetch('/api/hr?status=פעיל')
       if (res.ok) {
         const data = await res.json()
-        setEmployees(Array.isArray(data) ? data : data.employees || [])
+        setEmployees(data.items || (Array.isArray(data) ? data : []))
       }
     } catch (error) {
       console.error('Error:', error)

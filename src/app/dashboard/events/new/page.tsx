@@ -41,7 +41,7 @@ function NewEventContent() {
       const res = await fetch('/api/projects')
       if (res.ok) {
         const data = await res.json()
-        setProjects(data)
+        setProjects(data.items || (Array.isArray(data) ? data : []))
       }
     } catch (error) {
       console.error('Error:', error)

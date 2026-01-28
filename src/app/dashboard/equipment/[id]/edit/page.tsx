@@ -84,7 +84,8 @@ export default function EditEquipmentPage() {
       setEquipment(equipData)
       setSelectedType(equipData.type)
       setIsOfficeEquipment(equipData.isOfficeEquipment)
-      setEmployees(empData.filter((e: any) => e.status === 'פעיל'))
+      const items = empData.items || (Array.isArray(empData) ? empData : [])
+      setEmployees(items.filter((e: any) => e.status === 'פעיל'))
       setLoading(false)
     }).catch(() => {
       router.push('/dashboard/equipment')

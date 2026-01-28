@@ -25,7 +25,7 @@ export default function MobileVehiclesPage() {
     fetch('/api/vehicles')
       .then(r => r.json())
       .then(data => {
-        setVehicles(Array.isArray(data) ? data : [])
+        setVehicles(data.items || (Array.isArray(data) ? data : []))
         setLoading(false)
       })
       .catch(() => setLoading(false))

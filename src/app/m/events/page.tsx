@@ -67,7 +67,7 @@ export default function MobileEventsPage() {
     const res = await fetch('/api/events?' + params.toString())
     if (res.ok) {
       const data = await res.json()
-      setEvents(Array.isArray(data) ? data : data.events || [])
+      setEvents(data.items || (Array.isArray(data) ? data : []))
     }
     setLoading(false)
   }
