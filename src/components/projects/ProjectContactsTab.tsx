@@ -54,7 +54,11 @@ export default function ProjectContactsTab({ projectId, projectName, projectNumb
   const fetchAllContacts = async () => {
     try {
       const res = await fetch('/api/contacts')
-      if (res.ok) setAllContacts(await res.json())
+      if (res.ok) {
+        const data = await res.json()
+        // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
+        setAllContacts(data.items || (Array.isArray(data) ? data : []))
+      }
     } catch (error) { console.error('Error:', error) }
   }
 

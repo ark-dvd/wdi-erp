@@ -206,6 +206,19 @@ async function main() {
     ],
   })
 
+  // === STEP 2B: Create business domains (תחומים) ===
+  console.log('🏢 Creating business domains...')
+  await prisma.domain.deleteMany() // Clear existing
+  const BUSINESS_DOMAINS = [
+    { name: 'security', displayName: 'בטחוני', description: 'פרויקטים בטחוניים וצבאיים' },
+    { name: 'commercial', displayName: 'מסחרי', description: 'פרויקטים מסחריים ועסקיים' },
+    { name: 'industrial', displayName: 'תעשייתי', description: 'פרויקטים תעשייתיים' },
+  ]
+  for (const domain of BUSINESS_DOMAINS) {
+    await prisma.domain.create({ data: domain })
+    console.log(`   ✓ ${domain.displayName} (${domain.name})`)
+  }
+
   // === STEP 3: Create canonical roles ===
   console.log('👥 Creating canonical roles (DOC-013 §4.1)...')
   const roleMap: Record<string, string> = {}

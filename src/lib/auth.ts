@@ -159,7 +159,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           if (dbUser.employee) {
             session.user.employeeName = `${dbUser.employee.firstName} ${dbUser.employee.lastName}`
             if (dbUser.employee.photoUrl) {
-              session.user.employeePhoto = `/api/file?url=${encodeURIComponent(dbUser.employee.photoUrl)}`
+              // Use dedicated avatar endpoint (doesn't require session cookies for Image component)
+              session.user.employeePhoto = `/api/avatar/${dbUser.id}`
             }
           }
         }

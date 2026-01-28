@@ -16,6 +16,7 @@ const STATES = ['פעיל', 'מושהה', 'הושלם', 'בוטל']
 
 const SERVICES = [
   'ניהול תכנון',
+  'תכנון כוללני',
   'מסמכי דרישות, אפיון ופרוגרמה',
   'ייצוג בעלי עניין',
   'ניהול ביצוע ופיקוח',
@@ -38,6 +39,12 @@ const BUILDING_TYPES_GROUPED: Record<string, string[]> = {
 
 const DELIVERY_METHODS = ['תכנון ביצוע (Design Build)', 'DBOT', 'PPP', 'ביצוע']
 
+interface Domain {
+  id: string
+  name: string
+  displayName: string
+}
+
 // ==========================================
 // Main Component
 // ==========================================
@@ -48,6 +55,7 @@ export default function EditProjectPage() {
   const id = params?.id as string
 
   const [employees, setEmployees] = useState<any[]>([])
+  const [domains, setDomains] = useState<Domain[]>([])
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -56,7 +64,8 @@ export default function EditProjectPage() {
   const [form, setForm] = useState({
     name: '',
     address: '',
-    category: '',
+    domainId: '',
+    category: [] as string[],
     client: '',
     phase: '',
     state: '',
@@ -74,6 +83,7 @@ export default function EditProjectPage() {
   useEffect(() => {
     fetchProject()
     fetchEmployees()
+    fetchDomains()
   }, [id])
 
   const fetchProject = async () => {
@@ -82,10 +92,15 @@ export default function EditProjectPage() {
       if (res.ok) {
         const data = await res.json()
         setProject(data)
+        // Parse category: if stored as comma-separated string, convert to array
+        const categoryArray = data.category
+          ? (typeof data.category === 'string' ? data.category.split(',').map((c: string) => c.trim()).filter(Boolean) : data.category)
+          : []
         setForm({
           name: data.name || '',
           address: data.address || '',
-          category: data.category || '',
+          domainId: data.domainId || '',
+          category: categoryArray,
           client: data.client || '',
           phase: data.phase || '',
           state: data.state || '',
@@ -119,12 +134,30 @@ export default function EditProjectPage() {
     }
   }
 
+  const fetchDomains = async () => {
+    try {
+      const res = await fetch('/api/admin/domains')
+      if (res.ok) {
+        const data = await res.json()
+        setDomains(data || [])
+      }
+    } catch (error) {
+      console.error('Error fetching domains:', error)
+    }
+  }
+
   const toggleArrayItem = (arr: string[], item: string): string[] => {
     return arr.includes(item) ? arr.filter(i => i !== item) : [...arr, item]
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+
+    if (!form.domainId) {
+      setError('תחום הוא שדה חובה')
+      return
+    }
+
     setSaving(true)
     setError('')
 
@@ -134,6 +167,7 @@ export default function EditProjectPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...form,
+          category: form.category.length > 0 ? form.category.join(', ') : null,
           area: form.area ? parseFloat(form.area) : null,
           estimatedCost: form.estimatedCost ? parseFloat(form.estimatedCost) : null,
           startDate: form.startDate || null,
@@ -294,16 +328,44 @@ export default function EditProjectPage() {
         </div>
 
         {/* ==========================================
-            Category Tags
+            Domain Selection - Required
+            ========================================== */}
+        <div className="card">
+          <h2 className="text-lg font-semibold mb-2 text-[#3a3a3d]">
+            תחום <span className="text-red-500">*</span>
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            {domains.map((domain) => (
+              <button
+                key={domain.id}
+                type="button"
+                onClick={() => setForm({ ...form, domainId: domain.id })}
+                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  form.domainId === domain.id
+                    ? 'bg-[#0a3161] text-white border-[#0a3161]'
+                    : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161] hover:bg-[#f5f6f8]'
+                }`}
+              >
+                {domain.displayName}
+              </button>
+            ))}
+          </div>
+          {!form.domainId && (
+            <p className="text-sm text-red-500 mt-2">יש לבחור תחום</p>
+          )}
+        </div>
+
+        {/* ==========================================
+            Category Tags - Multi-select
             ========================================== */}
         <div className="card">
           <h2 className="text-lg font-semibold mb-2 text-[#3a3a3d]">קטגוריה</h2>
-          <p className="text-sm text-[#8f8f96] mb-4">בחר קטגוריה אחת</p>
+          <p className="text-sm text-[#8f8f96] mb-4">ניתן לבחור מספר קטגוריות</p>
           <TagSelector
             options={CATEGORIES}
-            selected={form.category ? [form.category] : []}
-            onChange={(selected) => setForm({ ...form, category: selected[0] || '' })}
-            multiple={false}
+            selected={form.category}
+            onChange={(selected) => setForm({ ...form, category: selected })}
+            multiple={true}
             columns={3}
           />
         </div>

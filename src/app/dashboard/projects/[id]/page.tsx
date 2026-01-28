@@ -83,6 +83,21 @@ export default function ProjectViewPage() {
     }
   }
 
+  const handleDeleteEvent = async (eventId: string) => {
+    if (!confirm('האם למחוק אירוע זה?')) return
+    try {
+      const res = await fetch(`/api/events/${eventId}`, { method: 'DELETE' })
+      if (res.ok) {
+        setEvents(events.filter(e => e.id !== eventId))
+      } else {
+        const data = await res.json()
+        alert(data.error || 'שגיאה במחיקת האירוע')
+      }
+    } catch (error) {
+      alert('שגיאה במחיקת האירוע')
+    }
+  }
+
   const handleDelete = async () => {
     setDeleting(true)
     try {
@@ -720,9 +735,25 @@ export default function ProjectViewPage() {
                           <p className="text-sm text-[#8f8f96] mt-1">{formatDate(event.eventDate)}</p>
                         </div>
                       </div>
-                      {event.files?.length > 0 && (
-                        <span className="text-sm text-[#8f8f96] bg-[#f5f6f8] px-2 py-1 rounded">{event.files.length} קבצים</span>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {event.files?.length > 0 && (
+                          <span className="text-sm text-[#8f8f96] bg-[#f5f6f8] px-2 py-1 rounded">{event.files.length} קבצים</span>
+                        )}
+                        <Link
+                          href={`/dashboard/events/${event.id}`}
+                          className="p-2 text-[#8f8f96] hover:text-[#0a3161] hover:bg-[#f5f6f8] rounded-lg transition-colors"
+                          title="עריכה"
+                        >
+                          <Edit size={16} />
+                        </Link>
+                        <button
+                          onClick={() => handleDeleteEvent(event.id)}
+                          className="p-2 text-[#8f8f96] hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                          title="מחיקה"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )

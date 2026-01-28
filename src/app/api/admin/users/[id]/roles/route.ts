@@ -42,7 +42,7 @@ export async function POST(
 
     const { id: targetUserId } = await params
     const data = await request.json()
-    const { roleId } = data
+    const { roleId, domainId } = data
 
     // Validate input
     if (!roleId) {
@@ -109,6 +109,36 @@ export async function POST(
         createdBy: actorUserId,
       },
     })
+
+    // If domain_head and domainId provided, create domain assignment
+    if (roleToAssign.name === 'domain_head' && domainId) {
+      // Verify domain exists
+      const domain = await prisma.domain.findUnique({
+        where: { id: domainId },
+      })
+
+      if (domain) {
+        // Check if assignment already exists
+        const existingDomainAssignment = await prisma.userDomainAssignment.findUnique({
+          where: {
+            userId_domainId: {
+              userId: targetUserId,
+              domainId,
+            },
+          },
+        })
+
+        if (!existingDomainAssignment) {
+          await prisma.userDomainAssignment.create({
+            data: {
+              userId: targetUserId,
+              domainId,
+              createdBy: actorUserId,
+            },
+          })
+        }
+      }
+    }
 
     // Fetch updated user
     const updatedUser = await prisma.user.findUnique({
