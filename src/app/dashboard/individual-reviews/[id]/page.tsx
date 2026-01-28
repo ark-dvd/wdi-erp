@@ -12,7 +12,8 @@ import { ArrowRight, Star, Edit, Trash2 } from 'lucide-react';
 interface IndividualReview {
   id: string;
   contactId: string;
-  projectId: string;
+  projectId: string | null;
+  externalProjectName: string | null;
   reviewerId: string;
   avgRating: number;
   generalNotes: string | null;
@@ -61,7 +62,7 @@ interface IndividualReview {
     id: string;
     projectNumber: string;
     name: string;
-  };
+  } | null;
 }
 
 const CRITERIA_CONFIG = [
@@ -250,12 +251,18 @@ export default function IndividualReviewPage() {
           
           <div className="text-left">
             <div className="text-sm text-gray-500">פרויקט</div>
-            <Link
-              href={`/dashboard/projects/${review.project.id}`}
-              className="text-[#0a3161] hover:underline font-medium"
-            >
-              #{review.project.projectNumber} {review.project.name}
-            </Link>
+            {review.project ? (
+              <Link
+                href={`/dashboard/projects/${review.project.id}`}
+                className="text-[#0a3161] hover:underline font-medium"
+              >
+                #{review.project.projectNumber} {review.project.name}
+              </Link>
+            ) : (
+              <span className="text-orange-600 font-medium">
+                {review.externalProjectName} (חיצוני)
+              </span>
+            )}
             
             <div className="text-sm text-gray-500 mt-3">דורג ע"י</div>
             <div className="font-medium">{review.reviewer.name || review.reviewer.email}</div>

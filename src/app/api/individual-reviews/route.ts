@@ -132,30 +132,53 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json();
-    const { contactId, projectId, ...ratingData } = body;
+    const { contactId, projectId, externalProjectName, ...ratingData } = body;
 
     // R2: Field-level validation
     const fieldErrors: Record<string, string> = {};
     if (!contactId) fieldErrors.contactId = 'נדרש לבחור איש קשר';
-    if (!projectId) fieldErrors.projectId = 'נדרש לבחור פרויקט';
+    // Either projectId OR externalProjectName is required
+    if (!projectId && !externalProjectName) {
+      fieldErrors.projectId = 'נדרש לבחור פרויקט או להזין שם פרויקט חיצוני';
+    }
     if (Object.keys(fieldErrors).length > 0) {
       return validationError(fieldErrors);
     }
 
-    const existingReview = await prisma.individualReview.findUnique({
-      where: {
-        reviewerId_contactId_projectId: {
+    // Check for existing review
+    if (projectId) {
+      // Internal project - check unique constraint
+      const existingReview = await prisma.individualReview.findUnique({
+        where: {
+          reviewerId_contactId_projectId: {
+            reviewerId: user.id,
+            contactId,
+            projectId,
+          },
+        },
+      });
+
+      if (existingReview) {
+        return versionedResponse({
+          error: 'כבר דירגת את איש הקשר הזה בפרויקט זה'
+        }, { status: 409 });
+      }
+    } else {
+      // External project - check by externalProjectName
+      const existingExternalReview = await prisma.individualReview.findFirst({
+        where: {
           reviewerId: user.id,
           contactId,
-          projectId,
+          projectId: null,
+          externalProjectName: externalProjectName,
         },
-      },
-    });
+      });
 
-    if (existingReview) {
-      return versionedResponse({
-        error: 'כבר דירגת את איש הקשר הזה בפרויקט זה'
-      }, { status: 409 });
+      if (existingExternalReview) {
+        return versionedResponse({
+          error: 'כבר דירגת את איש הקשר הזה בפרויקט חיצוני זה'
+        }, { status: 409 });
+      }
     }
 
     const ratings: Record<string, number> = {};
@@ -180,17 +203,19 @@ export async function POST(request: NextRequest) {
       select: { organizationId: true, firstName: true, lastName: true },
     });
 
-    const project = await prisma.project.findUnique({
+    // Only fetch project if projectId is provided (not external)
+    const project = projectId ? await prisma.project.findUnique({
       where: { id: projectId },
       select: { name: true },
-    });
+    }) : null;
 
     const review = await prisma.$transaction(async (tx) => {
       const review = await tx.individualReview.create({
         data: {
           reviewerId: user.id,
           contactId,
-          projectId,
+          projectId: projectId || null,
+          externalProjectName: externalProjectName || null,
           accountability: ratings.accountability,
           accountabilityNote: notes.accountabilityNote,
           boqQuality: ratings.boqQuality,
@@ -237,12 +262,14 @@ export async function POST(request: NextRequest) {
         await updateOrganizationAvgRating(contact.organizationId, tx)
       }
 
+      const projectDisplayName = projectId ? project?.name : `${externalProjectName} (חיצוני)`;
       await logCrud('CREATE', 'vendor-rating', 'individual-review', review.id,
-        `דירוג ${contact?.firstName} ${contact?.lastName} - ${project?.name}`, {
+        `דירוג ${contact?.firstName} ${contact?.lastName} - ${projectDisplayName}`, {
         contactId,
         contactName: `${contact?.firstName} ${contact?.lastName}`,
-        projectId,
-        projectName: project?.name,
+        projectId: projectId || null,
+        externalProjectName: externalProjectName || null,
+        projectName: projectDisplayName,
         avgRating: avgRating.toFixed(2),
       })
 
