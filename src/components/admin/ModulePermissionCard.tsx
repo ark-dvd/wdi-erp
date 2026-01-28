@@ -56,7 +56,8 @@ export function ModulePermissionCard({ module, permissions, note }: ModulePermis
   }
 
   const getPermission = (action: string): Permission | undefined => {
-    return permissions.find((p) => p.action === action)
+    // Case-insensitive match - DB stores UPPERCASE, UI uses lowercase
+    return permissions.find((p) => p.action.toLowerCase() === action.toLowerCase())
   }
 
   const hasAnyPermission = permissions.length > 0
