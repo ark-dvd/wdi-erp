@@ -78,7 +78,7 @@ export default function VehiclePage() {
 
   useEffect(() => {
     fetchVehicle(); fetchDocuments(); fetchPhotos()
-    fetch('/api/hr').then(r => r.json()).then(data => { setAllEmployees(data); setEmployees(data.filter((e: any) => e.status === 'פעיל')) }).catch(() => {})
+    fetch('/api/hr').then(r => r.json()).then(data => { const items = data.items || (Array.isArray(data) ? data : []); setAllEmployees(items); setEmployees(items.filter((e: any) => e.status === 'פעיל')) }).catch(() => {})
   }, [fetchVehicle, fetchDocuments, fetchPhotos])
 
   // ===== Formatters =====

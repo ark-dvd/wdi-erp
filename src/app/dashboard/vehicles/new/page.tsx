@@ -30,7 +30,7 @@ export default function NewVehiclePage() {
   useUnsavedChangesWarning(isDirty)
 
   useEffect(() => {
-    fetch('/api/hr').then(r => r.json()).then(data => setEmployees(data.filter((e: any) => e.status === 'פעיל'))).catch(() => {})
+    fetch('/api/hr').then(r => r.json()).then(data => { const items = data.items || (Array.isArray(data) ? data : []); setEmployees(items.filter((e: any) => e.status === 'פעיל')) }).catch(() => {})
   }, [])
 
   // UI-013: Clear error and mark dirty on any input change
