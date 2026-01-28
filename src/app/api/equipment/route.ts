@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Equipment API Route
-// Version: 20260125-RBAC-V1-CENTRAL
-// RBAC v1: Central authorization via loadUserAuthContext + evaluateAuthorization
+// Version: 20260128-RBAC-V2
+// RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
@@ -26,7 +26,7 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { loadUserAuthContext, evaluateAuthorization } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -34,31 +34,10 @@ export async function GET(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
-  const userId = (session.user as any)?.id
-  if (!userId) {
-    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-  }
-
   try {
-    // RBAC v1: Central authorization
-    const ctx = await loadUserAuthContext(userId)
-    if (!ctx) {
-      return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
-    }
-
-    const authResult = await evaluateAuthorization(ctx, {
-      module: 'equipment',
-      operation: 'READ',
-    })
-
-    if (!authResult.authorized) {
-      return versionedResponse({ error: 'אין הרשאה לצפות בציוד' }, { status: 403 })
-    }
-
-    // RBAC v1: This module is ALL-scope only
-    if (authResult.effectiveScope !== 'ALL') {
-      return versionedResponse({ error: 'אין הרשאה לצפות בציוד (נדרש ALL)' }, { status: 403 })
-    }
+    // RBAC v2: Check read permission for equipment
+    const denied = await requirePermission(session, 'equipment', 'read')
+    if (denied) return denied
 
     const { searchParams } = new URL(request.url)
 
@@ -94,8 +73,6 @@ export async function GET(request: NextRequest) {
     } else if (isOffice === 'false') {
       where.isOfficeEquipment = false
     }
-
-    // RBAC v1: This module is ALL-scope only (enforced above)
 
     // R1: Count total for pagination
     const total = await prisma.equipment.count({ where })
@@ -148,30 +125,11 @@ export async function POST(request: NextRequest) {
     return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
   }
 
+  // RBAC v2: Check create permission for equipment
+  const denied = await requirePermission(session, 'equipment', 'create')
+  if (denied) return denied
+
   const userId = (session.user as any)?.id
-  if (!userId) {
-    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // RBAC v1: Central authorization
-  const ctx = await loadUserAuthContext(userId)
-  if (!ctx) {
-    return versionedResponse({ error: 'אין הרשאה' }, { status: 403 })
-  }
-
-  const authResult = await evaluateAuthorization(ctx, {
-    module: 'equipment',
-    operation: 'CREATE',
-  })
-
-  if (!authResult.authorized) {
-    return versionedResponse({ error: 'אין הרשאה להוסיף ציוד' }, { status: 403 })
-  }
-
-  // RBAC v1: This module is ALL-scope only
-  if (authResult.effectiveScope !== 'ALL') {
-    return versionedResponse({ error: 'אין הרשאה להוסיף ציוד (נדרש ALL)' }, { status: 403 })
-  }
 
   try {
     const data = await request.json()

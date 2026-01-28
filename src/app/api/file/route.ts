@@ -1,10 +1,21 @@
+// src/app/api/file/route.ts
+// Version: 20260128-RBAC-V2
+// RBAC v2: Added authentication check (file proxy requires auth)
+
 import { NextRequest, NextResponse } from 'next/server'
 import { Storage } from '@google-cloud/storage'
+import { auth } from '@/lib/auth'
 
 const storage = new Storage()
 const bucketName = process.env.GCS_BUCKET_NAME || 'wdi-erp-files'
 
 export async function GET(request: NextRequest) {
+  // Authentication check - file proxy requires authenticated user
+  const session = await auth()
+  if (!session?.user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  }
+
   const url = request.nextUrl.searchParams.get('url')
   const download = request.nextUrl.searchParams.get('download')
 
