@@ -25,8 +25,9 @@ interface IndividualReview {
   avgRating: number
   generalNotes: string | null
   createdAt: string
+  externalProjectName: string | null
   reviewer: { id: string; name: string | null; employee: { firstName: string; lastName: string } | null }
-  project: { id: string; name: string; projectNumber: string }
+  project: { id: string; name: string; projectNumber: string } | null
   contact: { id: string; firstName: string; lastName: string }
 }
 
@@ -196,7 +197,11 @@ export default function OrganizationViewPage() {
                             </span>
                           </div>
                           <div className="text-sm text-[#3a3a3d]">
-                            #{review.project.projectNumber} {review.project.name}
+                            {review.project ? (
+                              <>#{review.project.projectNumber} {review.project.name}</>
+                            ) : (
+                              <span className="text-orange-600">{review.externalProjectName} (חיצוני)</span>
+                            )}
                           </div>
                           {review.generalNotes && (
                             <div className="text-sm text-[#8f8f96] mt-2 bg-gray-50 p-2 rounded">
