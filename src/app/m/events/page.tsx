@@ -56,7 +56,10 @@ export default function MobileEventsPage() {
 
   const fetchProjects = async () => {
     const res = await fetch('/api/projects')
-    if (res.ok) setProjects(await res.json())
+    if (res.ok) {
+      const data = await res.json()
+      setProjects(data.items || (Array.isArray(data) ? data : []))
+    }
   }
 
   const fetchEvents = async () => {
