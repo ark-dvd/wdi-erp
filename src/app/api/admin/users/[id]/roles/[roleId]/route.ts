@@ -32,7 +32,7 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const actorUserId = (session.user as any)?.id
@@ -41,7 +41,7 @@ export async function DELETE(
 
     // RBAC v1: Check admin authorization (with fallback)
     if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין הרשאה להסרת תפקידים' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const { id: targetUserId, roleId } = await params
@@ -113,13 +113,7 @@ export async function DELETE(
     )
 
     if (!authCheck.allowed) {
-      let errorMsg = 'אין הרשאה להסיר תפקיד זה'
-      if (authCheck.reason === 'CANNOT_MODIFY_OWNER') {
-        errorMsg = 'אין הרשאה להסיר תפקיד בעלים'
-      } else if (authCheck.reason === 'CANNOT_MODIFY_SELF') {
-        errorMsg = 'אין הרשאה לשנות את התפקידים שלך'
-      }
-      return versionedResponse({ error: errorMsg }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     // Safety rule 4: Cannot remove role from self if it removes admin access

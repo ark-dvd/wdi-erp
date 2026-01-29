@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const authHeader = request.headers.get('Authorization')
     const apiKeyHeader = request.headers.get('X-API-Key')
     if (!(authHeader === `Bearer ${API_KEY}` || apiKeyHeader === API_KEY)) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const projects = await prisma.project.findMany({

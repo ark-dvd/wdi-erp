@@ -225,12 +225,12 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
-    
+
     const userRole = (session.user as any).role
     if (userRole !== 'owner') {
-      return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const { rawInput, sourceContext } = await request.json()

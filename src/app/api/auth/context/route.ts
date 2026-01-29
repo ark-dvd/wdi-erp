@@ -76,17 +76,17 @@ function toModuleScope(scope: Scope | undefined): ModuleScope {
 export async function GET() {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   const userId = (session.user as any)?.id
   if (!userId) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   const ctx = await loadUserAuthContext(userId)
   if (!ctx) {
-    return NextResponse.json({ error: 'No authorization context' }, { status: 403 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
   }
 
   const uiAuthContext: UIAuthContext = { modules: {} }

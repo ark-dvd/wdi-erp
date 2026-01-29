@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth();
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // RBAC v2: Check read permission for vendors (vendor ratings)
@@ -116,7 +116,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth();
     if (!session?.user?.email) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 });
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // RBAC v2: Check create permission for vendors (vendor ratings)

@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useRef, Suspense } from 'react'
+import { useState, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Camera, Upload, X, FileText, Check } from 'lucide-react'
+import ProjectSelector from '@/components/ProjectSelector'
 
 const EVENT_TYPES = [
   { value: 'אתגר', color: 'bg-red-100 text-red-800 border-red-300' },
@@ -23,7 +24,6 @@ function MobileNewEventContent() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
-  const [projects, setProjects] = useState<any[]>([])
   const [formProject, setFormProject] = useState(preselectedProjectId || '')
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0])
   const [formTime, setFormTime] = useState(new Date().toTimeString().slice(0, 5))
@@ -32,33 +32,6 @@ function MobileNewEventContent() {
   const [formFiles, setFormFiles] = useState<{ file: File; preview?: string }[]>([])
   const [saving, setSaving] = useState(false)
   const [success, setSuccess] = useState(false)
-
-  useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  const fetchProjects = async () => {
-    const res = await fetch('/api/projects')
-    if (res.ok) {
-      const data = await res.json()
-      setProjects(data.items || (Array.isArray(data) ? data : []))
-    }
-  }
-
-  const flatProjects: { id: string; name: string; number: string; indent: number }[] = []
-  projects.forEach(p => {
-    flatProjects.push({ id: p.id, name: p.name, number: p.projectNumber, indent: 0 })
-    if (p.children) {
-      p.children.forEach((c: any) => {
-        flatProjects.push({ id: c.id, name: c.name, number: c.projectNumber, indent: 1 })
-        if (c.children) {
-          c.children.forEach((b: any) => {
-            flatProjects.push({ id: b.id, name: b.name, number: b.projectNumber, indent: 2 })
-          })
-        }
-      })
-    }
-  })
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
@@ -180,19 +153,11 @@ function MobileNewEventContent() {
         {/* Project Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">פרויקט *</label>
-          <select
+          <ProjectSelector
             value={formProject}
-            onChange={(e) => setFormProject(e.target.value)}
-            className="w-full p-3 border border-gray-200 rounded-xl bg-white text-sm"
+            onChange={setFormProject}
             required
-          >
-            <option value="">בחר פרויקט</option>
-            {flatProjects.map(p => (
-              <option key={p.id} value={p.id}>
-                {'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         {/* Date & Time */}

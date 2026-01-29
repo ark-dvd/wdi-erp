@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
     if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
     
     const data = await request.json()

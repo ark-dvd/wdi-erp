@@ -1,12 +1,13 @@
 'use client'
 
-// Version: 20260116-060000
-// Fix: Fetch all events, sticky table header, Pagination (50 per page)
+// Version: 20260129-ProjectSelector
+// Fix: Use ProjectSelector component, sticky table header, Pagination (50 per page)
 
 import { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Search, FileText, ChevronDown, ChevronLeft, X, Upload, Trash2, Pencil } from 'lucide-react'
+import ProjectSelector from '@/components/ProjectSelector'
 
 const EVENT_TYPES = [
   { value: 'אתגר', color: 'bg-red-100 text-red-800' },
@@ -28,14 +29,13 @@ function EventsContent() {
 
   const [events, setEvents] = useState<any[]>([])
   const [eventsTotal, setEventsTotal] = useState<number>(0)
-  const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [expandedEvents, setExpandedEvents] = useState<{ [key: string]: boolean }>({})
-  
+
   const [selectedProject, setSelectedProject] = useState(searchParams?.get('projectId') || '')
   const [selectedType, setSelectedType] = useState('')
   const [searchText, setSearchText] = useState('')
-  
+
   // Pagination
   const [page, setPage] = useState(1)
 
@@ -48,20 +48,10 @@ function EventsContent() {
   const [formFiles, setFormFiles] = useState<{ file: File; preview?: string }[]>([])
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { fetchProjects() }, [])
   useEffect(() => { fetchEvents() }, [selectedProject, selectedType])
-  
+
   // Reset page when filters change
   useEffect(() => { setPage(1) }, [selectedProject, selectedType, searchText])
-
-  const fetchProjects = async () => {
-    const res = await fetch('/api/projects')
-    if (res.ok) {
-      const data = await res.json()
-      // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
-      setProjects(data.items || data)
-    }
-  }
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -121,20 +111,6 @@ function EventsContent() {
     return { parts, number: project.projectNumber }
   }
 
-  const flatProjects: { id: string; name: string; number: string; indent: number }[] = []
-  projects.forEach(p => {
-    flatProjects.push({ id: p.id, name: p.name, number: p.projectNumber, indent: 0 })
-    if (p.children) {
-      p.children.forEach((c: any) => {
-        flatProjects.push({ id: c.id, name: c.name, number: c.projectNumber, indent: 1 })
-        if (c.children) {
-          c.children.forEach((b: any) => {
-            flatProjects.push({ id: b.id, name: b.name, number: b.projectNumber, indent: 2 })
-          })
-        }
-      })
-    }
-  })
 
   const filteredEvents = events.filter(event => {
     if (!searchText) return true
@@ -267,12 +243,11 @@ function EventsContent() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4">
               <div>
                 <label className="block text-sm font-medium mb-1">פרויקט *</label>
-                <select value={formProject} onChange={(e) => setFormProject(e.target.value)} className="w-full p-2 border rounded-lg" required>
-                  <option value="">בחר פרויקט</option>
-                  {flatProjects.map(p => (
-                    <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}</option>
-                  ))}
-                </select>
+                <ProjectSelector
+                  value={formProject}
+                  onChange={setFormProject}
+                  required
+                />
               </div>
               <div>
                 <label className="block text-sm font-medium mb-1">תאריך *</label>
@@ -344,12 +319,12 @@ function EventsContent() {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">פרויקט</label>
-              <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg">
-                <option value="">כל הפרויקטים</option>
-                {flatProjects.map(p => (
-                  <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}</option>
-                ))}
-              </select>
+              <ProjectSelector
+                value={selectedProject}
+                onChange={setSelectedProject}
+                allowAll
+                allLabel="כל הפרויקטים"
+              />
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">סוג אירוע</label>

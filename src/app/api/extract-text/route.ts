@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   const session = await auth();
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
   }
 
   try {

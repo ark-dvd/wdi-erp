@@ -117,7 +117,7 @@ const FUNCTION_MODULE_MAP: Record<string, string> = {
 export async function POST(request: NextRequest) {
   const session = await auth();
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
   }
 
   const userId = (session.user as any)?.id || 'unknown';

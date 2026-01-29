@@ -18,12 +18,12 @@ export async function POST(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user) {
-      return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
     if (!checkAdminAccess(session)) {
-      return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const userId = (session.user as any).id

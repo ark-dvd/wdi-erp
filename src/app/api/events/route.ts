@@ -23,7 +23,7 @@ import { requirePermission } from '@/lib/permissions'
 export async function GET(request: Request) {
   const session = await auth()
   if (!session) {
-    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   // RBAC v2: Check read permission for events

@@ -10,7 +10,7 @@ export async function GET() {
   try {
     const session = await auth();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // Get distinct non-null externalProjectName values

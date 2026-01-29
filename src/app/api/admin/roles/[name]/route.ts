@@ -41,7 +41,7 @@ export async function GET(
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // RBAC v1: Check admin authorization
@@ -50,7 +50,7 @@ export async function GET(
     const canReadAdmin = userRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
 
     if (!canReadAdmin) {
-      return versionedResponse({ error: 'אין הרשאה לצפות בפרטי תפקיד' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const { name: roleName } = await params

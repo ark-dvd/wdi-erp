@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { Search, FileText, ChevronLeft, Filter } from 'lucide-react'
+import ProjectSelector from '@/components/ProjectSelector'
 
 const EVENT_TYPES = [
   { value: 'אתגר', color: 'bg-red-100 text-red-800' },
@@ -43,24 +44,14 @@ interface Event {
 
 export default function MobileEventsPage() {
   const [events, setEvents] = useState<Event[]>([])
-  const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
   const [showFilters, setShowFilters] = useState(false)
-  
+
   const [selectedProject, setSelectedProject] = useState('')
   const [selectedType, setSelectedType] = useState('')
   const [searchText, setSearchText] = useState('')
 
-  useEffect(() => { fetchProjects() }, [])
   useEffect(() => { fetchEvents() }, [selectedProject, selectedType])
-
-  const fetchProjects = async () => {
-    const res = await fetch('/api/projects')
-    if (res.ok) {
-      const data = await res.json()
-      setProjects(data.items || (Array.isArray(data) ? data : []))
-    }
-  }
 
   const fetchEvents = async () => {
     setLoading(true)
@@ -100,20 +91,6 @@ export default function MobileEventsPage() {
     return project.name
   }
 
-  const flatProjects: { id: string; name: string; number: string; indent: number }[] = []
-  projects.forEach(p => {
-    flatProjects.push({ id: p.id, name: p.name, number: p.projectNumber, indent: 0 })
-    if (p.children) {
-      p.children.forEach((c) => {
-        flatProjects.push({ id: c.id, name: c.name, number: c.projectNumber, indent: 1 })
-        if (c.children) {
-          c.children.forEach((b) => {
-            flatProjects.push({ id: b.id, name: b.name, number: b.projectNumber, indent: 2 })
-          })
-        }
-      })
-    }
-  })
 
   const filteredEvents = events.filter(event => {
     if (!searchText) return true
@@ -156,18 +133,13 @@ export default function MobileEventsPage() {
         {/* Expandable Filters */}
         {showFilters && (
           <div className="space-y-3 pt-2">
-            <select
+            <ProjectSelector
               value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="w-full p-3 border border-gray-200 rounded-xl bg-white text-sm"
-            >
-              <option value="">כל הפרויקטים</option>
-              {flatProjects.map(p => (
-                <option key={p.id} value={p.id}>
-                  {'  '.repeat(p.indent)}#{p.number} - {p.name}
-                </option>
-              ))}
-            </select>
+              onChange={setSelectedProject}
+              allowAll
+              allLabel="כל הפרויקטים"
+              className="text-sm"
+            />
             <select
               value={selectedType}
               onChange={(e) => setSelectedType(e.target.value)}

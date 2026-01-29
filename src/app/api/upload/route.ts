@@ -19,7 +19,7 @@ export async function POST(request: Request) {
     // Authentication only - upload is a utility endpoint
     // Permission follows parent entity (HR, Projects, etc.), not a separate 'files' module
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const formData = await request.formData()

@@ -13,12 +13,12 @@ export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
     if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין הרשאה לצפות בתפקידים' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     // Get all roles ordered by level (privilege)

@@ -16,7 +16,7 @@ export async function GET(
 ) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   try {
@@ -42,7 +42,7 @@ export async function POST(
 ) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   try {
@@ -156,7 +156,7 @@ export async function PUT(
 ) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   try {
@@ -252,7 +252,7 @@ export async function DELETE(
 ) {
   const session = await auth()
   if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   try {

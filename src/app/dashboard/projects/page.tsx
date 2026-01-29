@@ -264,7 +264,7 @@ export default function ProjectsPage() {
           {/* Project Name and Number */}
           <div className="min-w-0">
             <div className="font-medium text-[#3a3a3d] truncate">{project.name}</div>
-            <div className="text-sm text-[#8f8f96]" dir="ltr">#{project.projectNumber}</div>
+            <div className="text-sm text-[#8f8f96] text-right"><span dir="ltr" className="inline-block">#{project.projectNumber}</span></div>
             {project.client && (
               <div className="text-xs text-[#a7a7b0]">{project.client}</div>
             )}

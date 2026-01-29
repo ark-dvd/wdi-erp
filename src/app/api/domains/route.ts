@@ -12,13 +12,13 @@ export async function GET(request: NextRequest) {
   try {
     const session = await auth()
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // Load user's full authorization context using RBAC system
     const authContext = await loadUserAuthContext(session.user.id)
     if (!authContext) {
-      return NextResponse.json({ error: 'User context not found' }, { status: 403 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     // Helper to determine effective scope for a given action

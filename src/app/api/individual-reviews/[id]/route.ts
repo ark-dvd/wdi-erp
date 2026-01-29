@@ -30,7 +30,7 @@ export async function GET(
   try {
     const session = await auth();
     if (!session?.user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // RBAC v2: Check read permission for vendors (vendor ratings)
@@ -72,7 +72,7 @@ export async function PUT(
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // RBAC v2: Check update permission for vendors (vendor ratings)
@@ -92,7 +92,7 @@ export async function PUT(
     }
 
     if (review.reviewerId !== session.user.id) {
-      return NextResponse.json({ error: 'אין הרשאה לערוך דירוג זה' }, { status: 403 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 });
     }
 
     const daysSinceCreation = Math.floor(
@@ -162,7 +162,7 @@ export async function DELETE(
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 });
     }
 
     // RBAC v2: Check delete permission for vendors (vendor ratings)
@@ -182,7 +182,7 @@ export async function DELETE(
     }
 
     if (review.reviewerId !== session.user.id) {
-      return NextResponse.json({ error: 'אין הרשאה למחוק דירוג זה' }, { status: 403 });
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 });
     }
 
     const daysSinceCreation = Math.floor(

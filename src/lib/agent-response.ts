@@ -136,7 +136,7 @@ export function createNoPermissionResponse(options: {
       permissionDenied: true,
     },
     data: null,
-    message: `אין לך הרשאה לצפות בנתוני ${options.module}. תפקידך: ${options.userRole}${options.requiredRole ? `. נדרש: ${options.requiredRole}` : ''}`,
+    message: 'אין לך הרשאה',
   }
 }
 
@@ -246,7 +246,7 @@ export function createNotAuthorizedResponse(options: {
 }): { state: 'NOT_AUTHORIZED'; message: string; httpStatus: 403 } {
   return {
     state: 'NOT_AUTHORIZED',
-    message: 'אין לך הרשאה מתאימה.',  // DOC-013 §8.2
+    message: 'אין לך הרשאה',
     httpStatus: 403,
   }
 }
@@ -262,7 +262,7 @@ export function createPartialResponse(options: {
 }): { state: 'PARTIAL'; message: string; response: string; httpStatus: 200 } {
   return {
     state: 'PARTIAL',
-    message: 'בחלק מהבקשה אין לך הרשאה להציג מידע.',  // DOC-013 §8.2
+    message: 'אין לך הרשאה',
     response: options.textResponse,
     httpStatus: 200,
   }

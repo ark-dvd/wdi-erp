@@ -23,11 +23,11 @@ export async function POST(
   try {
     const session = await auth()
     if (!session?.user) {
-      return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     if (!checkAdminAccess(session)) {
-      return NextResponse.json({ error: 'אין הרשאה' }, { status: 403 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const userId = (session.user as any).id

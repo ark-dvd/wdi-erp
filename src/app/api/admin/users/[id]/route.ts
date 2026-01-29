@@ -53,12 +53,12 @@ export async function GET(
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // RBAC v1: Check admin authorization (with fallback)
     if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין הרשאה לצפות בפרטי משתמש' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const userRoles = (session.user as any)?.roles || []
@@ -214,7 +214,7 @@ export async function PATCH(
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const actorUserId = (session.user as any)?.id
@@ -223,7 +223,7 @@ export async function PATCH(
 
     // RBAC v1: Check admin authorization (with fallback)
     if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין הרשאה לעדכן משתמשים' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const { id: targetUserId } = await params
@@ -287,7 +287,7 @@ export async function PATCH(
       const authCheck = canModifyRbac(userRoleNames, 'owner', targetUserId, actorUserId)
       if (!authCheck.allowed) {
         return versionedResponse(
-          { error: 'אין הרשאה לשנות סטטוס של בעלים' },
+          { error: 'אין לך הרשאה' },
           { status: 403 }
         )
       }

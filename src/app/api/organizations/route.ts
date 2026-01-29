@@ -25,7 +25,7 @@ import {
 export async function GET(request: Request) {
   try {
     const session = await auth()
-    if (!session) return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    if (!session) return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
 
     const { searchParams } = new URL(request.url)
 

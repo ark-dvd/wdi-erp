@@ -31,7 +31,7 @@ import { requirePermission } from '@/lib/permissions'
 export async function GET(request: NextRequest) {
   const session = await auth()
   if (!session) {
-    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   try {
@@ -122,7 +122,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const session = await auth()
   if (!session) {
-    return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+    return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
   // RBAC v2: Check create permission for equipment

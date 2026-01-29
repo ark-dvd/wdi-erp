@@ -312,7 +312,7 @@ export async function requirePermission(
 ): Promise<Response | null> {
   if (!session?.user) {
     return new Response(
-      JSON.stringify({ error: 'Unauthorized' }),
+      JSON.stringify({ error: 'אין לך הרשאה' }),
       { status: 401, headers: { 'Content-Type': 'application/json' } }
     )
   }
@@ -330,10 +330,7 @@ export async function requirePermission(
   if (!result.granted) {
     console.log(`Permission denied: user=${userId}, module=${module}, action=${action}, reason=${result.reason}`)
     return new Response(
-      JSON.stringify({
-        error: 'אין לך הרשאה לבצע פעולה זו',
-        code: result.reason,
-      }),
+      JSON.stringify({ error: 'אין לך הרשאה' }),
       { status: 403, headers: { 'Content-Type': 'application/json' } }
     )
   }

@@ -23,12 +23,12 @@ export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     // RBAC v1: Check multi-role authorization (DOC-013 §10.2)
     if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין הרשאה לניהול משתמשים' }, { status: 403 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const userRoles = (session.user as any)?.roles || []
@@ -105,7 +105,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth()
     if (!session) {
-      return versionedResponse({ error: 'Unauthorized' }, { status: 401 })
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const actorUserId = (session.user as any)?.id
@@ -153,13 +153,7 @@ export async function PATCH(request: Request) {
       )
 
       if (!authCheck.allowed) {
-        let errorMsg = 'אין הרשאה לשנות תפקידים'
-        if (authCheck.reason === 'CANNOT_MODIFY_OWNER') {
-          errorMsg = 'אין הרשאה לשנות הרשאות בעלים'
-        } else if (authCheck.reason === 'CANNOT_MODIFY_SELF') {
-          errorMsg = 'אין הרשאה לשנות את ההרשאות שלך'
-        }
-        return versionedResponse({ error: errorMsg }, { status: 403 })
+        return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
       }
     }
 

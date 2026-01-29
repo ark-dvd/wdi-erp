@@ -12,7 +12,7 @@ export async function PUT(
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const { id: projectId, contactProjectId } = await params
@@ -68,7 +68,7 @@ export async function DELETE(
   try {
     const session = await auth()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
     const { id: projectId, contactProjectId } = await params
