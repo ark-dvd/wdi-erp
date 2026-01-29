@@ -262,8 +262,21 @@ export async function getProjects(params: {
   phase?: string;
   leadId?: string;
   managerName?: string;
+  level?: string;
 }) {
   const where: any = {};
+
+  // By default, only return main projects (4-digit, level=PROJECT)
+  // Use level='all' or level='ALL' to get all levels
+  const levelParam = params.level?.toLowerCase();
+  if (!levelParam || levelParam === 'project') {
+    where.level = 'PROJECT';
+  } else if (levelParam === 'zone') {
+    where.level = 'ZONE';
+  } else if (levelParam === 'building') {
+    where.level = 'BUILDING';
+  }
+  // If level='all', don't filter by level
 
   // **שימוש ב-normalizer**
   if (params.state && params.state !== 'all') {
@@ -321,6 +334,7 @@ export async function getProjects(params: {
 export async function getProjectsByDomain(params: {
   domainName: string;
   state?: string;
+  level?: string;
 }) {
   // First, find the domain by name (supports Hebrew displayName or English name)
   const domain = await prisma.domain.findFirst({
@@ -337,6 +351,17 @@ export async function getProjectsByDomain(params: {
   }
 
   const where: any = { domainId: domain.id };
+
+  // By default, only return main projects (4-digit, level=PROJECT)
+  const levelParam = params.level?.toLowerCase();
+  if (!levelParam || levelParam === 'project') {
+    where.level = 'PROJECT';
+  } else if (levelParam === 'zone') {
+    where.level = 'ZONE';
+  } else if (levelParam === 'building') {
+    where.level = 'BUILDING';
+  }
+  // If level='all', don't filter by level
 
   // Optional state filter
   if (params.state && params.state !== 'all') {

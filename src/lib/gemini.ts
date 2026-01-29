@@ -65,7 +65,7 @@ export const agentFunctions: any[] = [
   // ============ PROJECTS ============
   {
     name: 'getProjects',
-    description: 'רשימת פרויקטים עם סינון. מצב: פעיל/הושלם/מושהה/בוטל',
+    description: 'רשימת פרויקטים ראשיים (4 ספרות) עם סינון. ברירת מחדל: רק פרויקטים ראשיים',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -73,6 +73,7 @@ export const agentFunctions: any[] = [
         category: { type: 'STRING', description: 'קטגוריה' },
         phase: { type: 'STRING', description: 'שלב' },
         managerName: { type: 'STRING', description: 'שם מנהל' },
+        level: { type: 'STRING', description: 'רמה: PROJECT (ראשי, ברירת מחדל), ZONE (אזור), BUILDING (בניין), או all (הכל)' },
       },
     },
   },
@@ -87,12 +88,13 @@ export const agentFunctions: any[] = [
   },
   {
     name: 'getProjectsByDomain',
-    description: 'פרויקטים לפי תחום עסקי (בטחוני/מסחרי/תעשייתי). לשאלות כמו "תן לי פרויקטים בתחום בטחוני"',
+    description: 'פרויקטים ראשיים לפי תחום עסקי (בטחוני/מסחרי/תעשייתי). ברירת מחדל: רק פרויקטים ראשיים',
     parameters: {
       type: 'OBJECT',
       properties: {
         domainName: { type: 'STRING', description: 'שם התחום: בטחוני, מסחרי, תעשייתי, security, commercial, industrial' },
         state: { type: 'STRING', description: 'מצב הפרויקט (אופציונלי): פעיל, הושלם, מושהה' },
+        level: { type: 'STRING', description: 'רמה: PROJECT (ראשי, ברירת מחדל), ZONE, BUILDING, או all' },
       },
       required: ['domainName'],
     },
