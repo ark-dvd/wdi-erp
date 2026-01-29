@@ -18,20 +18,24 @@ export async function GET(
     const session = await auth()
     const { id } = await params
 
-    // RBAC v2: Check read permission
-    const denied = await requirePermission(session, 'events', 'read', { id })
-    if (denied) return denied
-
     const event = await prisma.projectEvent.findUnique({
       where: { id },
       include: {
-        project: { select: { id: true, name: true, projectNumber: true } },
-        createdBy: { select: { email: true } },
+        project: { select: { id: true, name: true, projectNumber: true, domainId: true, parent: { select: { id: true, name: true, projectNumber: true, parent: { select: { id: true, name: true, projectNumber: true } } } } } },
+        createdBy: { select: { id: true, name: true, email: true, employee: { select: { firstName: true, lastName: true } } } },
         files: true,
       },
     })
 
     if (!event) return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
+
+    // RBAC v2: Check read permission with project's domainId for DOMAIN scope enforcement
+    const denied = await requirePermission(session, 'events', 'read', {
+      id,
+      domainId: event.project?.domainId || undefined,
+      createdById: event.createdById || undefined
+    })
+    if (denied) return denied
 
     return NextResponse.json(event)
   } catch (error) {
@@ -47,17 +51,25 @@ export async function PUT(
   try {
     const session = await auth()
     const { id } = await params
-
-    // RBAC v2: Check update permission
-    const denied = await requirePermission(session, 'events', 'update', { id })
-    if (denied) return denied
     const data = await request.json()
 
-    // Get event with project info for logging
+    // Get event with project info for RBAC check and logging
     const existingEvent = await prisma.projectEvent.findUnique({
       where: { id },
-      include: { project: { select: { name: true } } }
+      include: { project: { select: { name: true, domainId: true } } }
     })
+
+    if (!existingEvent) {
+      return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
+    }
+
+    // RBAC v2: Check update permission with project's domainId for DOMAIN scope enforcement
+    const denied = await requirePermission(session, 'events', 'update', {
+      id,
+      domainId: existingEvent.project?.domainId || undefined,
+      createdById: existingEvent.createdById || undefined
+    })
+    if (denied) return denied
 
     const event = await prisma.projectEvent.update({
       where: { id },
@@ -90,19 +102,23 @@ export async function DELETE(
     const session = await auth()
     const { id } = await params
 
-    // RBAC v2: Check delete permission
-    const denied = await requirePermission(session, 'events', 'delete', { id })
-    if (denied) return denied
-
-    // Get event info before delete for logging
+    // Get event info before delete for RBAC check and logging
     const event = await prisma.projectEvent.findUnique({
       where: { id },
-      include: { project: { select: { name: true } } }
+      include: { project: { select: { name: true, domainId: true } } }
     })
 
     if (!event) {
       return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
     }
+
+    // RBAC v2: Check delete permission with project's domainId for DOMAIN scope enforcement
+    const denied = await requirePermission(session, 'events', 'delete', {
+      id,
+      domainId: event.project?.domainId || undefined,
+      createdById: event.createdById || undefined
+    })
+    if (denied) return denied
 
     // Delete associated files first
     await prisma.eventFile.deleteMany({

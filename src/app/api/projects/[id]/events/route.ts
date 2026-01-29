@@ -69,20 +69,28 @@ export async function POST(
     const session = await auth()
     const { id } = await params
 
+    // Get project info first (needed for domain check and logging)
+    const project = await prisma.project.findUnique({
+      where: { id },
+      select: { name: true, projectNumber: true, domainId: true }
+    })
+
+    if (!project) {
+      return NextResponse.json({ error: 'פרויקט לא נמצא' }, { status: 404 })
+    }
+
     // RBAC v2: Check create permission for events on this project
-    const denied = await requirePermission(session, 'events', 'create', { projectId: id })
+    // Include domainId to enforce DOMAIN scope checks for domain_head users
+    const denied = await requirePermission(session, 'events', 'create', {
+      projectId: id,
+      domainId: project.domainId || undefined
+    })
     if (denied) return denied
 
     const data = await request.json()
     if (!data.eventType || !data.description) {
       return NextResponse.json({ error: 'חסרים שדות חובה' }, { status: 400 })
     }
-
-    // Get project name for logging
-    const project = await prisma.project.findUnique({
-      where: { id },
-      select: { name: true, projectNumber: true }
-    })
 
     const event = await prisma.projectEvent.create({
       data: {
