@@ -68,6 +68,7 @@ export default function VendorsPage() {
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [isExternalProject, setIsExternalProject] = useState(false);
   const [externalProjectName, setExternalProjectName] = useState('');
+  const [externalProjectOptions, setExternalProjectOptions] = useState<string[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<Organization | null>(null);
   const [selectedContact, setSelectedContact] = useState<Contact | null>(null);
   const [rating, setRating] = useState<IndividualRating>({});
@@ -103,6 +104,7 @@ export default function VendorsPage() {
   useEffect(() => {
     fetchProjects();
     fetchAllOrganizations();
+    fetchExternalProjects();
   }, []);
 
   useEffect(() => {
@@ -134,6 +136,18 @@ export default function VendorsPage() {
       setOrganizations(Array.isArray(data) ? data : (data.items || []));
     } catch (err) {
       console.error('שגיאה בטעינת ארגונים:', err);
+    }
+  };
+
+  const fetchExternalProjects = async () => {
+    try {
+      const res = await fetch('/api/individual-reviews/external-projects');
+      if (res.ok) {
+        const data = await res.json();
+        setExternalProjectOptions(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error('שגיאה בטעינת פרויקטים חיצוניים:', err);
     }
   };
 
@@ -322,18 +336,52 @@ export default function VendorsPage() {
           <span className="font-medium text-orange-800">פרויקט חיצוני (לא במערכת)</span>
         </label>
         {isExternalProject && (
-          <div className="mt-3">
-            <input
-              type="text"
-              placeholder="הזן שם פרויקט חיצוני..."
-              value={externalProjectName}
-              onChange={e => setExternalProjectName(e.target.value)}
-              className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
-            />
+          <div className="mt-3 space-y-3">
+            {/* Combobox with autocomplete */}
+            <div>
+              <label className="block text-sm text-orange-700 mb-1">בחר פרויקט קיים או הזן שם חדש:</label>
+              <input
+                type="text"
+                list="external-projects-list"
+                placeholder="הקלד או בחר פרויקט חיצוני..."
+                value={externalProjectName}
+                onChange={e => setExternalProjectName(e.target.value)}
+                className="w-full px-4 py-2 border border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+              />
+              <datalist id="external-projects-list">
+                {externalProjectOptions.map((name, idx) => (
+                  <option key={idx} value={name} />
+                ))}
+              </datalist>
+            </div>
+
+            {/* Quick select buttons for existing projects */}
+            {externalProjectOptions.length > 0 && (
+              <div>
+                <div className="text-xs text-orange-600 mb-2">פרויקטים חיצוניים קיימים:</div>
+                <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                  {externalProjectOptions.map((name, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => setExternalProjectName(name)}
+                      className={`px-3 py-1.5 text-sm rounded-lg border transition-colors ${
+                        externalProjectName === name
+                          ? 'bg-orange-600 text-white border-orange-600'
+                          : 'bg-white text-orange-700 border-orange-300 hover:bg-orange-100'
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {externalProjectName.trim() && (
               <button
                 onClick={() => setStep(2)}
-                className="mt-3 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
+                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700"
               >
                 המשך לבחירת ארגון ←
               </button>
