@@ -86,6 +86,18 @@ export const agentFunctions: any[] = [
     },
   },
   {
+    name: 'getProjectsByDomain',
+    description: 'פרויקטים לפי תחום עסקי (בטחוני/מסחרי/תעשייתי). לשאלות כמו "תן לי פרויקטים בתחום בטחוני"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        domainName: { type: 'STRING', description: 'שם התחום: בטחוני, מסחרי, תעשייתי, security, commercial, industrial' },
+        state: { type: 'STRING', description: 'מצב הפרויקט (אופציונלי): פעיל, הושלם, מושהה' },
+      },
+      required: ['domainName'],
+    },
+  },
+  {
     name: 'getProjectEvents',
     description: 'אירועים של פרויקט',
     parameters: {
@@ -669,6 +681,7 @@ export function getGeminiModel() {
 
 ### פרויקטים:
 - getProjects, getProjectById, countProjects, getProjectsStats
+- **getProjectsByDomain** - פרויקטים לפי תחום (בטחוני/מסחרי/תעשייתי)
 - getProjectEvents, getProjectContacts, getProjectLeads
 
 ### אירועים:

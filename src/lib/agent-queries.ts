@@ -306,6 +306,68 @@ export async function getProjects(params: {
   }));
 }
 
+export async function getProjectsByDomain(params: {
+  domainName: string;
+  state?: string;
+}) {
+  // First, find the domain by name (supports Hebrew displayName or English name)
+  const domain = await prisma.domain.findFirst({
+    where: {
+      OR: [
+        { name: { equals: params.domainName, mode: 'insensitive' } },
+        { displayName: { contains: params.domainName, mode: 'insensitive' } },
+      ],
+    },
+  });
+
+  if (!domain) {
+    return { error: `תחום "${params.domainName}" לא נמצא. תחומים קיימים: בטחוני, מסחרי, תעשייתי` };
+  }
+
+  const where: any = { domainId: domain.id };
+
+  // Optional state filter
+  if (params.state && params.state !== 'all') {
+    const normalizedState = normalizeProjectState(params.state);
+    if (normalizedState && normalizedState !== 'all') {
+      where.state = normalizedState;
+    }
+  }
+
+  const projects = await prisma.project.findMany({
+    where,
+    select: {
+      id: true,
+      projectNumber: true,
+      name: true,
+      category: true,
+      phase: true,
+      state: true,
+      client: true,
+      area: true,
+      estimatedCost: true,
+      startDate: true,
+      lead: {
+        select: { firstName: true, lastName: true },
+      },
+      domain: {
+        select: { displayName: true },
+      },
+    },
+    orderBy: { name: 'asc' },
+  });
+
+  return {
+    domain: domain.displayName,
+    count: projects.length,
+    projects: projects.map(p => ({
+      ...p,
+      leadName: p.lead ? `${p.lead.firstName} ${p.lead.lastName}` : null,
+      domainName: p.domain?.displayName || null,
+    })),
+  };
+}
+
 export async function getProjectById(params: { searchTerm: string }) {
   const searchTerm = params.searchTerm.trim();
 
@@ -1872,6 +1934,7 @@ export const functionMap: Record<string, Function> = {
   getEmployees,
   getEmployeeById,
   getProjects,
+  getProjectsByDomain,
   getProjectById,
   getProjectEvents,
   getProjectContacts,
