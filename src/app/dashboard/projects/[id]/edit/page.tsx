@@ -45,6 +45,9 @@ interface Domain {
   displayName: string
 }
 
+// RBAC scope types for domain authorization
+type DomainScope = 'ALL' | 'DOMAIN' | 'NONE'
+
 // ==========================================
 // Main Component
 // ==========================================
@@ -56,6 +59,8 @@ export default function EditProjectPage() {
 
   const [employees, setEmployees] = useState<any[]>([])
   const [domains, setDomains] = useState<Domain[]>([])
+  const [userScope, setUserScope] = useState<DomainScope>('NONE')
+  const [userAssignedDomainIds, setUserAssignedDomainIds] = useState<string[]>([])
   const [project, setProject] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -136,14 +141,24 @@ export default function EditProjectPage() {
 
   const fetchDomains = async () => {
     try {
-      const res = await fetch('/api/admin/domains')
+      const res = await fetch('/api/domains')
       if (res.ok) {
         const data = await res.json()
-        setDomains(data || [])
+        setDomains(data.domains || [])
+        // Use updateScope for edit page (projects:update permission)
+        setUserScope(data.updateScope || 'NONE')
+        setUserAssignedDomainIds(data.userAssignedDomainIds || [])
       }
     } catch (error) {
       console.error('Error fetching domains:', error)
     }
+  }
+
+  // Validate domain selection based on user's RBAC scope (for UPDATE permission)
+  const canUpdateDomain = (domainId: string): boolean => {
+    if (userScope === 'ALL') return true
+    if (userScope === 'DOMAIN') return userAssignedDomainIds.includes(domainId)
+    return false
   }
 
   const toggleArrayItem = (arr: string[], item: string): string[] => {
@@ -155,6 +170,12 @@ export default function EditProjectPage() {
 
     if (!form.domainId) {
       setError('תחום הוא שדה חובה')
+      return
+    }
+
+    // RBAC validation: Check if user can update project in selected domain
+    if (!canUpdateDomain(form.domainId)) {
+      setError('אין לך הרשאה לעדכן פרויקט בתחום זה')
       return
     }
 
@@ -335,23 +356,33 @@ export default function EditProjectPage() {
             תחום <span className="text-red-500">*</span>
           </h2>
           <div className="flex flex-wrap gap-2">
-            {domains.map((domain) => (
-              <button
-                key={domain.id}
-                type="button"
-                onClick={() => setForm({ ...form, domainId: domain.id })}
-                className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
-                  form.domainId === domain.id
-                    ? 'bg-[#0a3161] text-white border-[#0a3161]'
-                    : 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161] hover:bg-[#f5f6f8]'
-                }`}
-              >
-                {domain.displayName}
-              </button>
-            ))}
+            {domains.map((domain) => {
+              const isAllowed = canUpdateDomain(domain.id)
+              return (
+                <button
+                  key={domain.id}
+                  type="button"
+                  onClick={() => isAllowed && setForm({ ...form, domainId: domain.id })}
+                  disabled={!isAllowed}
+                  className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                    form.domainId === domain.id
+                      ? 'bg-[#0a3161] text-white border-[#0a3161]'
+                      : isAllowed
+                        ? 'bg-white text-[#3a3a3d] border-[#e2e4e8] hover:border-[#0a3161] hover:bg-[#f5f6f8]'
+                        : 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed'
+                  }`}
+                  title={!isAllowed ? 'אין לך הרשאה לעדכן פרויקט בתחום זה' : undefined}
+                >
+                  {domain.displayName}
+                </button>
+              )
+            })}
           </div>
           {!form.domainId && (
             <p className="text-sm text-red-500 mt-2">יש לבחור תחום</p>
+          )}
+          {userScope === 'NONE' && (
+            <p className="text-sm text-red-500 mt-2">אין לך הרשאה לעדכן פרויקטים</p>
           )}
         </div>
 
