@@ -52,6 +52,18 @@ import {
   findFieldBySynonym,
 } from './agent-data-dictionary';
 
+// ייבוא Project Counting - Single source of truth
+import {
+  getProjectAndBuildingCounts,
+  getProjectCount,
+  getBuildingCount,
+  getBuildingCountForProject,
+  isProjectNumber,
+  isBuildingNumber,
+  isZoneNumber,
+  getProjectHierarchySummary,
+} from './project-counting';
+
 // Stage 6.3 R4: ייבוא פונקציות ActivityLog
 import {
   queryActivityLogs,
@@ -589,7 +601,7 @@ export async function countProjects(params: {
   groupBy?: string;
 }) {
   const where: any = {};
-  
+
   // **שימוש ב-normalizer**
   if (params.state && params.state !== 'all') {
     const normalizedState = normalizeProjectState(params.state);
@@ -610,8 +622,75 @@ export async function countProjects(params: {
     }));
   }
 
-  const count = await prisma.project.count({ where });
-  return { total: count };
+  // Use single source of truth for counting
+  // Only counts 4-digit projectNumbers as projects
+  const projectCount = await getProjectCount(where);
+  return { total: projectCount };
+}
+
+/**
+ * Count buildings in the system
+ * Buildings = entries with number suffix (e.g., 5324-03, 3414-A-04)
+ * Also includes single-building projects (4-digit with no children)
+ */
+export async function countBuildings(params: {
+  state?: string;
+  projectNumber?: string;
+}) {
+  const where: any = {};
+
+  if (params.state && params.state !== 'all') {
+    const normalizedState = normalizeProjectState(params.state);
+    if (normalizedState && normalizedState !== 'all') {
+      where.state = normalizedState;
+    }
+  }
+
+  // If specific project requested, count buildings under it
+  if (params.projectNumber) {
+    const count = await getBuildingCountForProject(params.projectNumber);
+    return { total: count, projectNumber: params.projectNumber };
+  }
+
+  // Otherwise count all buildings
+  const buildingCount = await getBuildingCount(where);
+  return { total: buildingCount };
+}
+
+/**
+ * Get combined project and building counts
+ */
+export async function getProjectBuildingCounts(params: {
+  state?: string;
+}) {
+  const where: any = {};
+
+  if (params.state && params.state !== 'all') {
+    const normalizedState = normalizeProjectState(params.state);
+    if (normalizedState && normalizedState !== 'all') {
+      where.state = normalizedState;
+    }
+  }
+
+  const { projectCount, buildingCount } = await getProjectAndBuildingCounts(where);
+  return {
+    projectCount,
+    buildingCount,
+    description: 'פרויקט = מספר 4 ספרות בלבד. מבנה = רשומת עלה עם סיומת מספרית או פרויקט יחיד ללא ילדים.'
+  };
+}
+
+/**
+ * Get hierarchy summary for a specific project
+ */
+export async function getProjectStructure(params: {
+  projectNumber: string;
+}) {
+  const summary = await getProjectHierarchySummary(params.projectNumber);
+  return {
+    ...summary,
+    description: `פרויקט ${params.projectNumber}: ${summary.zoneCount} אזורים, ${summary.buildingCount} מבנים`
+  };
 }
 
 export async function getUpcomingBirthdays(params: { days?: number }) {
@@ -1940,6 +2019,9 @@ export const functionMap: Record<string, Function> = {
   getProjectContacts,
   countEmployees,
   countProjects,
+  countBuildings,
+  getProjectBuildingCounts,
+  getProjectStructure,
   getUpcomingBirthdays,
   getChildrenBirthdays,
   searchAll,

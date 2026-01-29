@@ -1,11 +1,13 @@
 // /app/dashboard/vendors/page.tsx
-// Version: 20251221-080500
+// Version: 20260129-HIERARCHY-FIX
 // 4-step wizard: Project -> Organization -> Contact (single) -> Rate
+// Fix: Collapse/expand hierarchy matching Projects page
 
 'use client';
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronDown, ChevronLeft, FolderKanban, Building2, Layers } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -19,6 +21,20 @@ interface FlatProject {
   projectNumber: string;
   name: string;
   indent: number;
+}
+
+// Helper to get icon based on project type
+function getProjectIcon(project: Project) {
+  // Mega project (has zone children)
+  if (project.children?.some(c => /^\d{4}-[A-Z]$/.test(c.projectNumber))) {
+    return <Layers size={16} className="text-[#0a3161]" />;
+  }
+  // Building (has number suffix)
+  if (/^\d{4}-\d{2}$/.test(project.projectNumber) || /^\d{4}-[A-Z]-\d{2}$/.test(project.projectNumber)) {
+    return <Building2 size={16} className="text-[#0a3161]" />;
+  }
+  // Default project
+  return <FolderKanban size={16} className="text-[#0a3161]" />;
 }
 
 interface Organization {
@@ -81,6 +97,9 @@ export default function VendorsPage() {
   const [projectSearch, setProjectSearch] = useState('');
   const [orgSearch, setOrgSearch] = useState('');
   const [contactSearch, setContactSearch] = useState('');
+
+  // Collapse/expand state for project hierarchy
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
   // Flatten project hierarchy to include quarters and buildings
   const flatProjects: FlatProject[] = useMemo(() => {
@@ -299,11 +318,34 @@ export default function VendorsPage() {
     );
   };
 
-  // Filtered lists - use flattened projects with hierarchy
-  const filteredProjects = flatProjects.filter(p =>
-    p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
-    p.projectNumber.includes(projectSearch)
-  );
+  // Toggle project expansion
+  const toggleProjectExpand = (id: string) => {
+    const newExpanded = new Set(expandedProjects);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedProjects(newExpanded);
+  };
+
+  // Filter top-level projects (search applies to all levels)
+  const matchesSearch = (p: Project): boolean => {
+    return p.name.toLowerCase().includes(projectSearch.toLowerCase()) ||
+           p.projectNumber.includes(projectSearch);
+  };
+
+  // Check if project or any of its descendants match
+  const projectOrDescendantsMatch = (p: Project): boolean => {
+    if (matchesSearch(p)) return true;
+    if (p.children) {
+      return p.children.some(c => projectOrDescendantsMatch(c));
+    }
+    return false;
+  };
+
+  // Filtered top-level projects
+  const filteredProjects = projects.filter(p => projectOrDescendantsMatch(p));
 
   const filteredOrgs = organizations.filter(o =>
     o.name.toLowerCase().includes(orgSearch.toLowerCase())
@@ -312,6 +354,72 @@ export default function VendorsPage() {
   const filteredContacts = contacts.filter(c =>
     `${c.firstName} ${c.lastName}`.toLowerCase().includes(contactSearch.toLowerCase())
   );
+
+  // Render a single project row with expand/collapse
+  const renderProjectRow = (project: Project, depth: number = 0) => {
+    const hasChildren = project.children && project.children.length > 0;
+    const isExpanded = expandedProjects.has(project.id);
+    const childrenMatchSearch = hasChildren && project.children!.some(c => projectOrDescendantsMatch(c));
+
+    // If searching and this item doesn't match but has matching children, show it expanded
+    const shouldShowExpanded = projectSearch && childrenMatchSearch;
+    const effectivelyExpanded = isExpanded || shouldShowExpanded;
+
+    return (
+      <div key={project.id}>
+        <div
+          className={`flex items-center gap-3 p-3 border rounded-lg hover:bg-blue-50 transition-colors cursor-pointer ${
+            selectedProject?.id === project.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
+          } ${depth > 0 ? 'bg-gray-50/50' : ''}`}
+          style={{ marginRight: `${depth * 20}px` }}
+        >
+          {/* Expand/Collapse button */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (hasChildren) toggleProjectExpand(project.id);
+            }}
+            className="w-5 h-5 flex items-center justify-center"
+          >
+            {hasChildren ? (
+              effectivelyExpanded ? (
+                <ChevronDown size={16} className="text-gray-400 hover:text-[#0a3161]" />
+              ) : (
+                <ChevronLeft size={16} className="text-gray-400 hover:text-[#0a3161]" />
+              )
+            ) : (
+              <div className="w-4" />
+            )}
+          </div>
+
+          {/* Icon */}
+          <div>{getProjectIcon(project)}</div>
+
+          {/* Project info - clickable to select */}
+          <div
+            className="flex-1 text-right"
+            onClick={() => {
+              setSelectedProject(project);
+              setIsExternalProject(false);
+              setExternalProjectName('');
+              setStep(2);
+            }}
+          >
+            <div className="font-medium">{project.projectNumber} - {project.name}</div>
+          </div>
+        </div>
+
+        {/* Render children if expanded */}
+        {hasChildren && effectivelyExpanded && (
+          <div className="mt-1 space-y-1">
+            {project.children!
+              .filter(c => !projectSearch || projectOrDescendantsMatch(c))
+              .map(child => renderProjectRow(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const renderStep1 = () => (
     <div className="space-y-4">
@@ -400,27 +508,8 @@ export default function VendorsPage() {
             className="w-full px-4 py-2 border rounded-lg"
           />
 
-          <div className="grid gap-3 max-h-96 overflow-y-auto">
-            {filteredProjects.map(project => (
-              <button
-                key={project.id}
-                onClick={() => {
-                  setSelectedProject(project);
-                  setIsExternalProject(false);
-                  setExternalProjectName('');
-                  setStep(2);
-                }}
-                className={`p-4 border rounded-lg text-right hover:bg-blue-50 transition-colors ${
-                  selectedProject?.id === project.id ? 'border-blue-500 bg-blue-50' : 'border-gray-200'
-                }`}
-                style={{ marginRight: `${project.indent * 24}px` }}
-              >
-                <div className="font-medium">
-                  {project.indent > 0 && <span className="text-gray-400 mr-1">{'└'} </span>}
-                  {project.projectNumber} - {project.name}
-                </div>
-              </button>
-            ))}
+          <div className="space-y-2 max-h-[500px] overflow-y-auto">
+            {filteredProjects.map(project => renderProjectRow(project, 0))}
             {filteredProjects.length === 0 && (
               <div className="p-4 text-gray-500 text-center">לא נמצאו פרויקטים</div>
             )}
@@ -628,7 +717,7 @@ export default function VendorsPage() {
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
+    <div className="p-6 max-w-6xl mx-auto">
       <h1 className="text-2xl font-bold mb-6">דירוג ספקים ויועצים</h1>
       
       {/* Progress indicator */}
