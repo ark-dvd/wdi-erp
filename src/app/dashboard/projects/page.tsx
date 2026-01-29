@@ -1,12 +1,26 @@
 'use client'
 
-// Version: 20260116-061500
+// Version: 20260129-COUNTING-FIX
 // Fix: Sticky table header (moved to sticky section), Pagination (50 per page)
+// Fix: Use projectNumber-based counting for consistency
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Plus, Search, Eye, Edit, ChevronDown, ChevronLeft, ChevronUp, FolderKanban, Building2, Layers } from 'lucide-react'
+
+// ============ COUNTING PATTERNS (must match src/lib/project-counting.ts) ============
+const PROJECT_PATTERN = /^\d{4}$/
+const BUILDING_PATTERN = /^\d{4}-\d{2}$/
+const MEGA_BUILDING_PATTERN = /^\d{4}-[A-Z]-\d{2}$/
+
+function isProjectNumber(projectNumber: string): boolean {
+  return PROJECT_PATTERN.test(projectNumber)
+}
+
+function isBuildingNumber(projectNumber: string): boolean {
+  return BUILDING_PATTERN.test(projectNumber) || MEGA_BUILDING_PATTERN.test(projectNumber)
+}
 
 interface Project {
   id: string
@@ -85,19 +99,30 @@ export default function ProjectsPage() {
     setExpandedProjects(newExpanded)
   }
 
-  // Count projects and buildings (not quarters)
+  // Count projects and buildings based on projectNumber format
+  // PROJECT: exactly 4 digits (e.g., 1293, 3414)
+  // BUILDING: 4 digits + number suffix (e.g., 5324-03, 3414-A-04)
+  // ZONE: 4 digits + letter (e.g., 3414-A) - NOT counted
+  // Single-building project: 4 digits with no children - counts as BOTH project AND building
   const countProjectsAndBuildings = () => {
     let projectCount = 0
     let buildingCount = 0
 
     const countRecursive = (items: Project[]) => {
       items.forEach(item => {
-        if (item.level === 'project') {
+        if (isProjectNumber(item.projectNumber)) {
+          // This is a 4-digit project
           projectCount++
-        }
-        if (item.level === 'building') {
+          // If no children, also counts as a building (single-building project)
+          if (!item.children || item.children.length === 0) {
+            buildingCount++
+          }
+        } else if (isBuildingNumber(item.projectNumber)) {
+          // This is a building (has number suffix)
           buildingCount++
         }
+        // Zones (4 digits + letter only) are NOT counted
+
         if (item.children?.length > 0) {
           countRecursive(item.children)
         }

@@ -1,5 +1,6 @@
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { getProjectAndBuildingCounts } from '@/lib/project-counting'
 import Link from 'next/link'
 import {
   Users,
@@ -8,17 +9,19 @@ import {
   TrendingUp,
   AlertCircle,
   CheckCircle,
+  Building2,
 } from 'lucide-react'
 
 export default async function DashboardPage() {
   const session = await auth()
-  
+
   // קבלת סטטיסטיקות
-  const [employeeCount, projectCount, eventCount, activeProjects] = await Promise.all([
+  // Use single source of truth for project/building counts
+  const [employeeCount, { projectCount, buildingCount }, eventCount, { projectCount: activeProjects }] = await Promise.all([
     prisma.employee.count({ where: { status: 'פעיל' } }),
-    prisma.project.count(),
+    getProjectAndBuildingCounts(),
     prisma.projectEvent.count(),
-    prisma.project.count({ where: { state: 'פעיל' } }),
+    getProjectAndBuildingCounts({ state: 'פעיל' }),
   ])
 
   const stats = [
@@ -35,6 +38,13 @@ export default async function DashboardPage() {
       icon: FolderKanban,
       href: '/dashboard/projects',
       color: 'bg-green-500',
+    },
+    {
+      name: 'מבנים',
+      value: buildingCount,
+      icon: Building2,
+      href: '/dashboard/projects',
+      color: 'bg-teal-500',
     },
     {
       name: 'פרויקטים פעילים',
