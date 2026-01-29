@@ -55,9 +55,16 @@ export function ModulePermissionCard({ module, permissions, note }: ModulePermis
     )
   }
 
-  const getPermission = (action: string): Permission | undefined => {
+  const getPermission = (action: string, moduleKey: string): Permission | undefined => {
     // Case-insensitive match - DB stores UPPERCASE, UI uses lowercase
-    return permissions.find((p) => p.action.toLowerCase() === action.toLowerCase())
+    const found = permissions.find((p) => p.action.toLowerCase() === action.toLowerCase())
+
+    // Special case: Agent module uses QUERY action for "read" capability
+    if (!found && action.toLowerCase() === 'read' && moduleKey === 'agent') {
+      return permissions.find((p) => p.action.toLowerCase() === 'query')
+    }
+
+    return found
   }
 
   const hasAnyPermission = permissions.length > 0
@@ -68,7 +75,7 @@ export function ModulePermissionCard({ module, permissions, note }: ModulePermis
 
       <div className="grid grid-cols-2 gap-3">
         {OPERATIONS.map((op) => {
-          const permission = getPermission(op.key)
+          const permission = getPermission(op.key, module.key)
 
           // Special case: Agent doesn't have update/delete
           if (module.key === 'agent' && (op.key === 'update' || op.key === 'delete')) {
