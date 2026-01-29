@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, useRef, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Camera, Upload, X, FileText, Check } from 'lucide-react'
 
 const EVENT_TYPES = [
@@ -16,13 +16,15 @@ const EVENT_TYPES = [
   { value: 'אחר', color: 'bg-gray-100 text-gray-800 border-gray-300' },
 ]
 
-export default function MobileNewEventPage() {
+function MobileNewEventContent() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const preselectedProjectId = searchParams?.get('projectId') || null
   const fileInputRef = useRef<HTMLInputElement>(null)
   const cameraInputRef = useRef<HTMLInputElement>(null)
 
   const [projects, setProjects] = useState<any[]>([])
-  const [formProject, setFormProject] = useState('')
+  const [formProject, setFormProject] = useState(preselectedProjectId || '')
   const [formDate, setFormDate] = useState(new Date().toISOString().split('T')[0])
   const [formTime, setFormTime] = useState(new Date().toTimeString().slice(0, 5))
   const [formType, setFormType] = useState('')
@@ -338,5 +340,13 @@ export default function MobileNewEventPage() {
         </button>
       </form>
     </div>
+  )
+}
+
+export default function MobileNewEventPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[60vh] text-gray-500">טוען...</div>}>
+      <MobileNewEventContent />
+    </Suspense>
   )
 }
