@@ -612,7 +612,7 @@ export default function NewProjectPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#3a3a3d]">הוספת מבנה</h1>
             <p className="text-sm text-[#8f8f96]">
-              לפרויקט: {parentProject.projectNumber} - {parentProject.name}
+              לפרויקט: <span dir="ltr">{parentProject.projectNumber}</span> - {parentProject.name}
             </p>
           </div>
         </div>
@@ -790,7 +790,7 @@ export default function NewProjectPage() {
           <div>
             <h1 className="text-2xl font-bold text-[#3a3a3d]">הוספת אזור/רובע</h1>
             <p className="text-sm text-[#8f8f96]">
-              לפרויקט: {parentProject.projectNumber} - {parentProject.name}
+              לפרויקט: <span dir="ltr">{parentProject.projectNumber}</span> - {parentProject.name}
             </p>
           </div>
         </div>

@@ -221,7 +221,7 @@ export default function MobileEventsPage() {
                 </div>
                 
                 <div className="text-sm font-medium text-[#1e3a5f] mb-1">
-                  #{event.project?.projectNumber} {getProjectName(event.project)}
+                  <span dir="ltr">#{event.project?.projectNumber}</span> {getProjectName(event.project)}
                 </div>
                 
                 <p className="text-sm text-gray-600 line-clamp-2 mb-2">

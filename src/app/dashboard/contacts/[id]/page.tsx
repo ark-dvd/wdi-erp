@@ -210,7 +210,7 @@ export default function ContactViewPage() {
                   {activeProjects.map(cp => (
                     <Link key={cp.id} href={`/dashboard/projects/${cp.project.id}`} className="flex items-center gap-4 p-4 hover:bg-[#f5f6f8] transition-colors">
                       <div className="w-10 h-10 bg-[#0a3161]/10 rounded-full flex items-center justify-center"><FolderKanban size={20} className="text-[#0a3161]" /></div>
-                      <div className="flex-1"><div className="font-medium text-[#0a3161]">{cp.project.name}</div><div className="text-sm text-[#8f8f96]">#{cp.project.projectNumber}{cp.roleInProject && ` • ${cp.roleInProject}`}</div></div>
+                      <div className="flex-1"><div className="font-medium text-[#0a3161]">{cp.project.name}</div><div className="text-sm text-[#8f8f96]"><span dir="ltr">#{cp.project.projectNumber}</span>{cp.roleInProject && ` • ${cp.roleInProject}`}</div></div>
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusClass(cp.status)}`}>{cp.status}</span>
                     </Link>
                   ))}
@@ -224,7 +224,7 @@ export default function ContactViewPage() {
                   {historicalProjects.map(cp => (
                     <Link key={cp.id} href={`/dashboard/projects/${cp.project.id}`} className="flex items-center gap-4 p-4 hover:bg-[#f5f6f8] transition-colors opacity-70">
                       <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center"><FolderKanban size={20} className="text-gray-500" /></div>
-                      <div className="flex-1"><div className="font-medium text-[#3a3a3d]">{cp.project.name}</div><div className="text-sm text-[#8f8f96]">#{cp.project.projectNumber}{cp.roleInProject && ` • ${cp.roleInProject}`}</div></div>
+                      <div className="flex-1"><div className="font-medium text-[#3a3a3d]">{cp.project.name}</div><div className="text-sm text-[#8f8f96]"><span dir="ltr">#{cp.project.projectNumber}</span>{cp.roleInProject && ` • ${cp.roleInProject}`}</div></div>
                       <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${getStatusClass(cp.status)}`}>{cp.status}</span>
                     </Link>
                   ))}
@@ -281,7 +281,7 @@ export default function ContactViewPage() {
                           </div>
                           <div className="text-sm text-[#3a3a3d]">
                             {review.project ? (
-                              <>#{review.project.projectNumber} {review.project.name}</>
+                              <><span dir="ltr">#{review.project.projectNumber}</span> {review.project.name}</>
                             ) : (
                               <span className="text-orange-600">{review.externalProjectName} (חיצוני)</span>
                             )}

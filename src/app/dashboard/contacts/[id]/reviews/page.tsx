@@ -211,7 +211,7 @@ export default function ContactReviewsPage() {
                         className="text-blue-600 hover:underline font-medium"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        #{review.vendorReview.project.projectNumber} {review.vendorReview.project.name}
+                        <span dir="ltr">#{review.vendorReview.project.projectNumber}</span> {review.vendorReview.project.name}
                       </Link>
                     ) : (
                       <span className="text-orange-600 font-medium">

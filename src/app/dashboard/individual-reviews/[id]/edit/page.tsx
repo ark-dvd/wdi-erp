@@ -214,7 +214,7 @@ export default function EditIndividualReviewPage() {
           <div>
             <span className="text-gray-500">פרויקט:</span>
             {review.project ? (
-              <span className="mr-2 font-medium">#{review.project.projectNumber} {review.project.name}</span>
+              <span className="mr-2 font-medium"><span dir="ltr">#{review.project.projectNumber}</span> {review.project.name}</span>
             ) : (
               <span className="mr-2 font-medium text-orange-600">{review.externalProjectName} (חיצוני)</span>
             )}

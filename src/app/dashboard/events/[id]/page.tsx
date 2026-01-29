@@ -107,7 +107,7 @@ export default function EventViewPage() {
           <div>
             <h1 className="text-2xl font-bold text-gray-800">פרטי אירוע</h1>
             <Link href={`/dashboard/projects/${event.project?.id}`} className="text-[#0a3161] hover:underline">
-              #{event.project?.projectNumber} - {event.project?.name}
+              <span dir="ltr">#{event.project?.projectNumber}</span> - {event.project?.name}
             </Link>
           </div>
         </div>

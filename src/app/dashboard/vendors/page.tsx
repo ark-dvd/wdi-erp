@@ -380,7 +380,7 @@ export default function VendorsPage() {
               setStep(2);
             }}
           >
-            <div className="font-medium">{project.projectNumber} - {project.name}</div>
+            <div className="font-medium"><span dir="ltr">#{project.projectNumber}</span> - {project.name}</div>
           </div>
         </div>
 
@@ -497,7 +497,7 @@ export default function VendorsPage() {
   const renderStep2 = () => (
     <div className="space-y-4">
       <h2 className="text-xl font-semibold">שלב 2: בחירת ארגון</h2>
-      <p className="text-gray-600">פרויקט: {selectedProject?.projectNumber} - {selectedProject?.name}</p>
+      <p className="text-gray-600">פרויקט: <span dir="ltr">{selectedProject?.projectNumber}</span> - {selectedProject?.name}</p>
       
       <input
         type="text"
@@ -631,7 +631,7 @@ export default function VendorsPage() {
           פרויקט: {isExternalProject ? (
             <span className="text-orange-600 font-medium">{externalProjectName} (חיצוני)</span>
           ) : (
-            selectedProject?.projectNumber
+            <span dir="ltr">{selectedProject?.projectNumber}</span>
           )} | ארגון: {selectedOrg?.name}
         </p>
         <p className="text-sm text-orange-600">* יש לדרג לפחות 6 קריטריונים מתוך 12 (לחיצה על אותו כוכב מאפסת)</p>

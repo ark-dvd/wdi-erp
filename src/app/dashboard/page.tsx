@@ -140,7 +140,7 @@ export default async function DashboardPage() {
                     {event.description}
                   </p>
                   <p className="text-xs text-gray-500">
-                    {event.project.name} ({event.project.projectNumber})
+                    {event.project.name} (<span dir="ltr">{event.project.projectNumber}</span>)
                   </p>
                 </div>
                 <span className="text-xs text-gray-400">

@@ -187,7 +187,7 @@ export default function MobileNewEventPage() {
             <option value="">בחר פרויקט</option>
             {flatProjects.map(p => (
               <option key={p.id} value={p.id}>
-                {'  '.repeat(p.indent)}#{p.number} - {p.name}
+                {'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}
               </option>
             ))}
           </select>

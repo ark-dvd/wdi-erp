@@ -198,7 +198,7 @@ export default function OrganizationViewPage() {
                           </div>
                           <div className="text-sm text-[#3a3a3d]">
                             {review.project ? (
-                              <>#{review.project.projectNumber} {review.project.name}</>
+                              <><span dir="ltr">#{review.project.projectNumber}</span> {review.project.name}</>
                             ) : (
                               <span className="text-orange-600">{review.externalProjectName} (חיצוני)</span>
                             )}

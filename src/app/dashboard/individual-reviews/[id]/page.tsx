@@ -256,7 +256,7 @@ export default function IndividualReviewPage() {
                 href={`/dashboard/projects/${review.project.id}`}
                 className="text-[#0a3161] hover:underline font-medium"
               >
-                #{review.project.projectNumber} {review.project.name}
+                <span dir="ltr">#{review.project.projectNumber}</span> {review.project.name}
               </Link>
             ) : (
               <span className="text-orange-600 font-medium">

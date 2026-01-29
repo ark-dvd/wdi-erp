@@ -270,7 +270,7 @@ function EventsContent() {
                 <select value={formProject} onChange={(e) => setFormProject(e.target.value)} className="w-full p-2 border rounded-lg" required>
                   <option value="">בחר פרויקט</option>
                   {flatProjects.map(p => (
-                    <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}#{p.number} - {p.name}</option>
+                    <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}</option>
                   ))}
                 </select>
               </div>
@@ -347,7 +347,7 @@ function EventsContent() {
               <select value={selectedProject} onChange={(e) => setSelectedProject(e.target.value)} className="w-full p-2 border border-gray-200 rounded-lg">
                 <option value="">כל הפרויקטים</option>
                 {flatProjects.map(p => (
-                  <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}#{p.number} - {p.name}</option>
+                  <option key={p.id} value={p.id}>{'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}</option>
                 ))}
               </select>
             </div>

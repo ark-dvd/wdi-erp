@@ -289,7 +289,7 @@ export default function EditProjectPage() {
         </Link>
         <div>
           <h1 className="text-2xl font-bold text-[#3a3a3d]">עריכת פרויקט</h1>
-          <p className="text-[#8f8f96]">{project.projectNumber} - {project.name}</p>
+          <p className="text-[#8f8f96]"><span dir="ltr">{project.projectNumber}</span> - {project.name}</p>
         </div>
       </div>
 

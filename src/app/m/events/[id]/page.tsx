@@ -292,7 +292,7 @@ export default function MobileEventViewPage() {
         <div className="bg-white rounded-xl border border-gray-200 p-4">
           <div className="text-xs text-gray-500 mb-1">פרויקט</div>
           <div className="font-medium text-[#1e3a5f]">
-            #{event.project?.projectNumber} {getProjectName(event.project)}
+            <span dir="ltr">#{event.project?.projectNumber}</span> {getProjectName(event.project)}
           </div>
         </div>
 
