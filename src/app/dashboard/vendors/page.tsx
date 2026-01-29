@@ -16,13 +16,6 @@ interface Project {
   children?: Project[];
 }
 
-interface FlatProject {
-  id: string;
-  projectNumber: string;
-  name: string;
-  indent: number;
-}
-
 // Helper to get icon based on project type
 function getProjectIcon(project: Project) {
   // Mega project (has zone children)
@@ -101,25 +94,6 @@ export default function VendorsPage() {
   // Collapse/expand state for project hierarchy
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
-  // Flatten project hierarchy to include quarters and buildings
-  const flatProjects: FlatProject[] = useMemo(() => {
-    const result: FlatProject[] = [];
-    projects.forEach(p => {
-      result.push({ id: p.id, projectNumber: p.projectNumber, name: p.name, indent: 0 });
-      if (p.children) {
-        p.children.forEach((c: Project) => {
-          result.push({ id: c.id, projectNumber: c.projectNumber, name: c.name, indent: 1 });
-          if (c.children) {
-            c.children.forEach((b: Project) => {
-              result.push({ id: b.id, projectNumber: b.projectNumber, name: b.name, indent: 2 });
-            });
-          }
-        });
-      }
-    });
-    return result;
-  }, [projects]);
-
   useEffect(() => {
     fetchProjects();
     fetchAllOrganizations();
@@ -135,7 +109,8 @@ export default function VendorsPage() {
   const fetchProjects = async () => {
     setLoading(true);
     try {
-      const res = await fetch('/api/projects?state=פעיל');
+      // level=main gets proper hierarchy (top-level projects with nested children)
+      const res = await fetch('/api/projects?state=פעיל&level=main');
       const data = await res.json();
       // MAYBACH: Handle paginated response format { items: [...], pagination: {...} }
       setProjects(data.items || (Array.isArray(data) ? data : []));

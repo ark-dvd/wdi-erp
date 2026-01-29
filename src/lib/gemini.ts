@@ -119,13 +119,45 @@ export const agentFunctions: any[] = [
   },
   {
     name: 'countProjects',
-    description: 'ספירת פרויקטים',
+    description: 'ספירת פרויקטים בלבד (4 ספרות). לספירה משולבת של פרויקטים ומבנים - השתמש ב-getProjectBuildingCounts',
     parameters: {
       type: 'OBJECT',
       properties: {
-        state: { type: 'STRING' },
+        state: { type: 'STRING', description: 'מצב: פעיל, הושלם, מושהה, בוטל, או all' },
         groupBy: { type: 'STRING', description: 'קיבוץ: category, phase, state' },
       },
+    },
+  },
+  {
+    name: 'countBuildings',
+    description: 'ספירת מבנים בלבד. מבנה = רשומה עם סיומת מספרית (5324-03, 3414-A-04) או פרויקט 4 ספרות ללא ילדים',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        state: { type: 'STRING', description: 'מצב: פעיל, הושלם, מושהה, בוטל, או all' },
+        projectNumber: { type: 'STRING', description: 'מספר פרויקט לספירת מבנים תחתיו (אופציונלי)' },
+      },
+    },
+  },
+  {
+    name: 'getProjectBuildingCounts',
+    description: 'ספירה משולבת של פרויקטים ומבנים - השתמש בזה לשאלות "כמה פרויקטים ומבנים יש?"',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        state: { type: 'STRING', description: 'מצב: פעיל, הושלם, מושהה, בוטל, או all' },
+      },
+    },
+  },
+  {
+    name: 'getProjectStructure',
+    description: 'מבנה היררכי של פרויקט ספציפי - כמה אזורים ומבנים יש לו',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        projectNumber: { type: 'STRING', description: 'מספר פרויקט (4 ספרות)' },
+      },
+      required: ['projectNumber'],
     },
   },
   {
@@ -680,7 +712,11 @@ export function getGeminiModel() {
 - **getEmployeesWithEducation** - לשאלות על מהנדסים, הנדסאים, תארים, הכשרות
 
 ### פרויקטים:
-- getProjects, getProjectById, countProjects, getProjectsStats
+- getProjects, getProjectById, getProjectsStats
+- **countProjects** - ספירת פרויקטים בלבד (4 ספרות)
+- **countBuildings** - ספירת מבנים בלבד
+- **getProjectBuildingCounts** - ספירה משולבת (לשאלות "כמה פרויקטים ומבנים?")
+- **getProjectStructure** - מבנה היררכי של פרויקט ספציפי
 - **getProjectsByDomain** - פרויקטים לפי תחום (בטחוני/מסחרי/תעשייתי)
 - getProjectEvents, getProjectContacts, getProjectLeads
 
@@ -729,6 +765,16 @@ export function getGeminiModel() {
 
 ### כללי:
 - searchAll
+
+## כללים חשובים לספירת פרויקטים ומבנים:
+**אל תספור את אורך רשימת getProjects כדי לענות על שאלות ספירה!**
+- לשאלה "כמה פרויקטים יש?" - השתמש ב-**countProjects** או **getProjectBuildingCounts**
+- לשאלה "כמה מבנים יש?" - השתמש ב-**countBuildings** או **getProjectBuildingCounts**
+- לשאלה "כמה פרויקטים ומבנים?" - השתמש ב-**getProjectBuildingCounts**
+- פרויקט = מספר בן 4 ספרות בלבד (1704, 3414)
+- מבנה = סיומת מספרית (5324-03, 3414-A-04) או פרויקט 4 ספרות ללא ילדים
+- אזור = 4 ספרות + מקף + אות (3414-A) - אזורים לא נספרים!
+- הצג תמיד בפורמט: "X פרויקטים, Y מבנים"
 
 ## כללים:
 - לשאלות על תוקף ביטוח/רישיון - השתמש ב-getVehicleDocuments או getVehiclesWithExpiringDocuments
