@@ -1,9 +1,10 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import { useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Upload, X, FileText } from 'lucide-react'
+import ProjectSelector from '@/components/ProjectSelector'
 
 const EVENT_TYPES = [
   { value: 'אתגר', label: 'אתגר' },
@@ -22,7 +23,6 @@ function NewEventContent() {
   const searchParams = useSearchParams()
   const preselectedProjectId = searchParams?.get('projectId') || null
 
-  const [projects, setProjects] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [form, setForm] = useState({
     projectId: preselectedProjectId || '',
@@ -31,37 +31,6 @@ function NewEventContent() {
     description: '',
   })
   const [files, setFiles] = useState<{ file: File; preview?: string }[]>([])
-
-  useEffect(() => {
-    fetchProjects()
-  }, [])
-
-  const fetchProjects = async () => {
-    try {
-      const res = await fetch('/api/projects')
-      if (res.ok) {
-        const data = await res.json()
-        setProjects(data.items || (Array.isArray(data) ? data : []))
-      }
-    } catch (error) {
-      console.error('Error:', error)
-    }
-  }
-
-  const flatProjects: { id: string; name: string; number: string; indent: number }[] = []
-  projects.forEach(p => {
-    flatProjects.push({ id: p.id, name: p.name, number: p.projectNumber, indent: 0 })
-    if (p.children) {
-      p.children.forEach((c: any) => {
-        flatProjects.push({ id: c.id, name: c.name, number: c.projectNumber, indent: 1 })
-        if (c.children) {
-          c.children.forEach((b: any) => {
-            flatProjects.push({ id: b.id, name: b.name, number: b.projectNumber, indent: 2 })
-          })
-        }
-      })
-    }
-  })
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFiles = Array.from(e.target.files || [])
@@ -185,19 +154,11 @@ function NewEventContent() {
       <form onSubmit={handleSubmit} className="card space-y-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">פרויקט *</label>
-          <select
+          <ProjectSelector
             value={form.projectId}
-            onChange={(e) => setForm({ ...form, projectId: e.target.value })}
-            className="w-full p-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            onChange={(value) => setForm({ ...form, projectId: value })}
             required
-          >
-            <option value="">בחר פרויקט</option>
-            {flatProjects.map(p => (
-              <option key={p.id} value={p.id}>
-                {'  '.repeat(p.indent)}{'\u200E'}#{p.number} - {p.name}
-              </option>
-            ))}
-          </select>
+          />
         </div>
 
         <div>
