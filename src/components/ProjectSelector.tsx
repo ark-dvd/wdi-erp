@@ -1,22 +1,20 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
-import { ChevronDown, Search, X, ChevronRight } from 'lucide-react'
+// Version: 20260129-VENDOR-MATCH
+// Rewritten to match Vendors page project selection exactly:
+// - Same API endpoint (?state=פעיל&level=main)
+// - Same hierarchy with collapse/expand (default: collapsed)
+// - Same icons (Layers, Building2, FolderKanban)
+// - Same visual design
+
+import { useState, useEffect, useRef } from 'react'
+import { ChevronDown, ChevronLeft, Search, X, FolderKanban, Building2, Layers } from 'lucide-react'
 
 interface Project {
   id: string
   name: string
   projectNumber: string
   children?: Project[]
-}
-
-interface FlatProject {
-  id: string
-  name: string
-  number: string
-  indent: number
-  hasChildren: boolean
-  parentId?: string
 }
 
 interface ProjectSelectorProps {
@@ -29,23 +27,30 @@ interface ProjectSelectorProps {
   className?: string
 }
 
-function flattenProjects(projects: Project[], indent = 0, parentId?: string): FlatProject[] {
-  const result: FlatProject[] = []
+// Helper to get icon based on project type (matching vendors page)
+function getProjectIcon(project: Project) {
+  // Mega project (has zone children)
+  if (project.children?.some(c => /^\d{4}-[A-Z]$/.test(c.projectNumber))) {
+    return <Layers size={16} className="text-[#0a3161]" />
+  }
+  // Building (has number suffix)
+  if (/^\d{4}-\d{2}$/.test(project.projectNumber) || /^\d{4}-[A-Z]-\d{2}$/.test(project.projectNumber)) {
+    return <Building2 size={16} className="text-[#0a3161]" />
+  }
+  // Default project
+  return <FolderKanban size={16} className="text-[#0a3161]" />
+}
+
+// Find a project by ID in the hierarchy
+function findProjectById(projects: Project[], id: string): Project | null {
   for (const p of projects) {
-    const hasChildren = !!(p.children && p.children.length > 0)
-    result.push({
-      id: p.id,
-      name: p.name,
-      number: p.projectNumber,
-      indent,
-      hasChildren,
-      parentId
-    })
-    if (hasChildren) {
-      result.push(...flattenProjects(p.children!, indent + 1, p.id))
+    if (p.id === id) return p
+    if (p.children) {
+      const found = findProjectById(p.children, id)
+      if (found) return found
     }
   }
-  return result
+  return null
 }
 
 export function ProjectSelector({
@@ -60,7 +65,9 @@ export function ProjectSelector({
   const [projects, setProjects] = useState<Project[]>([])
   const [isOpen, setIsOpen] = useState(false)
   const [search, setSearch] = useState('')
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(new Set())
+  const [loading, setLoading] = useState(true)
+  // Default: all collapsed (empty set = nothing expanded)
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set())
   const containerRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -79,64 +86,125 @@ export function ProjectSelector({
   }, [])
 
   const fetchProjects = async () => {
+    setLoading(true)
     try {
-      const res = await fetch('/api/projects')
+      // CRITICAL: Same endpoint as vendors page - gets hierarchy with children
+      const res = await fetch('/api/projects?state=פעיל&level=main')
       if (res.ok) {
         const data = await res.json()
+        // MAYBACH: Handle paginated response format
         setProjects(data.items || (Array.isArray(data) ? data : []))
       }
     } catch (error) {
       console.error('Error fetching projects:', error)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const flatProjects = flattenProjects(projects)
-
-  // Filter by search
-  const filteredProjects = search
-    ? flatProjects.filter(p =>
-        p.name.toLowerCase().includes(search.toLowerCase()) ||
-        p.number.toLowerCase().includes(search.toLowerCase())
-      )
-    : flatProjects
-
-  // Apply collapse logic (only when not searching)
-  const visibleProjects = search
-    ? filteredProjects
-    : filteredProjects.filter(p => {
-        if (p.indent === 0) return true
-        // Check if any ancestor is collapsed
-        let current = p
-        while (current.parentId) {
-          if (collapsedIds.has(current.parentId)) return false
-          current = flatProjects.find(fp => fp.id === current.parentId)!
-        }
-        return true
-      })
-
-  const toggleCollapse = (id: string, e: React.MouseEvent) => {
+  // Toggle project expansion
+  const toggleExpand = (id: string, e: React.MouseEvent) => {
     e.stopPropagation()
-    setCollapsedIds(prev => {
-      const next = new Set(prev)
-      if (next.has(id)) {
-        next.delete(id)
-      } else {
-        next.add(id)
-      }
-      return next
-    })
+    const newExpanded = new Set(expandedProjects)
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id)
+    } else {
+      newExpanded.add(id)
+    }
+    setExpandedProjects(newExpanded)
   }
 
-  const handleSelect = useCallback((projectId: string) => {
+  // Search matching logic (matches vendors page)
+  const matchesSearch = (p: Project): boolean => {
+    return p.name.toLowerCase().includes(search.toLowerCase()) ||
+           p.projectNumber.toLowerCase().includes(search.toLowerCase())
+  }
+
+  // Check if project or any descendants match search
+  const projectOrDescendantsMatch = (p: Project): boolean => {
+    if (matchesSearch(p)) return true
+    if (p.children) {
+      return p.children.some(c => projectOrDescendantsMatch(c))
+    }
+    return false
+  }
+
+  // Filtered top-level projects
+  const filteredProjects = projects.filter(p => projectOrDescendantsMatch(p))
+
+  const handleSelect = (projectId: string) => {
     onChange(projectId)
     setIsOpen(false)
     setSearch('')
-  }, [onChange])
+  }
 
-  const selectedProject = flatProjects.find(p => p.id === value)
+  const selectedProject = value ? findProjectById(projects, value) : null
   const displayValue = selectedProject
-    ? `#${selectedProject.number} - ${selectedProject.name}`
+    ? `#${selectedProject.projectNumber} - ${selectedProject.name}`
     : (allowAll && !value ? allLabel : placeholder)
+
+  // Render a single project row with expand/collapse (matching vendors page exactly)
+  const renderProjectRow = (project: Project, depth: number = 0) => {
+    const hasChildren = project.children && project.children.length > 0
+    const isExpanded = expandedProjects.has(project.id)
+    const childrenMatchSearch = hasChildren && project.children!.some(c => projectOrDescendantsMatch(c))
+
+    // If searching and this item doesn't match but has matching children, show it expanded
+    const shouldShowExpanded = search && childrenMatchSearch
+    const effectivelyExpanded = isExpanded || shouldShowExpanded
+
+    return (
+      <div key={project.id}>
+        <div
+          className={`flex items-center gap-2 p-2 hover:bg-blue-50 transition-colors cursor-pointer ${
+            value === project.id ? 'bg-blue-50 text-blue-700' : ''
+          } ${depth > 0 ? 'bg-gray-50/50' : ''}`}
+          style={{ paddingRight: `${8 + depth * 16}px` }}
+        >
+          {/* Expand/Collapse button */}
+          <div
+            onClick={(e) => {
+              e.stopPropagation()
+              if (hasChildren) toggleExpand(project.id, e)
+            }}
+            className="w-5 h-5 flex items-center justify-center flex-shrink-0"
+          >
+            {hasChildren ? (
+              effectivelyExpanded ? (
+                <ChevronDown size={14} className="text-gray-400 hover:text-[#0a3161]" />
+              ) : (
+                <ChevronLeft size={14} className="text-gray-400 hover:text-[#0a3161]" />
+              )
+            ) : (
+              <div className="w-4" />
+            )}
+          </div>
+
+          {/* Icon */}
+          <div className="flex-shrink-0">{getProjectIcon(project)}</div>
+
+          {/* Project info - clickable to select */}
+          <div
+            className="flex-1 text-right truncate"
+            onClick={() => handleSelect(project.id)}
+          >
+            <span dir="ltr" className="text-gray-500">#{project.projectNumber}</span>
+            {' - '}
+            <span>{project.name}</span>
+          </div>
+        </div>
+
+        {/* Render children if expanded */}
+        {hasChildren && effectivelyExpanded && (
+          <div>
+            {project.children!
+              .filter(c => !search || projectOrDescendantsMatch(c))
+              .map(child => renderProjectRow(child, depth + 1))}
+          </div>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div ref={containerRef} className={`relative ${className}`}>
@@ -151,18 +219,15 @@ export function ProjectSelector({
           !value && !allowAll ? 'text-gray-500' : ''
         }`}
       >
-        <span className="truncate" dir="ltr">
-          {value ? `#${selectedProject?.number}` : ''}
+        <span className="truncate flex-1 text-right">
+          {displayValue}
         </span>
-        <span className="truncate flex-1 text-right mr-1">
-          {value ? ` - ${selectedProject?.name}` : displayValue}
-        </span>
-        <ChevronDown size={16} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={16} className={`text-gray-400 transition-transform flex-shrink-0 mr-2 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
 
       {/* Dropdown */}
       {isOpen && (
-        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-hidden">
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-96 overflow-hidden">
           {/* Search input */}
           <div className="p-2 border-b border-gray-100">
             <div className="relative">
@@ -189,54 +254,32 @@ export function ProjectSelector({
           </div>
 
           {/* Options list */}
-          <div className="overflow-y-auto max-h-60">
+          <div className="overflow-y-auto max-h-80">
             {allowAll && (
               <button
                 type="button"
                 onClick={() => handleSelect('')}
-                className={`w-full px-3 py-2 text-right hover:bg-gray-50 ${
+                className={`w-full px-3 py-2 text-right hover:bg-gray-50 border-b border-gray-100 ${
                   !value ? 'bg-blue-50 text-blue-700' : ''
                 }`}
               >
                 {allLabel}
               </button>
             )}
-            {visibleProjects.length === 0 && (
+
+            {loading ? (
+              <div className="px-3 py-4 text-center text-gray-500 text-sm">
+                טוען פרויקטים...
+              </div>
+            ) : filteredProjects.length === 0 ? (
               <div className="px-3 py-4 text-center text-gray-500 text-sm">
                 לא נמצאו פרויקטים
               </div>
+            ) : (
+              <div className="py-1">
+                {filteredProjects.map(project => renderProjectRow(project, 0))}
+              </div>
             )}
-            {visibleProjects.map(p => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => handleSelect(p.id)}
-                className={`w-full px-3 py-2 text-right hover:bg-gray-50 flex items-center ${
-                  p.id === value ? 'bg-blue-50 text-blue-700' : ''
-                }`}
-                style={{ paddingRight: `${12 + p.indent * 16}px` }}
-              >
-                {!search && p.hasChildren && (
-                  <button
-                    type="button"
-                    onClick={(e) => toggleCollapse(p.id, e)}
-                    className="mr-1 p-0.5 hover:bg-gray-200 rounded"
-                  >
-                    <ChevronRight
-                      size={14}
-                      className={`text-gray-400 transition-transform ${
-                        collapsedIds.has(p.id) ? '' : 'rotate-90'
-                      }`}
-                    />
-                  </button>
-                )}
-                <span className="truncate">
-                  <span dir="ltr" className="text-gray-500">#{p.number}</span>
-                  {' - '}
-                  {p.name}
-                </span>
-              </button>
-            ))}
           </div>
         </div>
       )}
