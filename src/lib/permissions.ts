@@ -273,16 +273,9 @@ async function checkProjectAssignment(
     return true
   }
 
-  // Check visibility grants
-  const visibilityGrant = await prisma.visibilityGrant.findFirst({
-    where: {
-      granteeId: userId,
-      projectId,
-      isActive: true,
-    },
-  })
-
-  return !!visibilityGrant
+  // Phase 1 / FP-006: Visibility Grants removed - assignment is ONLY through
+  // lead, manager, or coordinator roles. No VG fallback.
+  return false
 }
 
 // ================================================
@@ -475,12 +468,7 @@ async function getAssignedProjectIds(
     projectIds.push(...coordinatedProjects.map(p => p.projectId))
   }
 
-  // Projects with visibility grants
-  const visibilityGrants = await prisma.visibilityGrant.findMany({
-    where: { granteeId: userId, isActive: true },
-    select: { projectId: true },
-  })
-  projectIds.push(...visibilityGrants.map(g => g.projectId))
+  // Phase 1 / FP-006: Visibility Grants removed - no VG-based project access
 
   // Remove duplicates
   return Array.from(new Set(projectIds))

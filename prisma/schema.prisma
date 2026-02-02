@@ -49,9 +49,6 @@ model User {
   mergesUndone      MergeHistory[] @relation("MergeHistoryUndoer")
   // RBAC v1: Domain assignments
   domainAssignments UserDomainAssignment[]
-  // RBAC v1: Visibility grants
-  visibilityGrantsReceived VisibilityGrant[] @relation("VisibilityGrantee")
-  visibilityGrantsGiven    VisibilityGrant[] @relation("VisibilityGrantor")
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
   activityLogs  ActivityLog[] @relation("UserActivityLogs")
@@ -144,25 +141,6 @@ model UserDomainAssignment {
   @@index([domainId])
 }
 
-// RBAC v1: Visibility grants per DOC-013 §8
-model VisibilityGrant {
-  id          String    @id @default(cuid())
-  grantee     User      @relation("VisibilityGrantee", fields: [granteeId], references: [id])
-  granteeId   String
-  project     Project   @relation(fields: [projectId], references: [id])
-  projectId   String
-  grantor     User      @relation("VisibilityGrantor", fields: [grantorId], references: [id])
-  grantorId   String
-  reason      String?   // Optional justification
-  isActive    Boolean   @default(true)
-  revokedAt   DateTime?
-  revokedBy   String?
-  createdAt   DateTime  @default(now())
-
-  @@unique([granteeId, projectId])  // One grant per user per project
-  @@index([granteeId, isActive])
-  @@index([projectId])
-}
 
 // ============ HR MODULE ============
 
@@ -254,8 +232,6 @@ model Project {
   // RBAC v1: Domain assignment for DOMAIN scope
   domainId        String?
   domain          Domain?   @relation("ProjectDomain", fields: [domainId], references: [id])
-  // RBAC v1: Visibility grants
-  visibilityGrants VisibilityGrant[]
   updatedById     String?
   updatedBy       User?     @relation("ProjectUpdatedBy", fields: [updatedById], references: [id])
   createdAt       DateTime  @default(now())

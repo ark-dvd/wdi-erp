@@ -144,7 +144,7 @@ export interface UserAuthContext {
   permissions: { module: string; action: string; scope: string }[]
   assignedDomainIds: string[]
   assignedProjectIds: string[]
-  visibilityGrantProjectIds: string[]
+  // Phase 1 / FP-006: visibilityGrantProjectIds removed - VG pattern rejected in RBAC v2
 }
 
 /**
@@ -173,10 +173,7 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
         where: { domain: { isActive: true } },
         select: { domainId: true },
       },
-      visibilityGrantsReceived: {
-        where: { isActive: true },
-        select: { projectId: true },
-      },
+      // Phase 1 / FP-006: visibilityGrantsReceived removed - VG pattern rejected
     },
   })
 
@@ -225,7 +222,7 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
     permissions,
     assignedDomainIds: user.domainAssignments.map((d) => d.domainId),
     assignedProjectIds,
-    visibilityGrantProjectIds: user.visibilityGrantsReceived.map((g) => g.projectId),
+    // Phase 1 / FP-006: visibilityGrantProjectIds removed
   }
 }
 
@@ -307,20 +304,17 @@ function checkEntityWithinScope(
       }
 
     case 'ASSIGNED':
-      // Entity must be in assigned projects OR visibility grants (for READ only)
-      const allProjectIds = [
-        ...context.assignedProjectIds,
-        ...context.visibilityGrantProjectIds,
-      ]
-      if (allProjectIds.length === 0) {
+      // Phase 1 / FP-006: Entity must be in assigned projects ONLY (no VG)
+      // ASSIGNED scope per DOC-016 §4.2: authoritative assignment records only
+      if (context.assignedProjectIds.length === 0) {
         return { authorized: false }
       }
-      if (targetEntity?.projectId && !allProjectIds.includes(targetEntity.projectId)) {
+      if (targetEntity?.projectId && !context.assignedProjectIds.includes(targetEntity.projectId)) {
         return { authorized: false }
       }
       return {
         authorized: true,
-        scopeFilter: { projectIds: allProjectIds },
+        scopeFilter: { projectIds: context.assignedProjectIds },
       }
 
     case 'MAIN_PAGE':
@@ -356,29 +350,14 @@ function checkEntityWithinScope(
 }
 
 // ================================================
-// VISIBILITY GRANT CONSTRAINTS (DOC-013 §8)
+// Phase 1 / FP-006: Visibility Grant section removed
+// Visibility Grants are an explicitly rejected RBAC pattern in v2
+// Read scope is built into roles per DOC-016 FP-006
 // ================================================
 
 /**
- * Check if operation is allowed through visibility grant
- * Visibility grants only enable READ operations
- */
-export function isVisibilityGrantAllowed(
-  operation: Operation,
-  projectId: string,
-  context: UserAuthContext
-): boolean {
-  // V-001: Visibility grants are read-only
-  if (operation !== 'READ') {
-    return false
-  }
-
-  return context.visibilityGrantProjectIds.includes(projectId)
-}
-
-/**
- * Check if user has write access to project (not through visibility grant)
- * Per DOC-013 §8.4 V-001
+ * Check if user has write access to project (via assignment)
+ * Per DOC-016 §4.1: Assignment state determines ASSIGNED scope
  */
 export function canWriteToProject(projectId: string, context: UserAuthContext): boolean {
   return context.assignedProjectIds.includes(projectId)
