@@ -18,14 +18,14 @@ datasource db {
 }
 
 // ============ AUTH & USERS ============
-// RBAC v1: Multi-role support per DOC-013
+// RBAC v2 / INV-007: Single role per user (DOC-016 v2.0)
 
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
   name          String?
   image         String?
-  // RBAC v1: Multi-role support via junction table
+  // RBAC v2 / INV-007: Single role via junction table (exactly one)
   roles         UserRole[]
   // Legacy: Keep roleId for migration, will be removed in v2
   legacyRoleId  String?   @map("roleId")
@@ -54,18 +54,17 @@ model User {
   activityLogs  ActivityLog[] @relation("UserActivityLogs")
 }
 
-// RBAC v1: Junction table for multi-role support (DOC-013 §3.2)
+// RBAC v2 / INV-007: Single role per user (DOC-016 v2.0)
+// Users must hold EXACTLY ONE role at any time. No permission unions.
 model UserRole {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
+  userId    String   @unique  // INV-007: Enforces single role per user
   role      Role     @relation(fields: [roleId], references: [id])
   roleId    String
   createdAt DateTime @default(now())
   createdBy String?  // Audit: who assigned this role
 
-  @@unique([userId, roleId])
-  @@index([userId])
   @@index([roleId])
 }
 

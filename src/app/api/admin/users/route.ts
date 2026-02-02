@@ -100,7 +100,7 @@ export async function GET(request: Request) {
   }
 }
 
-// RBAC v1: Role assignment endpoint (DOC-013 §4.2)
+// RBAC v2 / INV-007: Single role assignment endpoint (DOC-016 v2.0)
 export async function PATCH(request: Request) {
   try {
     const session = await auth()
@@ -124,6 +124,22 @@ export async function PATCH(request: Request) {
       return validationError({ action: 'פעולה לא תקינה. ערכים: assign, remove' })
     }
 
+    // RBAC v2 / INV-007: Single role enforcement
+    // 'remove' action is blocked - cannot remove user's only role
+    if (action === 'remove') {
+      return versionedResponse(
+        { error: 'לא ניתן להסיר תפקיד. השתמש בשינוי תפקיד במקום.' },
+        { status: 400 }
+      )
+    }
+
+    // 'assign' action: REPLACE user's role (single role only)
+    // If multiple roleIds provided, use only the first one
+    if (!roleIds || roleIds.length === 0) {
+      return validationError({ roleIds: 'יש לציין תפקיד אחד לפחות' })
+    }
+    const roleId = roleIds[0]  // INV-007: Take only the first role
+
     // Get target user's current roles
     const targetUser = await prisma.user.findUnique({
       where: { id: userId },
@@ -138,54 +154,57 @@ export async function PATCH(request: Request) {
       return versionedResponse({ error: 'משתמש לא נמצא' }, { status: 404 })
     }
 
-    // Get roles being modified
-    const rolesToModify = await prisma.role.findMany({
-      where: { id: { in: roleIds } },
+    // Get role being assigned
+    const roleToAssign = await prisma.role.findUnique({
+      where: { id: roleId },
     })
 
-    // Check authorization for each role modification
-    for (const role of rolesToModify) {
-      const authCheck = canModifyRbac(
-        userRoleNames,
-        role.name,
-        userId,
-        actorUserId
-      )
-
-      if (!authCheck.allowed) {
-        return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-      }
+    if (!roleToAssign) {
+      return versionedResponse({ error: 'תפקיד לא נמצא' }, { status: 404 })
     }
 
-    // Perform the role modification
-    const previousRoles = targetUser.roles.map((ur) => ur.role.name)
+    // Check authorization for role modification
+    const authCheck = canModifyRbac(
+      userRoleNames,
+      roleToAssign.name,
+      userId,
+      actorUserId
+    )
 
-    if (action === 'assign') {
-      // Add roles
-      for (const roleId of roleIds) {
-        await prisma.userRole.upsert({
-          where: { userId_roleId: { userId, roleId } },
-          update: {},
-          create: { userId, roleId, createdBy: actorUserId },
+    if (!authCheck.allowed) {
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
+    }
+
+    // Perform the role REPLACEMENT (not addition)
+    const previousRoles = targetUser.roles.map((ur) => ur.role.name)
+    const existingAssignment = targetUser.roles[0]
+
+    // Check if user already has this exact role
+    if (existingAssignment?.roleId === roleId) {
+      return versionedResponse(
+        { error: 'המשתמש כבר משויך לתפקיד זה' },
+        { status: 400 }
+      )
+    }
+
+    // Use transaction to atomically replace the role
+    await prisma.$transaction(async (tx) => {
+      // Delete existing role assignment (if any)
+      if (existingAssignment) {
+        await tx.userRole.delete({
+          where: { id: existingAssignment.id },
         })
       }
-    } else {
-      // Remove roles (but never remove all_employees)
-      const allEmployeesRole = await prisma.role.findUnique({
-        where: { name: 'all_employees' },
-      })
 
-      const roleIdsToRemove = roleIds.filter(
-        (id: string) => id !== allEmployeesRole?.id
-      )
-
-      await prisma.userRole.deleteMany({
-        where: {
+      // Create new role assignment
+      await tx.userRole.create({
+        data: {
           userId,
-          roleId: { in: roleIdsToRemove },
+          roleId,
+          createdBy: actorUserId,
         },
       })
-    }
+    })
 
     // Fetch updated user
     const updatedUser = await prisma.user.findUnique({
@@ -200,7 +219,7 @@ export async function PATCH(request: Request) {
 
     const newRoles = updatedUser?.roles.map((ur) => ur.role.name) || []
 
-    // Audit log (DOC-013 R-005)
+    // Audit log (DOC-016 R-005)
     await logCrud(
       'UPDATE',
       'admin',
@@ -208,10 +227,10 @@ export async function PATCH(request: Request) {
       userId,
       targetUser.email,
       {
-        action,
+        action: 'replace',
         previousRoles,
         newRoles,
-        modifiedRoles: rolesToModify.map((r) => r.name),
+        roleAssigned: roleToAssign.name,
       }
     )
 

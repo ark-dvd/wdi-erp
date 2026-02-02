@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - NextAuth Configuration
-// Version: 20260125-RBAC-V1
-// RBAC v1: Multi-role support per DOC-013
+// Version: 20260202-RBAC-V2
+// RBAC v2 / INV-007: Single role enforcement per DOC-016 v2.0
 // ================================================
 
 import NextAuth from "next-auth"
@@ -73,25 +73,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         },
       })
 
-      // RBAC v1 (DOC-013 R-001): Ensure all_employees role is assigned
-      const allEmployeesRole = await prisma.role.findUnique({
-        where: { name: 'all_employees' },
+      // RBAC v2 / INV-007: Assign all_employees ONLY if user has NO role
+      // Single role enforcement - do NOT add a second role
+      const existingUserRole = await prisma.userRole.findUnique({
+        where: { userId: existingUser.id },
       })
 
-      if (allEmployeesRole) {
-        await prisma.userRole.upsert({
-          where: {
-            userId_roleId: {
+      if (!existingUserRole) {
+        const allEmployeesRole = await prisma.role.findUnique({
+          where: { name: 'all_employees' },
+        })
+
+        if (allEmployeesRole) {
+          await prisma.userRole.create({
+            data: {
               userId: existingUser.id,
               roleId: allEmployeesRole.id,
             },
-          },
-          update: {},
-          create: {
-            userId: existingUser.id,
-            roleId: allEmployeesRole.id,
-          },
-        })
+          })
+        }
       }
 
       await logLogin(user.email, true)
@@ -100,7 +100,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
     async session({ session, token }) {
       if (session.user?.email) {
-        // RBAC v1: Load multi-role data from UserRole junction table
+        // RBAC v2 / INV-007: Load SINGLE role from UserRole table
         const dbUser = await prisma.user.findUnique({
           where: { email: session.user.email },
           include: {
@@ -114,7 +114,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                   },
                 },
               },
-              orderBy: { role: { level: 'asc' } }, // Primary role first
             },
             employee: true,
             domainAssignments: {
@@ -127,30 +126,64 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         if (dbUser) {
           session.user.id = dbUser.id
 
-          // RBAC v1: Load all roles
-          session.user.roles = dbUser.roles.map((ur) => ({
-            name: ur.role.name as CanonicalRole,
-            displayName: ur.role.displayName,
-          }))
+          // INV-007: CRITICAL - Enforce single role invariant
+          // If somehow >1 role exists (should be impossible with DB constraint), FAIL CLOSED
+          if (dbUser.roles.length > 1) {
+            console.error(
+              `[AUTH] CRITICAL: MULTI_ROLE_STATE detected for user ${dbUser.id}. ` +
+              `Found ${dbUser.roles.length} roles. INV-007 violation.`
+            )
+            // Log to activity for audit trail
+            await prisma.activityLog.create({
+              data: {
+                userId: dbUser.id,
+                userEmail: dbUser.email,
+                userRole: 'MULTI_ROLE_STATE',
+                action: 'SESSION_DENIED',
+                category: 'SECURITY',
+                module: 'auth',
+                success: false,
+                details: {
+                  reason: 'MULTI_ROLE_STATE',
+                  roleCount: dbUser.roles.length,
+                  roleNames: dbUser.roles.map((ur) => ur.role.name),
+                  invariant: 'INV-007',
+                },
+              },
+            })
+            // FAIL CLOSED: Return minimal session with no permissions
+            session.user.role = undefined
+            session.user.roles = []
+            session.user.permissions = []
+            return session
+          }
 
-          // Primary role (highest privilege for display)
-          const primaryRole = dbUser.roles[0]?.role
-          session.user.role = primaryRole?.name || 'all_employees'
-          session.user.roleDisplayName = primaryRole?.displayName || 'כל העובדים'
+          // RBAC v2: Single role (or none)
+          const userRole = dbUser.roles[0]
+          if (userRole) {
+            // Single role - for backwards compat, also populate roles array with one element
+            session.user.roles = [{
+              name: userRole.role.name as CanonicalRole,
+              displayName: userRole.role.displayName,
+            }]
+            session.user.role = userRole.role.name
+            session.user.roleDisplayName = userRole.role.displayName
+          } else {
+            // No role assigned - INV-008: fail closed
+            session.user.role = undefined
+            session.user.roles = []
+          }
 
           session.user.employeeId = dbUser.employeeId
 
-          // RBAC v1: Load permissions with scope (union-of-allows)
-          const permissionSet = new Set<string>()
-          for (const userRole of dbUser.roles) {
-            for (const rp of userRole.role.permissions) {
-              // Format: "module:action:scope"
-              permissionSet.add(
-                `${rp.permission.module}:${rp.permission.action}:${rp.permission.scope}`
-              )
-            }
+          // RBAC v2: Permissions from SINGLE role only (no union across roles)
+          if (userRole) {
+            session.user.permissions = userRole.role.permissions.map(
+              (rp) => `${rp.permission.module}:${rp.permission.action}:${rp.permission.scope}`
+            )
+          } else {
+            session.user.permissions = []
           }
-          session.user.permissions = Array.from(permissionSet)
 
           // Load assigned domain IDs for scope evaluation
           session.user.assignedDomainIds = dbUser.domainAssignments.map((d) => d.domainId)
@@ -183,7 +216,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 })
 
 // ================================================
-// Type Declarations (RBAC v1)
+// Type Declarations (RBAC v2 / INV-007)
 // ================================================
 
 declare module "next-auth" {
@@ -193,16 +226,16 @@ declare module "next-auth" {
       name?: string | null
       email?: string | null
       image?: string | null
-      // RBAC v1: Multi-role support
+      // RBAC v2 / INV-007: Single role (array kept for backwards compat, always 0 or 1 element)
       roles?: { name: CanonicalRole; displayName: string }[]
-      role?: string // Primary role (backwards compat)
+      role?: string // The user's single role
       roleDisplayName?: string
       employeeId?: string | null
       employeeName?: string
       employeePhoto?: string | null
-      // RBAC v1: Permissions with scope
+      // RBAC v2: Permissions from single role (no union)
       permissions?: string[] // "module:action:scope" format
-      // RBAC v1: Domain assignments
+      // Domain assignments for scope evaluation
       assignedDomainIds?: string[]
     }
   }

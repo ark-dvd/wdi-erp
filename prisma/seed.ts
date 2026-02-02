@@ -282,38 +282,37 @@ async function main() {
   // Get legacy roles for mapping
   // Note: Legacy roles no longer exist after deletion, so we'll use the map
 
+  // RBAC v2 / INV-007: Single role per user
   for (const user of existingUsers) {
-    // Assign all_employees role to everyone (DOC-013 R-001)
-    const allEmployeesRoleId = roleMap['all_employees']
-    if (allEmployeesRoleId) {
-      await prisma.userRole.upsert({
-        where: { userId_roleId: { userId: user.id, roleId: allEmployeesRoleId } },
-        update: {},
-        create: { userId: user.id, roleId: allEmployeesRoleId },
-      })
+    // Determine role: Arik gets owner, others get all_employees
+    let roleIdToAssign: string | undefined
+    let roleName: string
+
+    if (user.email === 'arik@wdi.one') {
+      roleIdToAssign = roleMap['owner']
+      roleName = 'owner'
+    } else {
+      roleIdToAssign = roleMap['all_employees']
+      roleName = 'all_employees'
     }
 
-    // Map legacy role to canonical role based on email for known users
-    if (user.email === 'arik@wdi.one') {
-      // Arik is Owner per requirement
-      const ownerRoleId = roleMap['owner']
-      if (ownerRoleId) {
-        await prisma.userRole.upsert({
-          where: { userId_roleId: { userId: user.id, roleId: ownerRoleId } },
-          update: {},
-          create: { userId: user.id, roleId: ownerRoleId },
-        })
-        console.log(`   ✓ ${user.email} → owner (בעלים)`)
-      }
+    if (roleIdToAssign) {
+      // INV-007: Single role - upsert by userId only
+      await prisma.userRole.upsert({
+        where: { userId: user.id },
+        update: { roleId: roleIdToAssign },
+        create: { userId: user.id, roleId: roleIdToAssign },
+      })
+      console.log(`   ✓ ${user.email} → ${roleName}`)
     }
   }
 
   // === STEP 7: Ensure Arik exists as Owner ===
+  // RBAC v2 / INV-007: Single role only
   console.log('👤 Ensuring Arik Davidi (arik@wdi.one) is Owner...')
   const ownerRole = await prisma.role.findUnique({ where: { name: 'owner' } })
-  const allEmployeesRole = await prisma.role.findUnique({ where: { name: 'all_employees' } })
 
-  if (ownerRole && allEmployeesRole) {
+  if (ownerRole) {
     const arikUser = await prisma.user.upsert({
       where: { email: 'arik@wdi.one' },
       update: {
@@ -327,18 +326,11 @@ async function main() {
       },
     })
 
-    // Assign Owner role
+    // INV-007: Single role - upsert by userId only
     await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: arikUser.id, roleId: ownerRole.id } },
-      update: {},
+      where: { userId: arikUser.id },
+      update: { roleId: ownerRole.id },
       create: { userId: arikUser.id, roleId: ownerRole.id },
-    })
-
-    // Assign all_employees role (required for all users per DOC-013 R-001)
-    await prisma.userRole.upsert({
-      where: { userId_roleId: { userId: arikUser.id, roleId: allEmployeesRole.id } },
-      update: {},
-      create: { userId: arikUser.id, roleId: allEmployeesRole.id },
     })
 
     console.log('   ✓ Arik Davidi is Owner with full access')

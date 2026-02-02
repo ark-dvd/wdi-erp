@@ -1,7 +1,7 @@
 // ================================================
-// WDI ERP - RBAC v1 Authorization Library
-// Version: 20260125-RBAC-V1
-// Implements: DOC-013 RBAC Authorization Matrix v1.1
+// WDI ERP - RBAC v2 Authorization Library
+// Version: 20260202-RBAC-V2
+// Implements: DOC-016 v2.0, INV-007 (Single Role Enforcement)
 // ================================================
 
 import { prisma } from './prisma'
@@ -200,20 +200,30 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
     }
   }
 
-  // Flatten permissions from all roles (union-of-allows)
-  const permissions: { module: string; action: string; scope: string }[] = []
-  const roles: { id: string; name: string }[] = []
+  // Phase 2 / INV-007: Single role enforcement
+  // CRITICAL: If >1 role found, this is an invariant violation - fail closed
+  if (user.roles.length > 1) {
+    console.error(
+      `[AUTH] CRITICAL: MULTI_ROLE_STATE for user ${userId}. ` +
+      `Found ${user.roles.length} roles. INV-007 violation. Failing closed.`
+    )
+    return null  // Fail closed - treat as unauthenticated
+  }
 
-  for (const userRole of user.roles) {
-    roles.push({ id: userRole.role.id, name: userRole.role.name })
-    for (const rp of userRole.role.permissions) {
-      permissions.push({
+  // Get the single role (or none)
+  const userRole = user.roles[0]
+  const roles: { id: string; name: string }[] = userRole
+    ? [{ id: userRole.role.id, name: userRole.role.name }]
+    : []
+
+  // Permissions from single role only (no union across roles)
+  const permissions: { module: string; action: string; scope: string }[] = userRole
+    ? userRole.role.permissions.map((rp) => ({
         module: rp.permission.module,
         action: rp.permission.action.toUpperCase(),  // Normalize to uppercase for Operation type
         scope: rp.permission.scope,
-      })
-    }
-  }
+      }))
+    : []
 
   return {
     userId,
@@ -227,12 +237,12 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
 }
 
 // ================================================
-// CORE AUTHORIZATION FUNCTION (DOC-013 §2.1)
+// CORE AUTHORIZATION FUNCTION (DOC-016 v2.0)
 // ================================================
 
 /**
  * Evaluate authorization for a specific operation
- * Implements DOC-013 permission evaluation algorithm
+ * RBAC v2 / INV-007: Single role - no permission unions
  */
 export async function evaluateAuthorization(
   context: UserAuthContext,
@@ -245,7 +255,7 @@ export async function evaluateAuthorization(
     return { authorized: false, reason: 'NO_ROLES' }
   }
 
-  // Step 2: Collect matching permissions (union-of-allows)
+  // Step 2: Collect matching permissions from single role
   const matchingPermissions = context.permissions.filter(
     (p) => p.module === module && p.action === operation
   )

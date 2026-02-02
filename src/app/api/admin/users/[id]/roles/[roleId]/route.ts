@@ -1,8 +1,8 @@
 // ================================================
 // WDI ERP - Admin User Role Removal API
-// Version: 20260125-RBAC-V1
+// Version: 20260202-RBAC-V2
 // Implements: DELETE /api/admin/users/[id]/roles/[roleId]
-// RBAC v1: Per DOC-013 §10.2
+// RBAC v2 / INV-007: Single role enforcement per DOC-016 v2.0
 // ================================================
 
 import { prisma } from '@/lib/prisma'
@@ -78,10 +78,12 @@ export async function DELETE(
       )
     }
 
-    // Safety rule 1: Cannot remove all_employees (base role)
-    if (roleToRemove.name === 'all_employees') {
+    // RBAC v2 / INV-007: Single role enforcement
+    // Safety rule 1: Cannot remove user's only role (would leave them with no role)
+    // Use POST to CHANGE the role instead
+    if (targetUser.roles.length <= 1) {
       return versionedResponse(
-        { error: 'לא ניתן להסיר את תפקיד הבסיס (כל העובדים)' },
+        { error: 'לא ניתן להסיר את התפקיד היחיד של המשתמש. השתמש בשינוי תפקיד במקום.' },
         { status: 400 }
       )
     }
@@ -132,15 +134,12 @@ export async function DELETE(
       }
     }
 
-    // Remove role
+    // Remove role (RBAC v2: use userId unique key)
     const previousRoles = targetUser.roles.map((ur) => ur.role.name)
 
     await prisma.userRole.delete({
       where: {
-        userId_roleId: {
-          userId: targetUserId,
-          roleId,
-        },
+        userId: targetUserId,
       },
     })
 

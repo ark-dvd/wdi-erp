@@ -132,14 +132,12 @@ async function main() {
     }
 
     // Check 3: Does the UserRole assignment exist?
+    // RBAC v2 / INV-007: Single role per user - query by userId
     if (user && ownerRole) {
       console.log(`\n[3/3] Checking if UserRole assignment exists...`)
       const existingAssignment = await prisma.userRole.findUnique({
         where: {
-          userId_roleId: {
-            userId: user.id,
-            roleId: ownerRole.id,
-          },
+          userId: user.id,
         },
       })
 

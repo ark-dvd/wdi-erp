@@ -1,8 +1,8 @@
 // ================================================
 // WDI ERP - Admin User Roles API
-// Version: 20260125-RBAC-V1
+// Version: 20260202-RBAC-V2
 // Implements: POST /api/admin/users/[id]/roles
-// RBAC v1: Per DOC-013 §10.2
+// RBAC v2 / INV-007: Single role enforcement per DOC-016 v2.0
 // ================================================
 
 import { prisma } from '@/lib/prisma'
@@ -75,15 +75,6 @@ export async function POST(
       return versionedResponse({ error: 'תפקיד לא נמצא' }, { status: 404 })
     }
 
-    // Check if user already has this role
-    const existingAssignment = targetUser.roles.find((ur) => ur.roleId === roleId)
-    if (existingAssignment) {
-      return versionedResponse(
-        { error: 'המשתמש כבר משויך לתפקיד זה' },
-        { status: 400 }
-      )
-    }
-
     // Check RBAC modification permission
     const authCheck = canModifyRbac(
       userRoleNames,
@@ -96,15 +87,36 @@ export async function POST(
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
-    // Assign role
+    // RBAC v2 / INV-007: Single role enforcement
+    // REPLACE existing role (upsert behavior) - user can only have ONE role
     const previousRoles = targetUser.roles.map((ur) => ur.role.name)
+    const existingAssignment = targetUser.roles[0]
 
-    await prisma.userRole.create({
-      data: {
-        userId: targetUserId,
-        roleId,
-        createdBy: actorUserId,
-      },
+    // Check if user already has this exact role
+    if (existingAssignment?.roleId === roleId) {
+      return versionedResponse(
+        { error: 'המשתמש כבר משויך לתפקיד זה' },
+        { status: 400 }
+      )
+    }
+
+    // Use transaction to atomically replace the role
+    await prisma.$transaction(async (tx) => {
+      // Delete existing role assignment (if any)
+      if (existingAssignment) {
+        await tx.userRole.delete({
+          where: { id: existingAssignment.id },
+        })
+      }
+
+      // Create new role assignment
+      await tx.userRole.create({
+        data: {
+          userId: targetUserId,
+          roleId,
+          createdBy: actorUserId,
+        },
+      })
     })
 
     // If domain_head and domains provided, create domain assignments

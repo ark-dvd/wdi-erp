@@ -1,11 +1,11 @@
 // ================================================
 // WDI ERP - RBAC v2 Canonical Seed (SAFE VERSION)
-// Version: 20260128-RBAC-V2-SAFE
-// Implements: DOC-013 RBAC Authorization Matrix v2.0
+// Version: 20260202-RBAC-V2-PHASE2
+// Implements: DOC-016 v2.0, INV-007 (Single Role Enforcement)
 // Implements: DOC-014 RBAC Authorization Matrix v2.0
 //
 // SAFETY FEATURES:
-// - Preserves existing UserRole assignments
+// - Single role per user (INV-007)
 // - Uses transaction wrapper (rollback on failure)
 // - Comprehensive logging before/after
 // - Role rename mapping documented
@@ -404,57 +404,79 @@ async function main() {
 
       // ================================================
       // STEP 6: RESTORE USER ROLE ASSIGNMENTS
-      // This is the critical safety step!
+      // RBAC v2 / INV-007: Single role per user
       // ================================================
-      console.log('👤 STEP 6: Restoring user role assignments...')
+      console.log('👤 STEP 6: Restoring user role assignments (single role per user)...')
       console.log('')
 
+      // Role level for priority selection (lower = higher privilege)
+      const ROLE_LEVEL: Record<string, number> = {
+        'owner': 1,
+        'executive': 2,
+        'trust_officer': 3,
+        'finance_officer': 3,
+        'pmo': 4,
+        'domain_head': 4,
+        'project_manager': 5,
+        'project_coordinator': 6,
+        'administration': 7,
+        'all_employees': 100,
+      }
+
       const unmappedUsers: { email: string; oldRoles: string[] }[] = []
-      const restoredUsers: { email: string; oldRoles: string[]; newRoles: string[] }[] = []
+      const restoredUsers: { email: string; oldRoles: string[]; newRole: string }[] = []
       let totalRestored = 0
 
       for (const [userId, userData] of Array.from(userRolesMap.entries())) {
         const { email, roles: oldRoles } = userData
-        const newRoles: string[] = []
         const failedMappings: string[] = []
 
+        // Map old roles to canonical names and find valid ones
+        const validRoles: { name: string; roleId: string; level: number }[] = []
         for (const oldRole of oldRoles) {
-          // Map old role name to canonical name
           const canonicalName = LEGACY_TO_CANONICAL_MAP[oldRole] || oldRole
           const newRoleId = newRoleMap[canonicalName]
 
           if (newRoleId) {
-            // Create UserRole assignment
-            await tx.userRole.upsert({
-              where: { userId_roleId: { userId, roleId: newRoleId } },
-              update: {},
-              create: { userId, roleId: newRoleId },
+            validRoles.push({
+              name: canonicalName,
+              roleId: newRoleId,
+              level: ROLE_LEVEL[canonicalName] || 100,
             })
-            newRoles.push(canonicalName)
-            totalRestored++
           } else {
             failedMappings.push(oldRole)
           }
         }
 
-        // Always ensure all_employees role
-        const allEmployeesId = newRoleMap['all_employees']
-        if (allEmployeesId && !newRoles.includes('all_employees')) {
-          await tx.userRole.upsert({
-            where: { userId_roleId: { userId, roleId: allEmployeesId } },
-            update: {},
-            create: { userId, roleId: allEmployeesId },
-          })
-          newRoles.push('all_employees')
-          totalRestored++
+        // INV-007: Pick ONE role - highest privilege (lowest level number)
+        // If no valid roles, default to all_employees
+        let selectedRole: { name: string; roleId: string }
+        if (validRoles.length > 0) {
+          validRoles.sort((a, b) => a.level - b.level)
+          selectedRole = { name: validRoles[0].name, roleId: validRoles[0].roleId }
+        } else {
+          const allEmployeesId = newRoleMap['all_employees']
+          if (!allEmployeesId) {
+            console.error(`   ✗ ${email}: No valid roles and all_employees not found!`)
+            continue
+          }
+          selectedRole = { name: 'all_employees', roleId: allEmployeesId }
         }
+
+        // Create single UserRole assignment (upsert by userId)
+        await tx.userRole.upsert({
+          where: { userId },
+          update: { roleId: selectedRole.roleId },
+          create: { userId, roleId: selectedRole.roleId },
+        })
+        totalRestored++
 
         if (failedMappings.length > 0) {
           unmappedUsers.push({ email, oldRoles: failedMappings })
         }
 
-        restoredUsers.push({ email, oldRoles, newRoles })
-        console.log(`   ✓ ${email}: [${oldRoles.join(', ')}] → [${newRoles.join(', ')}]`)
+        restoredUsers.push({ email, oldRoles, newRole: selectedRole.name })
+        console.log(`   ✓ ${email}: [${oldRoles.join(', ')}] → ${selectedRole.name}`)
       }
 
       console.log('')
@@ -463,28 +485,23 @@ async function main() {
 
       // ================================================
       // STEP 7: Ensure Arik exists as Owner
+      // RBAC v2 / INV-007: Single role only (owner)
       // ================================================
       console.log('👤 STEP 7: Ensuring Arik Davidi (arik@wdi.one) is Owner...')
       const ownerRoleId = newRoleMap['owner']
-      const allEmployeesRoleId = newRoleMap['all_employees']
 
-      if (ownerRoleId && allEmployeesRoleId) {
+      if (ownerRoleId) {
         const arikUser = await tx.user.upsert({
           where: { email: 'arik@wdi.one' },
           update: { name: 'אריק דוידי', isActive: true },
           create: { email: 'arik@wdi.one', name: 'אריק דוידי', isActive: true },
         })
 
+        // INV-007: Single role - upsert by userId only
         await tx.userRole.upsert({
-          where: { userId_roleId: { userId: arikUser.id, roleId: ownerRoleId } },
-          update: {},
+          where: { userId: arikUser.id },
+          update: { roleId: ownerRoleId },
           create: { userId: arikUser.id, roleId: ownerRoleId },
-        })
-
-        await tx.userRole.upsert({
-          where: { userId_roleId: { userId: arikUser.id, roleId: allEmployeesRoleId } },
-          update: {},
-          create: { userId: arikUser.id, roleId: allEmployeesRoleId },
         })
 
         console.log('   ✓ Arik Davidi is Owner with full access')
