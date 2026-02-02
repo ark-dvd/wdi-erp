@@ -1,3 +1,11 @@
+// ================================================
+// WDI ERP - Admin Users API
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// RBAC mutation: Uses canModifyRbac (DOC-016 §6.3)
+// MAYBACH: R1-Pagination, R4-Sorting, R5-Versioning
+// ================================================
+
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -13,26 +21,19 @@ import {
   validationError,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { RBAC_ADMIN_ROLES, canModifyRbac, checkAdminAccess, type CanonicalRole } from '@/lib/authorization'
-
-// Version: 20260125-RBAC-V1
-// RBAC v1: Role management per DOC-013 §10.2
-// MAYBACH: R1-Pagination, R4-Sorting, R5-Versioning
+import { canModifyRbac, type CanonicalRole } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
+    if (!session?.user) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // RBAC v1: Check multi-role authorization (DOC-013 §10.2)
-    if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
-
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'read')
+    if (denied) return denied
 
     const { searchParams } = new URL(request.url)
 
@@ -104,9 +105,13 @@ export async function GET(request: Request) {
 export async function PATCH(request: Request) {
   try {
     const session = await auth()
-    if (!session) {
+    if (!session?.user) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
+
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'update')
+    if (denied) return denied
 
     const actorUserId = (session.user as any)?.id
     const userRoles = (session.user as any)?.roles || []

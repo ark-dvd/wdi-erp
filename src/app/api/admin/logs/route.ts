@@ -1,7 +1,13 @@
+// ================================================
+// WDI ERP - Admin Logs API
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// ================================================
+
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
-import { checkAdminAccess } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request: Request) {
   try {
@@ -10,10 +16,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
-    if (!checkAdminAccess(session)) {
-      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'read')
+    if (denied) return denied
     
     const { searchParams } = new URL(request.url)
     const page = parseInt(searchParams.get('page') || '1')

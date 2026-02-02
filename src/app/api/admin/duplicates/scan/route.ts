@@ -1,6 +1,8 @@
-// /home/user/wdi-erp/src/app/api/admin/duplicates/scan/route.ts
-// Version: 20260125-RBAC-V1
-// FIXED: N+1 query issue - pre-fetch all records into Maps
+// ================================================
+// WDI ERP - Admin Duplicates Scan API
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// ================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
@@ -12,7 +14,7 @@ import {
   validateWithGemini,
   DuplicateCandidate,
 } from '@/lib/duplicate-detection'
-import { checkAdminAccess } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,10 +23,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
-    if (!checkAdminAccess(session)) {
-      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'create')
+    if (denied) return denied
 
     const userId = (session.user as any).id
     const { entityTypes = ['organization', 'contact'], useGemini = true } = await request.json()

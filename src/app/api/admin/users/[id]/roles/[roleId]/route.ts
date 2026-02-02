@@ -1,20 +1,18 @@
 // ================================================
 // WDI ERP - Admin User Role Removal API
-// Version: 20260202-RBAC-V2
+// Version: 20260202-RBAC-V2-PHASE3
 // Implements: DELETE /api/admin/users/[id]/roles/[roleId]
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
 // RBAC v2 / INV-007: Single role enforcement per DOC-016 v2.0
+// RBAC mutation: Uses canModifyRbac (DOC-016 §6.3)
 // ================================================
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { versionedResponse } from '@/lib/api-contracts'
-import {
-  RBAC_ADMIN_ROLES,
-  canModifyRbac,
-  checkAdminAccess,
-  type CanonicalRole,
-} from '@/lib/authorization'
+import { canModifyRbac, type CanonicalRole } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 // ================================================
 // DELETE /api/admin/users/[id]/roles/[roleId]
@@ -31,18 +29,17 @@ export async function DELETE(
 ) {
   try {
     const session = await auth()
-    if (!session) {
+    if (!session?.user) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
+
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'delete')
+    if (denied) return denied
 
     const actorUserId = (session.user as any)?.id
     const actorRoles = (session.user as any)?.roles || []
     const actorRoleNames: CanonicalRole[] = actorRoles.map((r: { name: string }) => r.name)
-
-    // RBAC v1: Check admin authorization (with fallback)
-    if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
 
     const { id: targetUserId, roleId } = await params
 
@@ -118,21 +115,9 @@ export async function DELETE(
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
-    // Safety rule 4: Cannot remove role from self if it removes admin access
-    if (targetUserId === actorUserId) {
-      const targetRoleNames = targetUser.roles.map((ur) => ur.role.name)
-      const remainingRoles = targetRoleNames.filter((r) => r !== roleToRemove.name)
-      const willRetainAdminAccess = remainingRoles.some((r) =>
-        RBAC_ADMIN_ROLES.includes(r as CanonicalRole)
-      )
-
-      if (!willRetainAdminAccess && RBAC_ADMIN_ROLES.includes(roleToRemove.name as CanonicalRole)) {
-        return versionedResponse(
-          { error: 'לא ניתן להסיר את התפקיד שמעניק לך גישת ניהול' },
-          { status: 400 }
-        )
-      }
-    }
+    // Note: Safety rule 4 (self-lockout prevention) removed per INV-007 single role enforcement
+    // With INV-007, users can only have ONE role, so the check at lines 84-89 will always
+    // trigger first, making this code path unreachable.
 
     // Remove role (RBAC v2: use userId unique key)
     const previousRoles = targetUser.roles.map((ur) => ur.role.name)

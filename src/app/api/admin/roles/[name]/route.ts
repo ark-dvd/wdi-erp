@@ -1,14 +1,14 @@
 // ================================================
 // WDI ERP - Admin Role Detail API
-// Version: 20260125-RBAC-V1
+// Version: 20260202-RBAC-V2-PHASE3
 // Implements: GET /api/admin/roles/[name]
-// RBAC v1: Per DOC-013 §4
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
 // ================================================
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { versionedResponse } from '@/lib/api-contracts'
-import { RBAC_ADMIN_ROLES, type CanonicalRole } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 // ================================================
 // CANONICAL MODULES (DOC-013)
@@ -44,14 +44,9 @@ export async function GET(
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // RBAC v1: Check admin authorization
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-    const canReadAdmin = userRoleNames.some((r) => RBAC_ADMIN_ROLES.includes(r))
-
-    if (!canReadAdmin) {
-      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'read')
+    if (denied) return denied
 
     const { name: roleName } = await params
 

@@ -1,20 +1,18 @@
 // ================================================
 // WDI ERP - Admin User Roles API
-// Version: 20260202-RBAC-V2
+// Version: 20260202-RBAC-V2-PHASE3
 // Implements: POST /api/admin/users/[id]/roles
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
 // RBAC v2 / INV-007: Single role enforcement per DOC-016 v2.0
+// RBAC mutation: Uses canModifyRbac (DOC-016 §6.3)
 // ================================================
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { versionedResponse, validationError } from '@/lib/api-contracts'
-import {
-  RBAC_ADMIN_ROLES,
-  canModifyRbac,
-  checkAdminAccess,
-  type CanonicalRole,
-} from '@/lib/authorization'
+import { canModifyRbac, type CanonicalRole } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 // ================================================
 // POST /api/admin/users/[id]/roles
@@ -27,18 +25,17 @@ export async function POST(
 ) {
   try {
     const session = await auth()
-    if (!session) {
+    if (!session?.user) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
+
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'create')
+    if (denied) return denied
 
     const actorUserId = (session.user as any)?.id
     const userRoles = (session.user as any)?.roles || []
     const userRoleNames: CanonicalRole[] = userRoles.map((r: { name: string }) => r.name)
-
-    // RBAC v1: Check admin authorization (with fallback)
-    if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
 
     const { id: targetUserId } = await params
     const data = await request.json()

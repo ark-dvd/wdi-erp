@@ -1,13 +1,13 @@
 // ================================================
 // WDI ERP - Admin Roles API
-// Version: 20260125-RBAC-V1
-// RBAC v1: Role management per DOC-013 §4
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
 // ================================================
 
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { versionedResponse } from '@/lib/api-contracts'
-import { checkAdminAccess } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request: Request) {
   try {
@@ -16,10 +16,9 @@ export async function GET(request: Request) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // RBAC v1: Check admin authorization (with fallback) - DOC-013 §10.2
-    if (!checkAdminAccess(session)) {
-      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'read')
+    if (denied) return denied
 
     // Get all roles ordered by level (privilege)
     const roles = await prisma.role.findMany({

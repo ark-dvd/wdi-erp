@@ -1,14 +1,15 @@
-// /home/user/wdi-erp/src/app/api/admin/duplicates/[id]/undo/route.ts
-// Version: 20260125-RBAC-V1
-// FIXED: Field names to match Schema (survivorId, mergedId)
+// ================================================
+// WDI ERP - Admin Duplicate Undo API
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// ================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { logActivity } from '@/lib/activity'
 import { undoMerge } from '@/lib/duplicate-detection'
-
-import { checkAdminAccess } from '@/lib/authorization'
+import { requirePermission } from '@/lib/permissions'
 
 export async function POST(
   request: NextRequest,
@@ -22,9 +23,9 @@ export async function POST(
       return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    if (!checkAdminAccess(session)) {
-      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'update')
+    if (denied) return denied
 
     const userId = (session.user as any).id
 

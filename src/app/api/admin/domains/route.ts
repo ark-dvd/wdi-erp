@@ -1,13 +1,13 @@
-// src/app/api/admin/domains/route.ts
-// Version: 20260128-RBAC-V2
-// Admin API to list business domains
+// ================================================
+// WDI ERP - Admin Domains API
+// Version: 20260202-RBAC-V2-PHASE3
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// ================================================
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-
-// RBAC admin roles that can access this endpoint
-const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
+import { requirePermission } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   try {
@@ -16,18 +16,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    // Check admin access
-    const userRoles = (session.user as any)?.roles || []
-    const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
-    const primaryRole = (session.user as any)?.role
-
-    const canAccess =
-      userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
-      (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
-
-    if (!canAccess) {
-      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // RBAC v2 / DOC-016 §6.1: Operation-specific permission check
+    const denied = await requirePermission(session, 'admin', 'read')
+    if (denied) return denied
 
     const domains = await prisma.domain.findMany({
       where: { isActive: true },
