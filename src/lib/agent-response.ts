@@ -284,20 +284,24 @@ export function createNoResultsResponse(options: {
 
 // ============================================================================
 // R1: Permission vs Data Distinction
-// RBAC v2: Uses canonical roles from DOC-013 v2.0
-// DOC-013 A-001: Agent can access exactly the data the user has READ permission for
-// HR access per role follows DOC-013 §7 permission matrix
+// RBAC v2 Phase 4: Database-driven Agent Permissions (DOC-016 §5, §7.1)
+// AG-001: Agent is read-only forever
+// AG-002: Agent uses only user READ grants
+// AG-003: Agent enforces scope boundaries
+// AG-004: No hardcoded matrices (INV-010, FP-009)
+// AG-005: Denial message: "אין לך הרשאה מתאימה."
 // ============================================================================
 
-import type { CanonicalRole, Module } from './authorization'
+import type { Module, Scope } from './authorization'
+import type { Session } from 'next-auth'
 
-export interface ModulePermissions {
+export interface AgentModulePermission {
   canRead: boolean
-  canWrite: boolean
-  restrictedFields?: string[]
+  scope: Scope | null
 }
 
 // Agent module mapping (some API modules map to different canonical modules)
+// This is CONFIGURATION, not a permission matrix (AG-004 compliant)
 const AGENT_MODULE_MAP: Record<string, Module> = {
   'hr': 'hr',
   'contacts': 'vendors',        // Contacts are part of vendors module
@@ -312,235 +316,142 @@ const AGENT_MODULE_MAP: Record<string, Module> = {
 }
 
 /**
- * RBAC v2 Module Permissions by Canonical Role
- * Source: DOC-013 v2.0 §7 Role Permission Matrix
+ * RBAC v2 Phase 4 / INV-010: Get Agent READ permissions from session
  *
- * DOC-013 A-001: Agent can access exactly the data the user has READ permission for.
- * Agent is READ-ONLY (canWrite: false for all modules).
- * HR access follows DOC-013 §7 role-specific permissions.
+ * Derives permissions ONLY from session.user.permissions (database-driven).
+ * MUST NOT use role name lookup or hardcoded matrices.
+ *
+ * @param session - NextAuth session containing user.permissions[]
+ * @returns Map of module → { canRead, scope } for READ operations only
  */
-const AGENT_MODULE_PERMISSIONS: Record<CanonicalRole, Record<string, ModulePermissions>> = {
-  // Owner: Full read access to all modules (DOC-013 §7.3)
-  // WDI Agent: "✅ All data"
-  owner: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: true, canWrite: false },  // DOC-013 §7.3: כח אדם ✅
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: true, canWrite: false },
-    activityLog: { canRead: true, canWrite: false },
-  },
+export function getAgentReadPermissions(
+  session: Session | null
+): Map<string, AgentModulePermission> {
+  const permissions = new Map<string, AgentModulePermission>()
 
-  // Executive: Full read access to all modules (DOC-013 §7.4)
-  // WDI Agent: "✅ Per read permissions"
-  executive: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: true, canWrite: false },  // DOC-013 §7.4: כח אדם ✅
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: true, canWrite: false },
-  },
+  // AG-004 / INV-010: Fail closed if no session or no permissions
+  if (!session?.user?.permissions || !Array.isArray(session.user.permissions)) {
+    return permissions
+  }
 
-  // Trust Officer: Full HR read access (DOC-013 §7.5)
-  // WDI Agent: "✅ Per read permissions"
-  trust_officer: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: true, canWrite: false },  // DOC-013 §7.5: כח אדם ✅
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: true, canWrite: false },
-  },
+  // session.user.permissions format: "module:action:scope" (e.g., "projects:READ:ALL")
+  for (const permStr of session.user.permissions) {
+    const parts = permStr.split(':')
+    if (parts.length !== 3) continue
 
-  // Finance Officer: Full HR read access (DOC-013 §7.7)
-  // WDI Agent: "✅ Per read permissions"
-  finance_officer: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: true, canWrite: false },  // DOC-013 §7.7: כח אדם ✅
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
+    const [module, action, scope] = parts
 
-  // Domain Head: Domain-scoped access (DOC-013 §7.8)
-  // HR: "⚠️ Main page only" - Agent can't enforce MAIN_PAGE scope
-  domain_head: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },  // DOMAIN scope applied server-side
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.8: MAIN_PAGE scope only - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
+    // AG-002: Agent uses ONLY READ grants - skip all non-READ permissions
+    if (action.toUpperCase() !== 'READ') continue
 
-  // PMO: Cross-project visibility (DOC-013 §7.6)
-  // HR: "⚠️ Main page + own card" - Agent can't enforce SELF scope
-  pmo: {
-    contacts: { canRead: true, canWrite: true },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.6: MAIN_PAGE + SELF - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },  // OWN scope
-    equipment: { canRead: true, canWrite: false },  // OWN scope
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: true },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
+    // AG-003: Capture scope for boundary enforcement
+    const validScope = scope as Scope
 
-  // Project Manager: Assigned projects (DOC-013 §7.9)
-  // HR: "⚠️ Main page + own card" - Agent can't enforce SELF scope
-  project_manager: {
-    contacts: { canRead: true, canWrite: true },
-    projects: { canRead: true, canWrite: false },  // ASSIGNED scope applied server-side
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.9: MAIN_PAGE + SELF - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },  // OWN scope
-    equipment: { canRead: true, canWrite: false },  // OWN scope
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: true },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
+    // Store the permission (broadest scope wins if multiple exist for same module)
+    const existing = permissions.get(module.toLowerCase())
+    if (!existing || shouldReplaceScope(existing.scope, validScope)) {
+      permissions.set(module.toLowerCase(), {
+        canRead: true,
+        scope: validScope,
+      })
+    }
+  }
 
-  // Project Coordinator: Project-scoped access (DOC-013 §7.10)
-  // HR: "⚠️ Own card only" - Agent can't enforce SELF scope
-  project_coordinator: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.10: SELF only - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
-
-  // Administration: Equipment/vehicles/vendors/contacts (DOC-013 §7.11)
-  // HR: "⚠️ Contacts scope" - Agent can't enforce CONTACTS scope
-  administration: {
-    contacts: { canRead: true, canWrite: true },
-    projects: { canRead: true, canWrite: false },  // CONTACTS scope only
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.11: CONTACTS scope - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: true },
-    equipment: { canRead: true, canWrite: true },
-    events: { canRead: false, canWrite: false },
-    reviews: { canRead: true, canWrite: true },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
-
-  // All Employees: Baseline access (DOC-013 §7.12)
-  // HR: "⚠️ Own card only" - Agent can't enforce SELF scope
-  all_employees: {
-    contacts: { canRead: true, canWrite: false },
-    projects: { canRead: true, canWrite: false },
-    hr: { canRead: false, canWrite: false },  // DOC-013 §7.12: SELF only - Agent can't enforce
-    organizations: { canRead: true, canWrite: false },
-    vehicles: { canRead: true, canWrite: false },
-    equipment: { canRead: true, canWrite: false },
-    events: { canRead: true, canWrite: false },
-    reviews: { canRead: true, canWrite: false },
-    users: { canRead: false, canWrite: false },
-    activityLog: { canRead: false, canWrite: false },
-  },
-}
-
-// Legacy compatibility: Map old role names to RBAC v2 canonical roles
-const LEGACY_ROLE_MAP: Record<string, CanonicalRole> = {
-  'ADMIN': 'owner',
-  'MANAGER': 'trust_officer',
-  'USER': 'all_employees',
-  'founder': 'owner',
-  'ceo': 'executive',
-  'office_manager': 'trust_officer',
-  'department_manager': 'domain_head',
-  'senior_pm': 'project_manager',        // v1→v2 rename
-  'operations_staff': 'administration',  // v1→v2 rename
-  'secretary': 'administration',
-  'employee': 'all_employees',
+  return permissions
 }
 
 /**
- * Normalize role name to canonical format
+ * Scope precedence: ALL > DOMAIN > ASSIGNED > OWN > SELF > MAIN_PAGE > CONTACTS
+ * Returns true if newScope should replace existingScope (is broader)
  */
-function normalizeRole(role: string): CanonicalRole {
-  const normalized = role.toLowerCase()
-
-  // Check if already canonical
-  if (normalized in AGENT_MODULE_PERMISSIONS) {
-    return normalized as CanonicalRole
+function shouldReplaceScope(existingScope: Scope | null, newScope: Scope): boolean {
+  const scopePrecedence: Record<string, number> = {
+    'ALL': 1,
+    'DOMAIN': 2,
+    'ASSIGNED': 3,
+    'OWN': 4,
+    'SELF': 5,
+    'MAIN_PAGE': 6,
+    'CONTACTS': 7,
   }
 
-  // Check legacy mapping
-  const legacy = LEGACY_ROLE_MAP[role] || LEGACY_ROLE_MAP[role.toUpperCase()]
-  if (legacy) {
-    return legacy
-  }
-
-  // Default to all_employees (safe baseline)
-  return 'all_employees'
+  if (!existingScope) return true
+  const existingRank = scopePrecedence[existingScope] ?? 99
+  const newRank = scopePrecedence[newScope] ?? 99
+  return newRank < existingRank
 }
 
-export function checkModulePermission(
-  role: string,
-  module: string,
-  operation: 'read' | 'write' = 'read'
-): ModulePermissions | null {
-  const canonicalRole = normalizeRole(role)
-  const rolePermissions = AGENT_MODULE_PERMISSIONS[canonicalRole]
+/**
+ * RBAC v2 Phase 4: Check if Agent has READ access to a module
+ *
+ * AG-001: Agent is read-only forever (only 'read' operation supported)
+ * AG-002: Checks session permissions, not role names
+ * AG-004: No hardcoded matrices (INV-010)
+ *
+ * @param session - NextAuth session
+ * @param agentModule - Module name as used by Agent (e.g., 'hr', 'contacts')
+ * @returns { canRead, scope } or null if no permission
+ */
+export function checkAgentModuleAccess(
+  session: Session | null,
+  agentModule: string
+): AgentModulePermission | null {
+  // AG-001: Agent is read-only - enforce at function level
+  const agentPermissions = getAgentReadPermissions(session)
 
-  if (!rolePermissions) {
-    return null
+  // Map agent module to canonical module (e.g., 'contacts' → 'vendors')
+  const canonicalModule = AGENT_MODULE_MAP[agentModule.toLowerCase()] || agentModule.toLowerCase()
+
+  // Check direct match first
+  let permission = agentPermissions.get(canonicalModule)
+
+  // If no direct match and we used a mapping, try the original module name
+  if (!permission && canonicalModule !== agentModule.toLowerCase()) {
+    permission = agentPermissions.get(agentModule.toLowerCase())
   }
 
-  const modulePermission = rolePermissions[module.toLowerCase()]
-  if (!modulePermission) {
-    return null
-  }
-
-  return modulePermission
+  return permission || null
 }
 
+/**
+ * RBAC v2 Phase 4: Legacy-compatible hasModuleAccess wrapper
+ *
+ * Replaced hardcoded role-based lookup with session-based permission check.
+ * AG-001: Only 'read' operation returns meaningful results
+ * AG-004: No role lookup, uses session.user.permissions (INV-010)
+ *
+ * @param session - NextAuth session (REQUIRED - replaces role parameter)
+ * @param module - Module to check
+ * @param operation - Must be 'read' (AG-001: Agent is read-only)
+ * @returns boolean - true if READ access granted
+ */
 export function hasModuleAccess(
-  role: string,
+  session: Session | null,
   module: string,
   operation: 'read' | 'write' = 'read'
 ): boolean {
-  // DOC-013 A-001: Agent can access exactly the data the user has READ permission for
-  // HR access is determined by AGENT_MODULE_PERMISSIONS per role (not hardcoded)
-  const permission = checkModulePermission(role, module, operation)
-  if (!permission) return false
-  return operation === 'read' ? permission.canRead : permission.canWrite
+  // AG-001: Agent is read-only forever - write operations always denied
+  if (operation !== 'read') {
+    return false
+  }
+
+  const permission = checkAgentModuleAccess(session, module)
+  return permission?.canRead === true
 }
 
-// Export for use in authorization module
-export { AGENT_MODULE_PERMISSIONS, AGENT_MODULE_MAP }
+/**
+ * Get the effective scope for a module (AG-003: scope boundary enforcement)
+ */
+export function getAgentModuleScope(
+  session: Session | null,
+  agentModule: string
+): Scope | null {
+  const permission = checkAgentModuleAccess(session, agentModule)
+  return permission?.scope || null
+}
+
+// Export module map for use in route.ts
+export { AGENT_MODULE_MAP }
 
 // ============================================================================
 // R2: Guarded Analysis Helpers

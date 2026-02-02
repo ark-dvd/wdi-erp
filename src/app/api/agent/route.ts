@@ -1,12 +1,13 @@
 // ============================================
 // src/app/api/agent/route.ts
-// Version: 20260202-PHASE0
+// Version: 20260202-RBAC-V2-PHASE4
+// RBAC v2 Phase 4: Agent Database Integration (DOC-016 §5, §7.1)
+// AG-001: Agent is read-only forever
+// AG-002: Agent uses only user READ grants
+// AG-004: No hardcoded matrices (INV-010, FP-009)
+// AG-005: Denial message: "אין לך הרשאה מתאימה."
 // Stage 6.3b Remediation: Authorization Truthfulness
 // Phase 0 Remediation: INV-008 (Fail Closed)
-// R1: Deterministic Authorization Truthfulness
-// R2: LLM Must Not Control Security Flow
-// R3: Refusal Semantics Completion
-// R4: Logging Requirements (unchanged)
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -24,6 +25,7 @@ import {
   createNoResultsResponse,
   type AgentResponseMetadata,
 } from '@/lib/agent-response';
+import type { Session } from 'next-auth';
 import {
   detectManipulation,
   logManipulationAttempt,
@@ -123,11 +125,13 @@ export async function POST(request: NextRequest) {
 
   const userId = (session.user as any)?.id || 'unknown';
   const userEmail = session.user?.email || 'unknown';
-  // Phase 0 / INV-008: Authorization must fail closed
-  // If role cannot be determined, DENY access (do NOT default to non-canonical value)
-  const userRole = (session.user as any)?.role;
+  const userRole = (session.user as any)?.role || 'unknown';
 
-  if (!userRole) {
+  // RBAC v2 Phase 4 / INV-010: Permissions come from session.user.permissions (DB-driven)
+  // AG-004: No hardcoded matrices - check if user has ANY permissions
+  const userPermissions = (session.user as any)?.permissions;
+
+  if (!userPermissions || !Array.isArray(userPermissions) || userPermissions.length === 0) {
     // DOC-016 §7.1: Log authorization denial
     await logActivity({
       action: 'AGENT_PERMISSION_DENIED',
@@ -135,13 +139,14 @@ export async function POST(request: NextRequest) {
       module: 'agent',
       userId,
       userEmail,
-      userRole: 'UNDEFINED',
+      userRole,
       details: {
         decision: 'DENY',
-        reason: 'ROLE_UNDEFINED',
-        message: 'INV-008: Cannot determine user role, failing closed',
+        reason: 'NO_PERMISSIONS',
+        message: 'INV-010/AG-004: No DB-driven permissions found in session',
       },
     });
+    // AG-005: Canonical denial message
     return NextResponse.json(
       { error: 'אין לך הרשאה מתאימה.' },
       { status: 403 }
@@ -257,9 +262,10 @@ export async function POST(request: NextRequest) {
       calledFunctions.push(functionName);
       console.log(`[Agent] Calling function: ${functionName}`, functionArgs);
 
-      // R1: Permission check before function execution
+      // RBAC v2 Phase 4 / AG-002: Permission check using session permissions (DB-driven)
+      // AG-001: Agent is read-only - only 'read' operation checked
       const requiredModule = FUNCTION_MODULE_MAP[functionName];
-      if (requiredModule && !hasModuleAccess(userRole, requiredModule, 'read')) {
+      if (requiredModule && !hasModuleAccess(session, requiredModule, 'read')) {
         // Log permission denial (internal only - do not expose details to client)
         await logActivity({
           action: 'AGENT_PERMISSION_DENIED',
