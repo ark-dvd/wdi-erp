@@ -1,10 +1,11 @@
-// Version: 20260127
+// Version: 20260202-PHASE0
 // RBAC v2: Use permission system from DOC-013/DOC-014
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
+// Phase 0 Remediation: INV-004, CC-001, CC-002
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
-import { logCrud } from '@/lib/activity'
+import { logCrud, logActivity } from '@/lib/activity'
 import { requirePermission } from '@/lib/permissions'
 import {
   parsePagination,
@@ -23,9 +24,45 @@ import {
 } from '@/lib/api-contracts'
 
 export async function GET(request: Request) {
+  const session = await auth()
+  const userId = (session?.user as any)?.id || null
+  const userRole = (session?.user as any)?.role || null
+
   try {
-    const session = await auth()
+    // INV-004: Authorization check required for all data-accessing routes
     if (!session) return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
+
+    // INV-004, CC-002: Check READ permission for contacts module (organizations are part of contacts per DOC-013 §6.1)
+    const denied = await requirePermission(session, 'contacts', 'read')
+    if (denied) {
+      // DOC-016 §7.1: Log authorization denial
+      await logActivity({
+        action: 'READ',
+        category: 'SECURITY',
+        module: 'organizations',
+        userId,
+        userRole,
+        details: {
+          decision: 'DENY',
+          reason: 'PERMISSION_DENIED',
+          operation: 'READ',
+        },
+      })
+      return denied
+    }
+
+    // DOC-016 §7.1: Log authorization grant (only once per request, not per record)
+    await logActivity({
+      action: 'READ',
+      category: 'SECURITY',
+      module: 'organizations',
+      userId,
+      userRole,
+      details: {
+        decision: 'GRANT',
+        operation: 'READ',
+      },
+    })
 
     const { searchParams } = new URL(request.url)
 

@@ -1,7 +1,8 @@
 // ============================================
 // src/app/api/agent/route.ts
-// Version: 20260124-STAGE63b
+// Version: 20260202-PHASE0
 // Stage 6.3b Remediation: Authorization Truthfulness
+// Phase 0 Remediation: INV-008 (Fail Closed)
 // R1: Deterministic Authorization Truthfulness
 // R2: LLM Must Not Control Security Flow
 // R3: Refusal Semantics Completion
@@ -122,9 +123,30 @@ export async function POST(request: NextRequest) {
 
   const userId = (session.user as any)?.id || 'unknown';
   const userEmail = session.user?.email || 'unknown';
-  // RBAC v1 FIX: session.user.role is a STRING, not an object with .name
-  // Previously: role?.name would always be undefined, falling back to 'USER'
-  const userRole = (session.user as any)?.role || 'USER';
+  // Phase 0 / INV-008: Authorization must fail closed
+  // If role cannot be determined, DENY access (do NOT default to non-canonical value)
+  const userRole = (session.user as any)?.role;
+
+  if (!userRole) {
+    // DOC-016 §7.1: Log authorization denial
+    await logActivity({
+      action: 'AGENT_PERMISSION_DENIED',
+      category: 'SECURITY',
+      module: 'agent',
+      userId,
+      userEmail,
+      userRole: 'UNDEFINED',
+      details: {
+        decision: 'DENY',
+        reason: 'ROLE_UNDEFINED',
+        message: 'INV-008: Cannot determine user role, failing closed',
+      },
+    });
+    return NextResponse.json(
+      { error: 'אין לך הרשאה מתאימה.' },
+      { status: 403 }
+    );
+  }
 
   const startTime = Date.now();
   let questionText = '';

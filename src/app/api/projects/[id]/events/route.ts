@@ -1,9 +1,10 @@
-// Version: 20260127
+// Version: 20260202-PHASE0
 // RBAC v2: Use permission system from DOC-013/DOC-014
+// Phase 0 Remediation: INV-004, INV-003, INV-008, CC-001, CC-002
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
-import { logCrud } from '@/lib/activity'
+import { logCrud, logActivity } from '@/lib/activity'
 import { supportsTextExtraction } from '@/lib/text-extraction'
 import { requirePermission } from '@/lib/permissions'
 
@@ -11,8 +12,67 @@ export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const session = await auth()
+  const userId = (session?.user as any)?.id || null
+  const userRole = (session?.user as any)?.role || null
   const { id } = await params
+
   try {
+    // INV-004: Authorization check required for all data-accessing routes
+    if (!session) {
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
+    }
+
+    // INV-003: Scope evaluation server-side only
+    // First get project to verify it exists and get domainId for scope check
+    const projectForAuth = await prisma.project.findUnique({
+      where: { id },
+      select: { id: true, domainId: true },
+    })
+
+    if (!projectForAuth) {
+      return NextResponse.json({ error: 'פרויקט לא נמצא' }, { status: 404 })
+    }
+
+    // INV-004, CC-002: Check READ permission for events on this project
+    const denied = await requirePermission(session, 'events', 'read', {
+      projectId: id,
+      domainId: projectForAuth.domainId || undefined,
+    })
+    if (denied) {
+      // DOC-016 §7.1: Log authorization denial
+      await logActivity({
+        action: 'READ',
+        category: 'SECURITY',
+        module: 'events',
+        userId,
+        userRole,
+        targetType: 'project_events',
+        targetId: id,
+        details: {
+          decision: 'DENY',
+          reason: 'PERMISSION_DENIED',
+          operation: 'READ',
+        },
+      })
+      return denied
+    }
+
+    // DOC-016 §7.1: Log authorization grant
+    await logActivity({
+      action: 'READ',
+      category: 'SECURITY',
+      module: 'events',
+      userId,
+      userRole,
+      targetType: 'project_events',
+      targetId: id,
+      details: {
+        decision: 'GRANT',
+        operation: 'READ',
+      },
+    })
+
     const project = await prisma.project.findUnique({
       where: { id },
       select: {
