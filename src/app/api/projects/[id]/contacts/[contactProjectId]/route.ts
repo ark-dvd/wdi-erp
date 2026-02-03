@@ -1,9 +1,14 @@
-// Version: 20260111-143100
-// Added: logCrud for UPDATE, DELETE
+// ================================================
+// WDI ERP - Project Contact Association API
+// Version: 20260202-RBAC-V2-PHASE5-B
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// B2: Added projects:update/delete permission gates
+// ================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
+import { requirePermission } from '@/lib/permissions'
 
 export async function PUT(
   request: NextRequest,
@@ -16,6 +21,12 @@ export async function PUT(
     }
 
     const { id: projectId, contactProjectId } = await params
+
+    // B2: RBAC v2 / DOC-016 §6.1: Permission gate for updating project contacts
+    // Scope enforcement via targetEntity { id: projectId }
+    const denied = await requirePermission(session, 'projects', 'update', { id: projectId })
+    if (denied) return denied
+
     const data = await request.json()
 
     // Get info for logging before update
@@ -72,6 +83,11 @@ export async function DELETE(
     }
 
     const { id: projectId, contactProjectId } = await params
+
+    // B2: RBAC v2 / DOC-016 §6.1: Permission gate for deleting project contacts
+    // Scope enforcement via targetEntity { id: projectId }
+    const denied = await requirePermission(session, 'projects', 'delete', { id: projectId })
+    if (denied) return denied
 
     // Get info for logging before delete
     const cp = await prisma.contactProject.findUnique({

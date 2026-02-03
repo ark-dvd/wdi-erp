@@ -1,6 +1,10 @@
-// Version: 20260127
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// ================================================
+// WDI ERP - Contacts API Route
+// Version: 20260202-RBAC-V2-PHASE5-B
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// B1: Added contacts:read permission gate to GET
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
+// ================================================
 import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
@@ -28,6 +32,11 @@ export async function GET(request: Request) {
     if (!session) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
     }
+
+    // B1: RBAC v2 / DOC-016 §6.1: Permission gate for reading contacts
+    // Note: Contacts module uses ALL scope (no domain/project filtering)
+    const denied = await requirePermission(session, 'contacts', 'read')
+    if (denied) return denied
 
     const { searchParams } = new URL(request.url)
 
