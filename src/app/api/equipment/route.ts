@@ -1,7 +1,8 @@
 // ================================================
 // WDI ERP - Equipment API Route
-// Version: 20260128-RBAC-V2
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// Version: 20260202-RBAC-V2-PHASE5-D
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// D2: OWN scope enforcement - filters by currentAssigneeId
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
@@ -26,7 +27,7 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { requirePermission } from '@/lib/permissions'
+import { requirePermission, getPermissionFilter } from '@/lib/permissions'
 
 export async function GET(request: NextRequest) {
   const session = await auth()
@@ -35,9 +36,13 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // RBAC v2: Check read permission for equipment
+    // D2: RBAC v2 / DOC-016 §6.1: Permission gate for reading equipment
     const denied = await requirePermission(session, 'equipment', 'read')
     if (denied) return denied
+
+    // D2: Get user's permission scope for OWN filtering
+    const userId = (session.user as any)?.id
+    const permFilter = userId ? await getPermissionFilter(userId, 'equipment') : null
 
     const { searchParams } = new URL(request.url)
 
@@ -58,6 +63,22 @@ export async function GET(request: NextRequest) {
     }
 
     const where: any = {}
+
+    // D2: Apply OWN scope filtering - only equipment assigned to user
+    if (permFilter?.scope === 'OWN') {
+      // Get user's employee ID for assignment filtering
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        select: { employee: { select: { id: true } } }
+      })
+      if (user?.employee?.id) {
+        where.currentAssigneeId = user.employee.id
+      } else {
+        // User has no employee record - return empty result
+        return versionedResponse(paginatedResponse([], page, limit, 0))
+      }
+    }
+    // ALL scope: no additional filtering needed
 
     if (status && status !== 'all') {
       where.status = status
