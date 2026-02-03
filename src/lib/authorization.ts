@@ -1,7 +1,8 @@
 // ================================================
 // WDI ERP - RBAC v2 Authorization Library
-// Version: 20260202-RBAC-V2
+// Version: 20260202-RBAC-V2-PHASE5-E
 // Implements: DOC-016 v2.0, INV-007 (Single Role Enforcement)
+// E1: Deprecated checkAdminAccess() and RBAC_ADMIN_ROLES
 // ================================================
 
 import { prisma } from './prisma'
@@ -436,6 +437,10 @@ export interface ExtendedSession extends Session {
  * Check if user has admin access (owner or trust_officer)
  * Checks both roles array AND primary role string for robustness
  * DOC-013 §10.2
+ *
+ * @deprecated Use requirePermission(session, 'admin', 'read') instead.
+ * Role-name checks bypass RBAC v2 permission+scope enforcement and violate FP-002.
+ * TODO: Remove after all callers migrated to permission-based checks (Phase 6 UI + remaining routes).
  */
 export function checkAdminAccess(session: any): boolean {
   // Check roles array first
@@ -516,6 +521,10 @@ export function isAgentModuleAllowed(module: Module): boolean {
 
 /**
  * Roles that can modify RBAC configuration
+ *
+ * @deprecated Use permission-based checks via requirePermission(session, 'admin', 'read')
+ * instead of role-name arrays. Role-based checks bypass RBAC v2 scope enforcement.
+ * TODO: Remove after all callers migrated to permission-based checks (Phase 6 UI + remaining routes).
  */
 export const RBAC_ADMIN_ROLES: CanonicalRole[] = ['owner', 'trust_officer']
 
