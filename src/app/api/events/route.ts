@@ -14,10 +14,11 @@ import {
   FILTER_DEFINITIONS,
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
-import { requirePermission } from '@/lib/permissions'
+import { requirePermission, getPermissionFilter } from '@/lib/permissions'
 
-// Version: 20260128-RBAC-V2
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// Version: 20260202-RBAC-V2-PHASE5-C
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// C2: Added scope-based filtering for ASSIGNED users
 // MAYBACH: R1-Pagination, R3-FilterStrictness, R4-Sorting, R5-Versioning
 
 export async function GET(request: Request) {
@@ -26,9 +27,13 @@ export async function GET(request: Request) {
     return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
   }
 
-  // RBAC v2: Check read permission for events
+  // C2: RBAC v2 / DOC-016 §6.1: Permission gate for reading events
   const denied = await requirePermission(session, 'events', 'read')
   if (denied) return denied
+
+  // C2: Get user's permission scope to filter results for ASSIGNED scope
+  const userId = (session.user as any)?.id
+  const permFilter = userId ? await getPermissionFilter(userId, 'events') : null
 
   try {
     const { searchParams } = new URL(request.url)
@@ -51,6 +56,12 @@ export async function GET(request: Request) {
 
     const where: any = {}
 
+    // C2: Get assigned project IDs for ASSIGNED scope users
+    let assignedProjectIds: string[] | null = null
+    if (permFilter?.scope === 'ASSIGNED' && permFilter.where?.id?.in) {
+      assignedProjectIds = permFilter.where.id.in as string[]
+    }
+
     // סינון לפי פרויקט (כולל ילדים)
     if (projectId) {
       const project = await prisma.project.findUnique({
@@ -67,15 +78,24 @@ export async function GET(request: Request) {
       })
 
       if (project) {
-        const projectIds = [project.id]
+        let projectIds = [project.id]
         project.children.forEach(child => {
           projectIds.push(child.id)
           child.children.forEach(grandchild => {
             projectIds.push(grandchild.id)
           })
         })
+
+        // C2: For ASSIGNED scope, intersect with user's assigned projects
+        if (assignedProjectIds) {
+          projectIds = projectIds.filter(id => assignedProjectIds!.includes(id))
+        }
+
         where.projectId = { in: projectIds }
       }
+    } else if (assignedProjectIds) {
+      // C2: No project filter specified - apply ASSIGNED scope filter
+      where.projectId = { in: assignedProjectIds }
     }
 
     // סינון לפי סוג

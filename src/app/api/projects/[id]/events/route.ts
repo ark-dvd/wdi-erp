@@ -1,6 +1,7 @@
-// Version: 20260202-PHASE0
-// RBAC v2: Use permission system from DOC-013/DOC-014
-// Phase 0 Remediation: INV-004, INV-003, INV-008, CC-001, CC-002
+// Version: 20260202-RBAC-V2-PHASE5-C
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// C4: Project events with ASSIGNED scope support via projectId+domainId
+// INV-004, INV-003, INV-008: Authorization, server-side scope, fail-closed
 import { prisma } from '@/lib/prisma'
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'

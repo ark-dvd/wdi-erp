@@ -1,7 +1,8 @@
 // ============================================
 // src/app/api/events/[id]/route.ts
-// Version: 20260127
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// Version: 20260202-RBAC-V2-PHASE5-C
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// C1: Fixed projectId passing for ASSIGNED scope enforcement
 // ============================================
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -29,9 +30,12 @@ export async function GET(
 
     if (!event) return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
 
-    // RBAC v2: Check read permission with project's domainId for DOMAIN scope enforcement
+    // C1: RBAC v2 / DOC-016 §6.1: Permission gate for reading events
+    // CRITICAL: Pass projectId (not event id) for ASSIGNED scope enforcement
+    // Also pass domainId for DOMAIN scope and createdById for OWN scope
     const denied = await requirePermission(session, 'events', 'read', {
       id,
+      projectId: event.projectId,
       domainId: event.project?.domainId || undefined,
       createdById: event.createdById || undefined
     })
@@ -56,16 +60,19 @@ export async function PUT(
     // Get event with project info for RBAC check and logging
     const existingEvent = await prisma.projectEvent.findUnique({
       where: { id },
-      include: { project: { select: { name: true, domainId: true } } }
+      include: { project: { select: { id: true, name: true, domainId: true } } }
     })
 
     if (!existingEvent) {
       return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
     }
 
-    // RBAC v2: Check update permission with project's domainId for DOMAIN scope enforcement
+    // C1: RBAC v2 / DOC-016 §6.1: Permission gate for updating events
+    // CRITICAL: Pass projectId (not event id) for ASSIGNED scope enforcement
+    // Also pass domainId for DOMAIN scope and createdById for OWN scope
     const denied = await requirePermission(session, 'events', 'update', {
       id,
+      projectId: existingEvent.projectId,
       domainId: existingEvent.project?.domainId || undefined,
       createdById: existingEvent.createdById || undefined
     })
@@ -81,7 +88,7 @@ export async function PUT(
     })
 
     // Logging - added
-    await logCrud('UPDATE', 'events', 'event', id, 
+    await logCrud('UPDATE', 'events', 'event', id,
       `${data.eventType} - ${existingEvent?.project?.name || ''}`, {
       projectName: existingEvent?.project?.name,
       eventType: data.eventType,
@@ -105,16 +112,19 @@ export async function DELETE(
     // Get event info before delete for RBAC check and logging
     const event = await prisma.projectEvent.findUnique({
       where: { id },
-      include: { project: { select: { name: true, domainId: true } } }
+      include: { project: { select: { id: true, name: true, domainId: true } } }
     })
 
     if (!event) {
       return NextResponse.json({ error: 'אירוע לא נמצא' }, { status: 404 })
     }
 
-    // RBAC v2: Check delete permission with project's domainId for DOMAIN scope enforcement
+    // C1: RBAC v2 / DOC-016 §6.1: Permission gate for deleting events
+    // CRITICAL: Pass projectId (not event id) for ASSIGNED scope enforcement
+    // Also pass domainId for DOMAIN scope and createdById for OWN scope
     const denied = await requirePermission(session, 'events', 'delete', {
       id,
+      projectId: event.projectId,
       domainId: event.project?.domainId || undefined,
       createdById: event.createdById || undefined
     })

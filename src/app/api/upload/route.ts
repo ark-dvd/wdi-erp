@@ -1,8 +1,10 @@
 // ============================================
 // src/app/api/upload/route.ts
-// Version: 20260202-PHASE0
-// RBAC v2: Use permission system from DOC-013/DOC-014
-// Phase 0 Remediation: INV-004, INV-006, FP-001, CC-001, CC-002
+// Version: 20260202-RBAC-V2-PHASE5-C
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// C3: Parent-follow rules with ASSIGNED scope support
+// INV-004: Authorization check required
+// INV-006: Server-side parent verification (DOC-013 §6.3 M-005)
 // ============================================
 
 import { NextResponse } from 'next/server'
