@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Admin Activity Logs Page
-// Version: 20260125-RBAC-V1
-// RBAC v1: Multi-role authorization per DOC-013 §10.2
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Permission-based admin gating (DOC-016 §6.1, FP-002)
 // ================================================
 'use client'
 
@@ -11,9 +11,8 @@ import { usePageView } from '@/hooks/useActivityLog'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Search, Download, Eye, RefreshCw, ArrowRight } from 'lucide-react'
-
-// RBAC admin roles that can access this page (DOC-013 §10.2)
-const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
+import { canAccessAdmin } from '@/lib/ui-permissions'
+import NoAccessPage from '@/components/NoAccessPage'
 
 interface ActivityLog {
   id: string
@@ -199,20 +198,15 @@ export default function BackOfficeLogsPage() {
   
   const [selectedLog, setSelectedLog] = useState<ActivityLog | null>(null)
 
-  // RBAC v1: Check admin access (both roles array and role string)
-  const userRoles = (session?.user as any)?.roles || []
-  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
-  const primaryRole = (session?.user as any)?.role
-
-  const canAccessAdmin =
-    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
-    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
+  // RBAC v2 / Phase 6: Permission-based admin gating
+  const permissions = (session?.user as any)?.permissions as string[] | undefined
+  const hasAdminAccess = canAccessAdmin(permissions)
 
   useEffect(() => {
-    if (status === 'authenticated' && !canAccessAdmin) {
+    if (status === 'authenticated' && !hasAdminAccess) {
       router.push('/dashboard')
     }
-  }, [status, canAccessAdmin, router])
+  }, [status, hasAdminAccess, router])
 
   const fetchLogs = async () => {
     try {
@@ -255,11 +249,11 @@ export default function BackOfficeLogsPage() {
   }
 
   useEffect(() => {
-    if (canAccessAdmin) {
+    if (hasAdminAccess) {
       fetchLogs()
       fetchStats()
     }
-  }, [page, filterAction, filterModule, canAccessAdmin])
+  }, [page, filterAction, filterModule, hasAdminAccess])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -314,8 +308,8 @@ export default function BackOfficeLogsPage() {
     return <div className="p-8 text-center">טוען...</div>
   }
 
-  if (!canAccessAdmin) {
-    return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
+  if (!hasAdminAccess) {
+    return <NoAccessPage />
   }
 
   if (error) {

@@ -1,5 +1,11 @@
 'use client'
 
+// ================================================
+// WDI ERP - Sidebar Component
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Permission-based admin gating (DOC-016 §6.1, FP-002)
+// ================================================
+
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { signOut, useSession } from 'next-auth/react'
@@ -19,9 +25,7 @@ import {
   UserCircle,
   Contact
 } from 'lucide-react'
-
-// RBAC v1: Canonical admin roles (DOC-013 §10.2)
-const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
+import { canAccessAdmin } from '@/lib/ui-permissions'
 
 const menuGroup1 = [
   { href: '/dashboard/events', label: 'יומן אירועים', icon: Calendar },
@@ -56,15 +60,10 @@ export default function Sidebar() {
   const user = session?.user
   const userRoleDisplayName = (user as any)?.roleDisplayName || 'משתמש'
 
-  // RBAC v1: Check admin access - multiple fallback checks for robustness
-  const userRoles = (user as any)?.roles || []
-  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
-  const primaryRole = (user as any)?.role as string | undefined
-
-  // Check BOTH the roles array AND the primary role string
-  const canAccessAdmin =
-    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
-    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
+  // RBAC v2 / Phase 6: Permission-based admin gating
+  // Uses admin:read permission instead of hardcoded role arrays
+  const permissions = (user as any)?.permissions as string[] | undefined
+  const hasAdminAccess = canAccessAdmin(permissions)
 
   const renderMenuItem = (item: { href: string; label: string; icon: any }) => {
     const Icon = item.icon
@@ -106,7 +105,7 @@ export default function Sidebar() {
         </ul>
       </nav>
 
-      {canAccessAdmin && (
+      {hasAdminAccess && (
         <div className="px-3 py-2 border-t border-[#e2e4e8]">
           <Link
             href="/dashboard/admin"

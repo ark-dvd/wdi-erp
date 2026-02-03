@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Admin Import Contacts Page
-// Version: 20260125-RBAC-V1
-// RBAC v1: Multi-role authorization per DOC-013 §10.2
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Permission-based admin gating (DOC-016 §6.1, FP-002)
 // ================================================
 'use client'
 
@@ -9,9 +9,8 @@ import { useSession } from 'next-auth/react'
 import { useRouter } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { Upload, FileText, ArrowRight, Loader2, CheckCircle, AlertTriangle, ChevronDown, ChevronUp, Merge, SkipForward, Search } from 'lucide-react'
-
-// RBAC admin roles that can access this page (DOC-013 §10.2)
-const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
+import { canAccessAdmin } from '@/lib/ui-permissions'
+import NoAccessPage from '@/components/NoAccessPage'
 
 interface EnrichedOrganization {
   name?: string
@@ -99,10 +98,9 @@ export default function ImportContactsPage() {
   const { data: session, status } = useSession()
   const router = useRouter()
 
-  // RBAC v1: Check multi-role authorization
-  const userRoles = (session?.user as any)?.roles || []
-  const userRoleNames = userRoles.map((r: { name: string }) => r.name)
-  const canAccessAdmin = userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r))
+  // RBAC v2 / Phase 6: Permission-based admin gating
+  const permissions = (session?.user as any)?.permissions as string[] | undefined
+  const hasAdminAccess = canAccessAdmin(permissions)
 
   const [rawInput, setRawInput] = useState('')
   const [sourceContext, setSourceContext] = useState('')
@@ -120,17 +118,17 @@ export default function ImportContactsPage() {
   })
 
   useEffect(() => {
-    if (status === 'authenticated' && !canAccessAdmin) {
+    if (status === 'authenticated' && !hasAdminAccess) {
       router.push('/dashboard')
     }
-  }, [status, canAccessAdmin, router])
+  }, [status, hasAdminAccess, router])
 
   if (status === 'loading') {
     return <div className="p-8 text-center">טוען...</div>
   }
 
-  if (!canAccessAdmin) {
-    return <div className="p-8 text-center text-red-600">אין לך הרשאה לדף זה</div>
+  if (!hasAdminAccess) {
+    return <NoAccessPage />
   }
 
   const handleDrag = (e: React.DragEvent) => {

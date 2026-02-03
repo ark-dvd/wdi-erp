@@ -1,7 +1,7 @@
 // ================================================
 // WDI ERP - Admin Roles Overview Page
-// Version: 20260125-MAYBACH
-// Maybach-grade UI per Design Document
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Permission-based admin gating (DOC-016 §6.1, FP-002)
 // ================================================
 
 'use client'
@@ -12,6 +12,8 @@ import { useRouter } from 'next/navigation'
 import { usePageView } from '@/hooks/useActivityLog'
 import { Shield, Loader2, Info, Users } from 'lucide-react'
 import { AdminPageHeader, RoleCard } from '@/components/admin'
+import { canAccessAdmin } from '@/lib/ui-permissions'
+import NoAccessPage from '@/components/NoAccessPage'
 
 // ================================================
 // TYPES
@@ -27,13 +29,6 @@ interface Role {
 }
 
 // ================================================
-// CONSTANTS
-// ================================================
-
-// RBAC admin roles that can access this page (DOC-013 §10.2)
-const RBAC_ADMIN_ROLES = ['owner', 'trust_officer']
-
-// ================================================
 // COMPONENT
 // ================================================
 
@@ -46,28 +41,23 @@ export default function AdminRolesPage() {
   const [roles, setRoles] = useState<Role[]>([])
   const [loading, setLoading] = useState(true)
 
-  // RBAC v1: Check admin access (both roles array and role string)
-  const userRoles = (session?.user as any)?.roles || []
-  const userRoleNames: string[] = userRoles.map((r: { name: string }) => r?.name).filter(Boolean)
-  const primaryRole = (session?.user as any)?.role
-
-  const canManageRoles =
-    userRoleNames.some((r: string) => RBAC_ADMIN_ROLES.includes(r)) ||
-    (primaryRole ? RBAC_ADMIN_ROLES.includes(primaryRole) : false)
+  // RBAC v2 / Phase 6: Permission-based admin gating
+  const permissions = (session?.user as any)?.permissions as string[] | undefined
+  const hasAdminAccess = canAccessAdmin(permissions)
 
   // Redirect if not authorized
   useEffect(() => {
-    if (status === 'authenticated' && !canManageRoles) {
+    if (status === 'authenticated' && !hasAdminAccess) {
       router.push('/dashboard')
     }
-  }, [status, canManageRoles, router])
+  }, [status, hasAdminAccess, router])
 
   // Fetch roles
   useEffect(() => {
-    if (canManageRoles) {
+    if (hasAdminAccess) {
       fetchRoles()
     }
-  }, [canManageRoles])
+  }, [hasAdminAccess])
 
   const fetchRoles = async () => {
     try {
@@ -100,18 +90,8 @@ export default function AdminRolesPage() {
   }
 
   // Unauthorized state
-  if (!canManageRoles) {
-    return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Shield className="w-8 h-8 text-red-500" />
-          </div>
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">אין הרשאה</h2>
-          <p className="text-gray-500">אין לך הרשאה לגשת לדף זה</p>
-        </div>
-      </div>
-    )
+  if (!hasAdminAccess) {
+    return <NoAccessPage />
   }
 
   return (
