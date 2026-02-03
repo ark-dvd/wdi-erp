@@ -9,6 +9,12 @@ import { prisma } from './prisma'
 import { Session } from 'next-auth'
 
 // ================================================
+// DEBUG FLAG
+// ================================================
+
+const DEBUG_AUTH_CONTEXT = process.env.DEBUG_AUTH_CONTEXT === 'true'
+
+// ================================================
 // CANONICAL TYPES (DOC-013 §4-5)
 // ================================================
 
@@ -182,22 +188,48 @@ export async function loadUserAuthContext(userId: string): Promise<UserAuthConte
 
   // Get assigned projects through employee relationships
   let assignedProjectIds: string[] = []
-  if (user.employee) {
-    const employee = await prisma.employee.findUnique({
-      where: { id: user.employee.id },
-      include: {
-        managedProjects: { select: { projectId: true } },
-        coordinatedProjects: { select: { projectId: true } },
-        ledProjects: { select: { id: true } },
-      },
-    })
+  const employeeId = user.employee?.id
 
-    if (employee) {
-      assignedProjectIds = [
-        ...employee.managedProjects.map((p) => p.projectId),
-        ...employee.coordinatedProjects.map((p) => p.projectId),
-        ...employee.ledProjects.map((p) => p.id),
-      ]
+  // Debug logging for ASSIGNED scope investigation
+  if (DEBUG_AUTH_CONTEXT) {
+    console.log(`[AUTH-CONTEXT] userId=${userId}, employeeId=${employeeId || 'NONE'}`)
+  }
+
+  if (employeeId) {
+    // Query project assignments from the actual tables (same pattern as permissions.ts)
+    const [ledProjects, managedProjects, coordinatedProjects] = await Promise.all([
+      // Projects where employee is lead
+      prisma.project.findMany({
+        where: { leadId: employeeId },
+        select: { id: true },
+      }),
+      // Projects where employee is manager
+      prisma.projectManager.findMany({
+        where: { employeeId },
+        select: { projectId: true },
+      }),
+      // Projects where employee is coordinator
+      prisma.projectCoordinator.findMany({
+        where: { employeeId },
+        select: { projectId: true },
+      }),
+    ])
+
+    assignedProjectIds = [
+      ...ledProjects.map((p) => p.id),
+      ...managedProjects.map((p) => p.projectId),
+      ...coordinatedProjects.map((p) => p.projectId),
+    ]
+
+    // Remove duplicates
+    assignedProjectIds = Array.from(new Set(assignedProjectIds))
+
+    if (DEBUG_AUTH_CONTEXT) {
+      console.log(
+        `[AUTH-CONTEXT] employeeId=${employeeId}: ` +
+        `ledProjects=${ledProjects.length}, managedProjects=${managedProjects.length}, ` +
+        `coordinatedProjects=${coordinatedProjects.length}, total=${assignedProjectIds.length}`
+      )
     }
   }
 
