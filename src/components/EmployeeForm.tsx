@@ -2,7 +2,8 @@
 
 // ================================================
 // WDI ERP - Employee Form Component
-// Version: 20260124
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Scope-based PII gating (DOC-016 §6.1, FP-002)
 // Fixes: #6 education degrees + certificate upload, #7 departments list,
 //        #8 email fields, #10 certifications section, #12 dates, #17 validations
 // UI-015: Added dirty state warning
@@ -92,6 +93,8 @@ interface EmployeeFormProps {
   initialData?: Partial<EmployeeFormData>
   isEdit?: boolean
   employeeId?: string
+  // RBAC v2: Controls visibility of PII fields (idNumber, birthDate, salary, family)
+  showSensitiveHR?: boolean
 }
 
 const roles = [
@@ -114,7 +117,7 @@ const statuses = ['פעיל', 'לא פעיל', 'בחופשה']
 // #6: רשימת סוגי תארים מורחבת
 const degreeTypes = ['הנדסאי', 'מהנדס', 'תואר ראשון', 'תואר שני', 'תואר שלישי']
 
-export default function EmployeeForm({ initialData, isEdit, employeeId }: EmployeeFormProps) {
+export default function EmployeeForm({ initialData, isEdit, employeeId, showSensitiveHR = true }: EmployeeFormProps) {
   const router = useRouter()
   const { showSuccess, showError: showErrorToast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -457,33 +460,38 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          {/* #17: ת.ז. עם וולידציה */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              תעודת זהות <span className="text-red-500">*</span>
-              <span className="text-xs text-gray-400 mr-1">(9 ספרות)</span>
-            </label>
-            <input
-              type="text"
-              name="idNumber"
-              value={formData.idNumber}
-              onChange={handleIdChange}
-              required
-              maxLength={9}
-              pattern="\d{9}"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
-            <input
-              type="date"
-              name="birthDate"
-              value={formData.birthDate}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {/* RBAC v2: idNumber hidden for MAIN_PAGE users */}
+          {showSensitiveHR && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                תעודת זהות <span className="text-red-500">*</span>
+                <span className="text-xs text-gray-400 mr-1">(9 ספרות)</span>
+              </label>
+              <input
+                type="text"
+                name="idNumber"
+                value={formData.idNumber}
+                onChange={handleIdChange}
+                required
+                maxLength={9}
+                pattern="\d{9}"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
+              />
+            </div>
+          )}
+          {/* RBAC v2: birthDate hidden for MAIN_PAGE users */}
+          {showSensitiveHR && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
+              <input
+                type="date"
+                name="birthDate"
+                value={formData.birthDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
           {/* #17: טלפון עם נרמול */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -617,17 +625,20 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
               className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">שכר ברוטו</label>
-            <input
-              type="number"
-              name="grossSalary"
-              value={formData.grossSalary}
-              onChange={handleChange}
-              min="0"
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {/* RBAC v2: grossSalary hidden for MAIN_PAGE users */}
+          {showSensitiveHR && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">שכר ברוטו</label>
+              <input
+                type="number"
+                name="grossSalary"
+                value={formData.grossSalary}
+                onChange={handleChange}
+                min="0"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">תאריך התחלה</label>
             <input
@@ -678,152 +689,156 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
         </div>
       </div>
 
-      {/* בן/בת זוג */}
-      <div className="card">
-        <h2 className="text-lg font-semibold text-gray-800 mb-4">פרטי בן/בת זוג</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">שם פרטי</label>
-            <input
-              type="text"
-              name="spouseFirstName"
-              value={formData.spouseFirstName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">שם משפחה</label>
-            <input
-              type="text"
-              name="spouseLastName"
-              value={formData.spouseLastName}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תעודת זהות</label>
-            <input
-              type="text"
-              name="spouseIdNumber"
-              value={formData.spouseIdNumber}
-              onChange={(e) => {
-                const digitsOnly = e.target.value.replace(/\D/g, '').substring(0, 9)
-                setFormData(prev => ({ ...prev, spouseIdNumber: digitsOnly }))
-              }}
-              maxLength={9}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
-            <input
-              type="date"
-              name="spouseBirthDate"
-              value={formData.spouseBirthDate}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">טלפון</label>
-            <input
-              type="tel"
-              name="spousePhone"
-              value={formData.spousePhone}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
-            <input
-              type="email"
-              name="spouseEmail"
-              value={formData.spouseEmail}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">תאריך נישואין</label>
-            <input
-              type="date"
-              name="marriageDate"
-              value={formData.marriageDate}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+      {/* RBAC v2: Spouse section hidden for MAIN_PAGE users */}
+      {showSensitiveHR && (
+        <div className="card">
+          <h2 className="text-lg font-semibold text-gray-800 mb-4">פרטי בן/בת זוג</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">שם פרטי</label>
+              <input
+                type="text"
+                name="spouseFirstName"
+                value={formData.spouseFirstName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">שם משפחה</label>
+              <input
+                type="text"
+                name="spouseLastName"
+                value={formData.spouseLastName}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תעודת זהות</label>
+              <input
+                type="text"
+                name="spouseIdNumber"
+                value={formData.spouseIdNumber}
+                onChange={(e) => {
+                  const digitsOnly = e.target.value.replace(/\D/g, '').substring(0, 9)
+                  setFormData(prev => ({ ...prev, spouseIdNumber: digitsOnly }))
+                }}
+                maxLength={9}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
+              <input
+                type="date"
+                name="spouseBirthDate"
+                value={formData.spouseBirthDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">טלפון</label>
+              <input
+                type="tel"
+                name="spousePhone"
+                value={formData.spousePhone}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">אימייל</label>
+              <input
+                type="email"
+                name="spouseEmail"
+                value={formData.spouseEmail}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">תאריך נישואין</label>
+              <input
+                type="date"
+                name="marriageDate"
+                value={formData.marriageDate}
+                onChange={handleChange}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* ילדים */}
-      <div className="card">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-800">ילדים</h2>
-          <button
-            type="button"
-            onClick={addChild}
-            disabled={formData.children.length >= 7}
-            className="btn btn-secondary text-sm"
-          >
-            <Plus size={16} />
-            הוסף ילד
-          </button>
-        </div>
-        {formData.children.length === 0 ? (
-          <p className="text-gray-500 text-center py-4">לא הוזנו ילדים</p>
-        ) : (
-          <div className="space-y-4">
-            {formData.children.map((child, index) => (
-              <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">שם</label>
-                    <input
-                      type="text"
-                      value={child.name}
-                      onChange={(e) => updateChild(index, 'name', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
-                    <input
-                      type="date"
-                      value={child.birthDate}
-                      onChange={(e) => updateChild(index, 'birthDate', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ת.ז.</label>
-                    <input
-                      type="text"
-                      value={child.idNumber}
-                      onChange={(e) => {
-                        const digitsOnly = e.target.value.replace(/\D/g, '').substring(0, 9)
-                        updateChild(index, 'idNumber', digitsOnly)
-                      }}
-                      maxLength={9}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
-                    />
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => removeChild(index)}
-                  className="p-2 text-gray-400 hover:text-red-600"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            ))}
+      {/* RBAC v2: Children section hidden for MAIN_PAGE users */}
+      {showSensitiveHR && (
+        <div className="card">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-800">ילדים</h2>
+            <button
+              type="button"
+              onClick={addChild}
+              disabled={formData.children.length >= 7}
+              className="btn btn-secondary text-sm"
+            >
+              <Plus size={16} />
+              הוסף ילד
+            </button>
           </div>
-        )}
-      </div>
+          {formData.children.length === 0 ? (
+            <p className="text-gray-500 text-center py-4">לא הוזנו ילדים</p>
+          ) : (
+            <div className="space-y-4">
+              {formData.children.map((child, index) => (
+                <div key={index} className="flex items-start gap-4 p-4 bg-gray-50 rounded-lg">
+                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">שם</label>
+                      <input
+                        type="text"
+                        value={child.name}
+                        onChange={(e) => updateChild(index, 'name', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">תאריך לידה</label>
+                      <input
+                        type="date"
+                        value={child.birthDate}
+                        onChange={(e) => updateChild(index, 'birthDate', e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">ת.ז.</label>
+                      <input
+                        type="text"
+                        value={child.idNumber}
+                        onChange={(e) => {
+                          const digitsOnly = e.target.value.replace(/\D/g, '').substring(0, 9)
+                          updateChild(index, 'idNumber', digitsOnly)
+                        }}
+                        maxLength={9}
+                        className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ltr"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeChild(index)}
+                    className="p-2 text-gray-400 hover:text-red-600"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* #6: השכלה עם תעודות צמודות */}
       <div className="card">
@@ -1058,54 +1073,59 @@ export default function EmployeeForm({ initialData, isEdit, employeeId }: Employ
               )}
             </div>
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">צילום ת.ז.</label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(e) => handleFileChange(e, 'idCardFileUrl', 'id-cards')}
-              className="hidden"
-              id="idCardFileUrl"
-            />
-            <label
-              htmlFor="idCardFileUrl"
-              className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
-            >
-              {formData.idCardFileUrl ? '✓ הועלה' : 'בחר קובץ'}
-            </label>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">צילום רישיון נהיגה</label>
-            <input
-              type="file"
-              accept="image/*,.pdf"
-              onChange={(e) => handleFileChange(e, 'driversLicenseFileUrl', 'licenses')}
-              className="hidden"
-              id="driversLicenseFileUrl"
-            />
-            <label
-              htmlFor="driversLicenseFileUrl"
-              className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
-            >
-              {formData.driversLicenseFileUrl ? '✓ הועלה' : 'בחר קובץ'}
-            </label>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">חוזה העסקה</label>
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={(e) => handleFileChange(e, 'contractFileUrl', 'contracts')}
-              className="hidden"
-              id="contractFileUrl"
-            />
-            <label
-              htmlFor="contractFileUrl"
-              className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
-            >
-              {formData.contractFileUrl ? '✓ הועלה' : 'בחר קובץ'}
-            </label>
-          </div>
+          {/* RBAC v2: Sensitive document uploads hidden for MAIN_PAGE users */}
+          {showSensitiveHR && (
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">צילום ת.ז.</label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => handleFileChange(e, 'idCardFileUrl', 'id-cards')}
+                  className="hidden"
+                  id="idCardFileUrl"
+                />
+                <label
+                  htmlFor="idCardFileUrl"
+                  className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
+                >
+                  {formData.idCardFileUrl ? '✓ הועלה' : 'בחר קובץ'}
+                </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">צילום רישיון נהיגה</label>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => handleFileChange(e, 'driversLicenseFileUrl', 'licenses')}
+                  className="hidden"
+                  id="driversLicenseFileUrl"
+                />
+                <label
+                  htmlFor="driversLicenseFileUrl"
+                  className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
+                >
+                  {formData.driversLicenseFileUrl ? '✓ הועלה' : 'בחר קובץ'}
+                </label>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">חוזה העסקה</label>
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={(e) => handleFileChange(e, 'contractFileUrl', 'contracts')}
+                  className="hidden"
+                  id="contractFileUrl"
+                />
+                <label
+                  htmlFor="contractFileUrl"
+                  className="block px-3 py-2 border border-dashed border-gray-300 rounded-lg text-center cursor-pointer hover:border-blue-500"
+                >
+                  {formData.contractFileUrl ? '✓ הועלה' : 'בחר קובץ'}
+                </label>
+              </div>
+            </>
+          )}
         </div>
       </div>
 

@@ -2,14 +2,16 @@
 
 // ================================================
 // WDI ERP - Employee View Page
-// Version: 20251211-143100
-// Fixes: #11 show active projects only, #12 dates, #13 show all personal details
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Scope-based PII gating (DOC-016 §6.1, FP-002)
 // ================================================
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { ArrowRight, Edit, Mail, Phone, MapPin, Calendar, Briefcase, GraduationCap, Users, FileText, Linkedin, Shield, Award, Eye } from 'lucide-react'
+import { useSession } from 'next-auth/react'
+import { ArrowRight, Edit, Mail, Phone, MapPin, Calendar, Briefcase, GraduationCap, Users, FileText, Linkedin, Shield, Award, Eye, ShieldOff } from 'lucide-react'
+import { getHRScope } from '@/lib/ui-permissions'
 
 interface Employee {
   id: string
@@ -62,14 +64,27 @@ function getProxyUrl(url: string | null): string | null {
 export default function EmployeeViewPage() {
   const params = useParams()
   const id = params?.id as string
+  const { data: session, status: sessionStatus } = useSession()
   const [employee, setEmployee] = useState<Employee | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // RBAC v2 / Phase 6: HR scope-based access control
+  const permissions = (session?.user as any)?.permissions as string[] | undefined
+  const hrScope = getHRScope(permissions)
+  const currentUserEmployeeId = (session?.user as any)?.employeeId
+
+  // Determine access level:
+  // - ALL: full access to any employee
+  // - SELF: only own record
+  // - MAIN_PAGE or null: no access to detail cards
+  const canViewCard = hrScope === 'ALL' || (hrScope === 'SELF' && currentUserEmployeeId === id)
+  const showSensitiveHR = hrScope === 'ALL' || hrScope === 'SELF'
+
   useEffect(() => {
-    if (id) {
+    if (id && canViewCard) {
       fetchEmployee()
     }
-  }, [id])
+  }, [id, canViewCard])
 
   const fetchEmployee = async () => {
     try {
@@ -85,10 +100,28 @@ export default function EmployeeViewPage() {
     }
   }
 
-  if (loading) {
+  // Loading state - wait for session and data
+  if (sessionStatus === 'loading' || loading) {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    )
+  }
+
+  // RBAC v2 / Phase 6: Access denied for MAIN_PAGE users or SELF viewing other records
+  if (!canViewCard) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-8">
+        <ShieldOff className="w-16 h-16 text-gray-300 mb-4" />
+        <h2 className="text-xl font-semibold text-gray-700 mb-2">אין גישה</h2>
+        <p className="text-gray-500 mb-6">אין לך הרשאה לצפות בכרטיס עובד זה.</p>
+        <Link
+          href="/dashboard/hr"
+          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          חזרה לרשימת עובדים
+        </Link>
       </div>
     )
   }
@@ -241,12 +274,16 @@ export default function EmployeeViewPage() {
         <div className="card">
           <h2 className="text-lg font-semibold text-gray-800 mb-4">פרטים אישיים</h2>
           <dl className="space-y-3">
-            <div className="flex items-center gap-3">
-              <span className="text-gray-400"><FileText size={18} /></span>
-              <dt className="text-gray-500 w-28">ת.ז.:</dt>
-              <dd className="font-medium ltr">{employee.idNumber}</dd>
-            </div>
-            {employee.birthDate && (
+            {/* RBAC v2: idNumber hidden for MAIN_PAGE users */}
+            {showSensitiveHR && (
+              <div className="flex items-center gap-3">
+                <span className="text-gray-400"><FileText size={18} /></span>
+                <dt className="text-gray-500 w-28">ת.ז.:</dt>
+                <dd className="font-medium ltr">{employee.idNumber}</dd>
+              </div>
+            )}
+            {/* RBAC v2: birthDate/age hidden for MAIN_PAGE users */}
+            {showSensitiveHR && employee.birthDate && (
               <>
                 <div className="flex items-center gap-3">
                   <span className="text-gray-400"><Calendar size={18} /></span>
@@ -323,7 +360,8 @@ export default function EmployeeViewPage() {
                 <dd className="font-medium">{employee.employmentPercent}%</dd>
               </div>
             )}
-            {employee.grossSalary && (
+            {/* RBAC v2: grossSalary hidden for MAIN_PAGE users */}
+            {showSensitiveHR && employee.grossSalary && (
               <div className="flex items-center gap-3">
                 <span className="text-gray-400 w-[18px]"></span>
                 <dt className="text-gray-500 w-32">שכר ברוטו:</dt>
@@ -390,90 +428,92 @@ export default function EmployeeViewPage() {
 
       {/* שורה שנייה: משפחה | השכלה ותעודות */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* משפחה - בן/בת זוג + ילדים */}
-        <div className="card">
-          <h2 className="text-lg font-semibold text-gray-800 mb-4">
-            <div className="flex items-center gap-2">
-              <Users size={20} />
-              משפחה
-            </div>
-          </h2>
-          
-          {/* בן/בת זוג */}
-          {employee.spouseFirstName ? (
-            <div className="mb-6">
-              <h3 className="text-md font-medium text-gray-700 mb-3">בן/בת זוג</h3>
-              <dl className="space-y-2">
-                <div className="flex items-center gap-3">
-                  <dt className="text-gray-500 w-28">שם:</dt>
-                  <dd className="font-medium">{employee.spouseFirstName} {employee.spouseLastName}</dd>
-                </div>
-                {employee.spouseIdNumber && (
-                  <div className="flex items-center gap-3">
-                    <dt className="text-gray-500 w-28">ת.ז.:</dt>
-                    <dd className="font-medium ltr">{employee.spouseIdNumber}</dd>
-                  </div>
-                )}
-                {employee.spouseBirthDate && (
-                  <div className="flex items-center gap-3">
-                    <dt className="text-gray-500 w-28">תאריך לידה:</dt>
-                    <dd className="font-medium">{formatDate(employee.spouseBirthDate)}</dd>
-                  </div>
-                )}
-                {employee.marriageDate && (
-                  <div className="flex items-center gap-3">
-                    <dt className="text-gray-500 w-28">תאריך נישואין:</dt>
-                    <dd className="font-medium">{formatDate(employee.marriageDate)}</dd>
-                  </div>
-                )}
-                {employee.spousePhone && (
-                  <div className="flex items-center gap-3">
-                    <dt className="text-gray-500 w-28">טלפון:</dt>
-                    <dd className="font-medium ltr">{employee.spousePhone}</dd>
-                  </div>
-                )}
-                {employee.spouseEmail && (
-                  <div className="flex items-center gap-3">
-                    <dt className="text-gray-500 w-28">אימייל:</dt>
-                    <dd className="font-medium ltr">{employee.spouseEmail}</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          ) : (
-            <p className="text-gray-400 mb-4">לא הוזנו פרטי בן/בת זוג</p>
-          )}
+        {/* RBAC v2: Family section hidden for MAIN_PAGE users */}
+        {showSensitiveHR && (
+          <div className="card">
+            <h2 className="text-lg font-semibold text-gray-800 mb-4">
+              <div className="flex items-center gap-2">
+                <Users size={20} />
+                משפחה
+              </div>
+            </h2>
 
-          {/* ילדים */}
-          {children.length > 0 ? (
-            <div className="pt-4 border-t">
-              <h3 className="text-md font-medium text-gray-700 mb-3">ילדים ({children.length})</h3>
-              <div className="space-y-2">
-                {children.map((child: any, idx: number) => (
-                  <div key={idx} className="p-2 bg-gray-50 rounded-lg">
-                    <div className="flex items-center justify-between">
-                      <span className="font-medium">{child.name}</span>
-                      {child.birthDate && (
-                        <span className="text-sm text-gray-500">
-                          {formatDate(child.birthDate)} (גיל {calculateAge(child.birthDate)})
-                        </span>
+            {/* בן/בת זוג */}
+            {employee.spouseFirstName ? (
+              <div className="mb-6">
+                <h3 className="text-md font-medium text-gray-700 mb-3">בן/בת זוג</h3>
+                <dl className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <dt className="text-gray-500 w-28">שם:</dt>
+                    <dd className="font-medium">{employee.spouseFirstName} {employee.spouseLastName}</dd>
+                  </div>
+                  {employee.spouseIdNumber && (
+                    <div className="flex items-center gap-3">
+                      <dt className="text-gray-500 w-28">ת.ז.:</dt>
+                      <dd className="font-medium ltr">{employee.spouseIdNumber}</dd>
+                    </div>
+                  )}
+                  {employee.spouseBirthDate && (
+                    <div className="flex items-center gap-3">
+                      <dt className="text-gray-500 w-28">תאריך לידה:</dt>
+                      <dd className="font-medium">{formatDate(employee.spouseBirthDate)}</dd>
+                    </div>
+                  )}
+                  {employee.marriageDate && (
+                    <div className="flex items-center gap-3">
+                      <dt className="text-gray-500 w-28">תאריך נישואין:</dt>
+                      <dd className="font-medium">{formatDate(employee.marriageDate)}</dd>
+                    </div>
+                  )}
+                  {employee.spousePhone && (
+                    <div className="flex items-center gap-3">
+                      <dt className="text-gray-500 w-28">טלפון:</dt>
+                      <dd className="font-medium ltr">{employee.spousePhone}</dd>
+                    </div>
+                  )}
+                  {employee.spouseEmail && (
+                    <div className="flex items-center gap-3">
+                      <dt className="text-gray-500 w-28">אימייל:</dt>
+                      <dd className="font-medium ltr">{employee.spouseEmail}</dd>
+                    </div>
+                  )}
+                </dl>
+              </div>
+            ) : (
+              <p className="text-gray-400 mb-4">לא הוזנו פרטי בן/בת זוג</p>
+            )}
+
+            {/* ילדים */}
+            {children.length > 0 ? (
+              <div className="pt-4 border-t">
+                <h3 className="text-md font-medium text-gray-700 mb-3">ילדים ({children.length})</h3>
+                <div className="space-y-2">
+                  {children.map((child: any, idx: number) => (
+                    <div key={idx} className="p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">{child.name}</span>
+                        {child.birthDate && (
+                          <span className="text-sm text-gray-500">
+                            {formatDate(child.birthDate)} (גיל {calculateAge(child.birthDate)})
+                          </span>
+                        )}
+                      </div>
+                      {child.idNumber && (
+                        <div className="text-sm text-gray-500 mt-1">
+                          ת.ז.: <span className="ltr inline-block">{child.idNumber}</span>
+                        </div>
                       )}
                     </div>
-                    {child.idNumber && (
-                      <div className="text-sm text-gray-500 mt-1">
-                        ת.ז.: <span className="ltr inline-block">{child.idNumber}</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
-            </div>
-          ) : (
-            <div className="pt-4 border-t">
-              <p className="text-gray-400">לא הוזנו ילדים</p>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div className="pt-4 border-t">
+                <p className="text-gray-400">לא הוזנו ילדים</p>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* השכלה ותעודות */}
         <div className="card">
@@ -549,48 +589,50 @@ export default function EmployeeViewPage() {
             )}
           </div>
 
-          {/* מסמכים ותעודות */}
-          <div className="pt-4 border-t mt-4">
-            <h3 className="text-md font-medium text-gray-700 mb-3">מסמכים</h3>
-            <div className="space-y-2">
-              {employee.idCardFileUrl && (
-                <a
-                  href={getProxyUrl(employee.idCardFileUrl)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
-                >
-                  <span>צילום תעודת זהות</span>
-                  <Eye size={18} className="text-blue-600" />
-                </a>
-              )}
-              {employee.driversLicenseFileUrl && (
-                <a
-                  href={getProxyUrl(employee.driversLicenseFileUrl)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
-                >
-                  <span>רישיון נהיגה</span>
-                  <Eye size={18} className="text-blue-600" />
-                </a>
-              )}
-              {employee.contractFileUrl && (
-                <a
-                  href={getProxyUrl(employee.contractFileUrl)!}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
-                >
-                  <span>חוזה העסקה</span>
-                  <Eye size={18} className="text-blue-600" />
-                </a>
-              )}
-              {!employee.idCardFileUrl && !employee.driversLicenseFileUrl && !employee.contractFileUrl && (
-                <p className="text-gray-400">לא הועלו מסמכים</p>
-              )}
+          {/* RBAC v2: Sensitive documents hidden for MAIN_PAGE users */}
+          {showSensitiveHR && (
+            <div className="pt-4 border-t mt-4">
+              <h3 className="text-md font-medium text-gray-700 mb-3">מסמכים</h3>
+              <div className="space-y-2">
+                {employee.idCardFileUrl && (
+                  <a
+                    href={getProxyUrl(employee.idCardFileUrl)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
+                  >
+                    <span>צילום תעודת זהות</span>
+                    <Eye size={18} className="text-blue-600" />
+                  </a>
+                )}
+                {employee.driversLicenseFileUrl && (
+                  <a
+                    href={getProxyUrl(employee.driversLicenseFileUrl)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
+                  >
+                    <span>רישיון נהיגה</span>
+                    <Eye size={18} className="text-blue-600" />
+                  </a>
+                )}
+                {employee.contractFileUrl && (
+                  <a
+                    href={getProxyUrl(employee.contractFileUrl)!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between p-2 bg-gray-50 rounded-lg hover:bg-gray-100"
+                  >
+                    <span>חוזה העסקה</span>
+                    <Eye size={18} className="text-blue-600" />
+                  </a>
+                )}
+                {!employee.idCardFileUrl && !employee.driversLicenseFileUrl && !employee.contractFileUrl && (
+                  <p className="text-gray-400">לא הועלו מסמכים</p>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

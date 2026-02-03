@@ -2,15 +2,17 @@
 
 // ================================================
 // WDI ERP - HR List Page
-// Version: 20260125-SERVER-PAGINATION
-// Implements server-side pagination and search
+// Version: 20260202-RBAC-V2-PHASE6
+// RBAC v2: Scope-based PII gating (DOC-016 §6.1, FP-002)
 // ================================================
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
+import { useSession } from 'next-auth/react'
 import Link from 'next/link'
 import { Plus, Search, Edit, Trash2, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react'
 import SortableTable, { Column } from '@/components/SortableTable'
+import { getHRScope } from '@/lib/ui-permissions'
 
 interface Project {
   id: string
@@ -45,6 +47,7 @@ interface Employee {
 
 export default function HRPage() {
   const router = useRouter()
+  const { data: session } = useSession()
   const [employees, setEmployees] = useState<Employee[]>([])
   const [employeesTotal, setEmployeesTotal] = useState<number>(0)
   const [loading, setLoading] = useState(true)
@@ -52,6 +55,12 @@ export default function HRPage() {
   const [debouncedSearch, setDebouncedSearch] = useState('')
   // #9: ברירת מחדל "פעיל"
   const [statusFilter, setStatusFilter] = useState<string>('פעיל')
+
+  // RBAC v2 / Phase 6: HR scope-based PII gating
+  const permissions = (session?.user as any)?.permissions as string[] | undefined
+  const hrScope = getHRScope(permissions)
+  // showSensitiveHR = true for ALL or SELF scopes, false for MAIN_PAGE or null
+  const showSensitiveHR = hrScope === 'ALL' || hrScope === 'SELF'
 
   // Pagination state
   const [page, setPage] = useState(1)
@@ -257,118 +266,134 @@ export default function HRPage() {
     return `${count} עובדים`
   }
 
-  const columns: Column<Employee>[] = [
-    {
-      key: 'lastName',
-      label: 'שם',
-      render: (item) => (
-        <div className="flex items-center gap-3">
-          {item.photoUrl ? (
-            <img
-              src={`/api/file?url=${encodeURIComponent(item.photoUrl)}`}
-              alt=""
-              className="w-10 h-10 rounded-full object-cover"
-            />
-          ) : (
-            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-              <span className="text-blue-600 font-medium text-sm">
-                {(item.firstName || '?')[0]}{(item.lastName || '?')[0]}
-              </span>
-            </div>
-          )}
-          <p className="font-medium">{item.lastName || ''} {item.firstName || ''}</p>
-        </div>
-      ),
-    },
-    {
-      key: 'role',
-      label: 'תפקיד',
-    },
-    {
-      key: 'birthDate',
-      label: 'תאריך לידה',
-      render: (item) => formatDate(item.birthDate),
-    },
-    {
-      // #2: עמודת גיל ממוינת - שימוש בערך מספרי
-      key: 'age',
-      label: 'גיל',
-      sortable: true,
-      render: (item) => {
-        const age = calculateAge(item.birthDate)
-        return age !== null ? age : '-'
+  // RBAC v2 / Phase 6: Build columns based on HR scope
+  // PII columns (birthDate, age) hidden for MAIN_PAGE users
+  const columns: Column<Employee>[] = useMemo(() => {
+    const baseColumns: Column<Employee>[] = [
+      {
+        key: 'lastName',
+        label: 'שם',
+        render: (item) => (
+          <div className="flex items-center gap-3">
+            {item.photoUrl ? (
+              <img
+                src={`/api/file?url=${encodeURIComponent(item.photoUrl)}`}
+                alt=""
+                className="w-10 h-10 rounded-full object-cover"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <span className="text-blue-600 font-medium text-sm">
+                  {(item.firstName || '?')[0]}{(item.lastName || '?')[0]}
+                </span>
+              </div>
+            )}
+            <p className="font-medium">{item.lastName || ''} {item.firstName || ''}</p>
+          </div>
+        ),
       },
-    },
-    {
-      key: 'startDate',
-      label: 'תאריך הצטרפות',
-      render: (item) => formatDate(item.startDate),
-    },
-    {
-      // מיון ותק - לפי חודשים
-      key: 'seniorityMonths',
-      label: 'ותק',
-      sortable: true,
-      render: (item) => calculateSeniority(item.startDate),
-    },
-    {
-      key: 'projects',
-      label: 'פרויקט נוכחי',
-      sortable: false,
-      render: (item) => getEmployeeProjects(item),
-    },
-    {
-      key: 'status',
-      label: 'סטטוס',
-      render: (item) => (
-        <span className={`badge ${
-          item.status === 'פעיל' ? 'badge-active' :
-          item.status === 'לא פעיל' ? 'badge-inactive' :
-          'badge-pending'
-        }`}>
-          {item.status}
-        </span>
-      ),
-    },
-    {
-      key: 'updatedAt',
-      label: 'עודכן',
-      sortable: true,
-      render: (item) => (
-        <div className="text-sm text-gray-500">{formatDateTime(item.updatedAt)}</div>
-      ),
-    },
-    {
-      // #3: עמודת פעולות - הסרת עין, עריכה ומחיקה בלבד
-      key: 'actions',
-      label: 'פעולות',
-      sortable: false,
-      render: (item) => (
-        <div className="flex items-center gap-2">
-          {/* #3: עריכה מובילה ישירות למסך עריכה */}
-          <Link
-            href={`/dashboard/hr/${item.id}/edit`}
-            className="p-2 text-gray-400 hover:text-green-600 transition-colors"
-            title="עריכה"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Edit size={18} />
-          </Link>
-          {/* #4: מחיקה פותחת מודאל מעוצב */}
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              openDeleteModal(item)
-            }}
-            className="p-2 text-gray-400 hover:text-red-600 transition-colors"
-            title="מחיקה"
-          >
-            <Trash2 size={18} />
-          </button>
-        </div>
-      ),
-    },
-  ]
+      {
+        key: 'role',
+        label: 'תפקיד',
+      },
+    ]
+
+    // PII columns - only for ALL/SELF scopes
+    if (showSensitiveHR) {
+      baseColumns.push(
+        {
+          key: 'birthDate',
+          label: 'תאריך לידה',
+          render: (item) => formatDate(item.birthDate),
+        },
+        {
+          // #2: עמודת גיל ממוינת - שימוש בערך מספרי
+          key: 'age',
+          label: 'גיל',
+          sortable: true,
+          render: (item) => {
+            const age = calculateAge(item.birthDate)
+            return age !== null ? age : '-'
+          },
+        }
+      )
+    }
+
+    // Non-PII columns
+    baseColumns.push(
+      {
+        key: 'startDate',
+        label: 'תאריך הצטרפות',
+        render: (item) => formatDate(item.startDate),
+      },
+      {
+        // מיון ותק - לפי חודשים
+        key: 'seniorityMonths',
+        label: 'ותק',
+        sortable: true,
+        render: (item) => calculateSeniority(item.startDate),
+      },
+      {
+        key: 'projects',
+        label: 'פרויקט נוכחי',
+        sortable: false,
+        render: (item) => getEmployeeProjects(item),
+      },
+      {
+        key: 'status',
+        label: 'סטטוס',
+        render: (item) => (
+          <span className={`badge ${
+            item.status === 'פעיל' ? 'badge-active' :
+            item.status === 'לא פעיל' ? 'badge-inactive' :
+            'badge-pending'
+          }`}>
+            {item.status}
+          </span>
+        ),
+      },
+      {
+        key: 'updatedAt',
+        label: 'עודכן',
+        sortable: true,
+        render: (item) => (
+          <div className="text-sm text-gray-500">{formatDateTime(item.updatedAt)}</div>
+        ),
+      },
+      {
+        // #3: עמודת פעולות - הסרת עין, עריכה ומחיקה בלבד
+        key: 'actions',
+        label: 'פעולות',
+        sortable: false,
+        render: (item) => (
+          <div className="flex items-center gap-2">
+            {/* #3: עריכה מובילה ישירות למסך עריכה */}
+            <Link
+              href={`/dashboard/hr/${item.id}/edit`}
+              className="p-2 text-gray-400 hover:text-green-600 transition-colors"
+              title="עריכה"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <Edit size={18} />
+            </Link>
+            {/* #4: מחיקה פותחת מודאל מעוצב */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                openDeleteModal(item)
+              }}
+              className="p-2 text-gray-400 hover:text-red-600 transition-colors"
+              title="מחיקה"
+            >
+              <Trash2 size={18} />
+            </button>
+          </div>
+        ),
+      }
+    )
+
+    return baseColumns
+  }, [showSensitiveHR])
 
   // חישוב ותק בחודשים לצורך מיון
   const calculateSeniorityMonths = (startDate: string | null): number | null => {
