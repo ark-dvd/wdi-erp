@@ -1,6 +1,12 @@
-// Version: 20251218-094500
+// ================================================
+// WDI ERP - Import Contacts Enrich API
+// Version: 20260202-RBAC-V2-PHASE5-FIX
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// A-FIX-2: Double-gate (admin:read + contacts:create)
+// ================================================
 import { NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
+import { requirePermission } from '@/lib/permissions'
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY
 
@@ -8,8 +14,17 @@ export async function POST(request: Request) {
   try {
     const session = await auth()
     if (!session?.user) {
-      return NextResponse.json({ error: 'לא מורשה' }, { status: 401 })
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
+
+    // A-FIX-2: Double-gate - requires both admin console access AND contacts:create
+    // Gate 1: Admin console access (endpoint is under /api/admin)
+    const adminDenied = await requirePermission(session, 'admin', 'read')
+    if (adminDenied) return adminDenied
+
+    // Gate 2: Contacts create permission (actual data operation)
+    const contactsDenied = await requirePermission(session, 'contacts', 'create')
+    if (contactsDenied) return contactsDenied
 
     const { organizations } = await request.json()
 

@@ -1,7 +1,9 @@
 // ================================================
 // WDI ERP - HR API Route
-// Version: 20260127
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// Version: 20260202-RBAC-V2-PHASE5-FIX
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// RBAC v2 Scope Enforcement: SELF/MAIN_PAGE/ALL per DOC-016 §5.2
+// A-FIX-1: Field-level restriction based on scope
 // MAYBACH: R1-Pagination, R2-FieldValidation, R3-FilterStrictness, R4-Sorting, R5-Versioning
 // ================================================
 
@@ -9,7 +11,7 @@ import { NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
-import { requirePermission } from '@/lib/permissions'
+import { requirePermission, getPermissionFilter, type Scope } from '@/lib/permissions'
 import {
   parsePagination,
   calculateSkip,
@@ -26,12 +28,98 @@ import {
   SORT_DEFINITIONS,
 } from '@/lib/api-contracts'
 
+// ================================================
+// A-FIX-1: Field selections based on scope (DOC-016 §5.2)
+// ================================================
+
+// MAIN_PAGE scope: List-safe fields only (no PII, no documents, no deep relations)
+const MAIN_PAGE_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  role: true,
+  department: true,
+  phone: true,
+  email: true,
+  status: true,
+  photoUrl: true,
+  // No birthDate (PII), no startDate, no updatedAt, no relations
+} as const
+
+// SELF/ALL scope: Full details including relations
+const FULL_SELECT = {
+  id: true,
+  firstName: true,
+  lastName: true,
+  // idNumber: removed from response for security (PII) - even for SELF/ALL
+  role: true,
+  department: true,
+  phone: true,
+  email: true,
+  status: true,
+  photoUrl: true,
+  birthDate: true,
+  startDate: true,
+  updatedAt: true,
+  managedProjects: {
+    select: {
+      project: {
+        select: {
+          id: true,
+          name: true,
+          projectNumber: true,
+          state: true,
+        }
+      }
+    },
+    where: {
+      project: {
+        state: 'פעיל'
+      }
+    }
+  },
+  ledProjects: {
+    select: {
+      id: true,
+      name: true,
+      projectNumber: true,
+      state: true,
+    },
+    where: {
+      state: 'פעיל'
+    }
+  },
+} as const
+
+/**
+ * Get appropriate Prisma select based on effective scope
+ * MAIN_PAGE: restricted fields for list view
+ * SELF/ALL: full fields including relations
+ */
+function getSelectForScope(scope: Scope): typeof MAIN_PAGE_SELECT | typeof FULL_SELECT {
+  if (scope === 'MAIN_PAGE') {
+    return MAIN_PAGE_SELECT
+  }
+  // SELF, ALL, and other scopes get full details
+  return FULL_SELECT
+}
 
 export async function GET(request: Request) {
   try {
     const session = await auth()
     if (!session) {
       return versionedResponse({ error: 'אין לך הרשאה' }, { status: 401 })
+    }
+
+    // RBAC v2 / DOC-016 §6.1: Permission check with scope
+    const denied = await requirePermission(session, 'hr', 'read')
+    if (denied) return denied
+
+    // RBAC v2 / DOC-016 §5.2: Get scope-based filter for HR module
+    const userId = (session.user as any).id
+    const permFilter = await getPermissionFilter(userId, 'hr')
+    if (!permFilter) {
+      return versionedResponse({ error: 'אין לך הרשאה' }, { status: 403 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -52,7 +140,8 @@ export async function GET(request: Request) {
       return sortValidationError(sortResult.error)
     }
 
-    const where: any = {}
+    // Start with scope-based filter (SELF/MAIN_PAGE/ALL)
+    const where: any = { ...permFilter.where }
     if (search) {
       where.OR = [
         { firstName: { contains: search, mode: 'insensitive' } },
@@ -68,6 +157,9 @@ export async function GET(request: Request) {
     // R1: Count total for pagination
     const total = await prisma.employee.count({ where })
 
+    // A-FIX-1: Select fields based on effective scope
+    const selectFields = getSelectForScope(permFilter.scope)
+
     const employees = await prisma.employee.findMany({
       where,
       // R4: Client-configurable sorting
@@ -75,50 +167,7 @@ export async function GET(request: Request) {
       // R1: Apply pagination
       skip: calculateSkip(page, limit),
       take: limit,
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
-        // idNumber: removed from response for security (PII)
-        role: true,
-        department: true,
-        phone: true,
-        email: true,
-        status: true,
-        photoUrl: true,
-        birthDate: true,
-        startDate: true,
-        updatedAt: true,
-        // Note: Employee model doesn't have updatedBy field in schema
-        managedProjects: {
-          select: {
-            project: {
-              select: {
-                id: true,
-                name: true,
-                projectNumber: true,
-                state: true,
-              }
-            }
-          },
-          where: {
-            project: {
-              state: 'פעיל'
-            }
-          }
-        },
-        ledProjects: {
-          select: {
-            id: true,
-            name: true,
-            projectNumber: true,
-            state: true,
-          },
-          where: {
-            state: 'פעיל'
-          }
-        },
-      },
+      select: selectFields,
     })
 
     // R1 + R5: Return paginated response with versioning

@@ -1,8 +1,14 @@
-// Version: 20251218-065000
+// ================================================
+// WDI ERP - Import Contacts Parse API
+// Version: 20260202-RBAC-V2-PHASE5-FIX
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// A-FIX-2: Double-gate (admin:read + contacts:create)
+// ================================================
 import { NextRequest, NextResponse } from 'next/server'
 import { auth } from '@/lib/auth'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 import { prisma } from '@/lib/prisma'
+import { requirePermission } from '@/lib/permissions'
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
 
@@ -228,10 +234,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
     }
 
-    const userRole = (session.user as any).role
-    if (userRole !== 'owner') {
-      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 403 })
-    }
+    // A-FIX-2: Double-gate - requires both admin console access AND contacts:create
+    // Gate 1: Admin console access (endpoint is under /api/admin)
+    const adminDenied = await requirePermission(session, 'admin', 'read')
+    if (adminDenied) return adminDenied
+
+    // Gate 2: Contacts create permission (actual data operation)
+    const contactsDenied = await requirePermission(session, 'contacts', 'create')
+    if (contactsDenied) return contactsDenied
 
     const { rawInput, sourceContext } = await request.json()
     

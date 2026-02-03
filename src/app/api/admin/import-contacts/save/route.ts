@@ -1,7 +1,8 @@
 // ============================================
 // src/app/api/admin/import-contacts/save/route.ts
-// Version: 20260127
-// RBAC v2: Use permission system from DOC-013/DOC-014
+// Version: 20260202-RBAC-V2-PHASE5-FIX
+// RBAC v2: Uses requirePermission (DOC-016 §6.1, FP-002)
+// A-FIX-2: Double-gate (admin:read + contacts:create)
 // FIXED: Wrap entire import in transaction - all or nothing
 // ============================================
 
@@ -14,10 +15,18 @@ import { requirePermission } from '@/lib/permissions'
 export async function POST(request: Request) {
   try {
     const session = await auth()
+    if (!session?.user) {
+      return NextResponse.json({ error: 'אין לך הרשאה' }, { status: 401 })
+    }
 
-    // RBAC v2: Check create permission for contacts (admin import requires create permission)
-    const denied = await requirePermission(session, 'contacts', 'create')
-    if (denied) return denied
+    // A-FIX-2: Double-gate - requires both admin console access AND contacts:create
+    // Gate 1: Admin console access (endpoint is under /api/admin)
+    const adminDenied = await requirePermission(session, 'admin', 'read')
+    if (adminDenied) return adminDenied
+
+    // Gate 2: Contacts create permission (actual data operation)
+    const contactsDenied = await requirePermission(session, 'contacts', 'create')
+    if (contactsDenied) return contactsDenied
 
     const { contacts, sourceContext } = await request.json()
 
