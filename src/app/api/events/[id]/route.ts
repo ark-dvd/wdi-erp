@@ -10,6 +10,7 @@ import { prisma } from '@/lib/prisma'
 import { auth } from '@/lib/auth'
 import { logCrud } from '@/lib/activity'
 import { requirePermission } from '@/lib/permissions'
+import { supportsTextExtraction } from '@/lib/text-extraction'
 
 export async function GET(
   request: NextRequest,
@@ -57,10 +58,13 @@ export async function PUT(
     const { id } = await params
     const data = await request.json()
 
-    // Get event with project info for RBAC check and logging
+    // Get event with project info and files for RBAC check and logging
     const existingEvent = await prisma.projectEvent.findUnique({
       where: { id },
-      include: { project: { select: { id: true, name: true, domainId: true } } }
+      include: {
+        project: { select: { id: true, name: true, domainId: true } },
+        files: { select: { id: true } }
+      }
     })
 
     if (!existingEvent) {
@@ -78,6 +82,52 @@ export async function PUT(
     })
     if (denied) return denied
 
+    // Handle file operations
+    const filesToDelete: string[] = data.filesToDelete || []
+    const filesToAdd: any[] = data.filesToAdd || []
+
+    // Validate filesToDelete - ensure they belong to this event
+    const existingFileIds = existingEvent.files.map(f => f.id)
+    const invalidDeleteIds = filesToDelete.filter(fid => !existingFileIds.includes(fid))
+    if (invalidDeleteIds.length > 0) {
+      return NextResponse.json({ error: 'קבצים לא תקינים למחיקה' }, { status: 400 })
+    }
+
+    // Validate total file count won't exceed 5
+    const remainingFiles = existingFileIds.length - filesToDelete.length
+    const totalAfterUpdate = remainingFiles + filesToAdd.length
+    if (totalAfterUpdate > 5) {
+      return NextResponse.json({ error: 'ניתן להעלות עד 5 קבצים' }, { status: 400 })
+    }
+
+    // Delete files if requested
+    if (filesToDelete.length > 0) {
+      await prisma.eventFile.deleteMany({
+        where: { id: { in: filesToDelete }, eventId: id }
+      })
+    }
+
+    // Add new files if any
+    let newFileRecords: any[] = []
+    if (filesToAdd.length > 0) {
+      await prisma.eventFile.createMany({
+        data: filesToAdd.map((file: any) => ({
+          eventId: id,
+          fileUrl: file.fileUrl,
+          fileName: file.fileName,
+          fileType: file.fileType,
+          fileSize: file.fileSize || null
+        }))
+      })
+      // Fetch created files for text extraction
+      newFileRecords = await prisma.eventFile.findMany({
+        where: {
+          eventId: id,
+          fileUrl: { in: filesToAdd.map((f: any) => f.fileUrl) }
+        }
+      })
+    }
+
     const event = await prisma.projectEvent.update({
       where: { id },
       data: {
@@ -85,6 +135,7 @@ export async function PUT(
         description: data.description,
         eventDate: data.eventDate ? new Date(data.eventDate) : undefined,
       },
+      include: { files: true }
     })
 
     // Logging - added
@@ -93,6 +144,20 @@ export async function PUT(
       projectName: existingEvent?.project?.name,
       eventType: data.eventType,
     })
+
+    // Trigger text extraction for new files (async, non-blocking)
+    if (newFileRecords.length > 0) {
+      const baseUrl = process.env.NEXTAUTH_URL || 'https://erp.wdi.one'
+      for (const file of newFileRecords) {
+        if (supportsTextExtraction(file.fileType, file.fileUrl)) {
+          fetch(`${baseUrl}/api/extract-text`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ fileId: file.id }),
+          }).catch(err => console.error('Text extraction trigger failed:', err))
+        }
+      }
+    }
 
     return NextResponse.json(event)
   } catch (error) {

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowRight, Save, Trash2, Loader2, FileText, Image as ImageIcon } from 'lucide-react'
+import { ArrowRight, Save, Trash2, Loader2, FileText, Image as ImageIcon, Upload, X } from 'lucide-react'
 
 const EVENT_TYPES = ['אדמיניסטרציה', 'אתגר', 'בטיחות', 'גבייה', 'החלטה', 'לקוח', 'לקחים', 'סיכום פגישה', 'תיעוד', 'אחר']
 
@@ -23,6 +23,12 @@ export default function EventViewPage() {
   const [formDescription, setFormDescription] = useState('')
   const [formDate, setFormDate] = useState('')
 
+  // File editing state
+  const [existingFiles, setExistingFiles] = useState<any[]>([])
+  const [filesToDelete, setFilesToDelete] = useState<string[]>([])
+  const [newFiles, setNewFiles] = useState<{ file: File; preview?: string }[]>([])
+  const [uploading, setUploading] = useState(false)
+
   useEffect(() => { fetchEvent() }, [id])
 
   const fetchEvent = async () => {
@@ -34,6 +40,9 @@ export default function EventViewPage() {
         setFormType(data.eventType)
         setFormDescription(data.description)
         setFormDate(data.eventDate?.split('T')[0] || '')
+        setExistingFiles(data.files || [])
+        setFilesToDelete([])
+        setNewFiles([])
       }
     } catch (error) {
       console.error('Error:', error)
@@ -42,9 +51,32 @@ export default function EventViewPage() {
     }
   }
 
+  const uploadFile = async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('folder', `projects/${event.project?.id}/events`)
+    const res = await fetch('/api/upload', { method: 'POST', body: formData })
+    if (!res.ok) throw new Error('שגיאה בהעלאת קובץ')
+    const data = await res.json()
+    return {
+      fileUrl: data.url,
+      fileType: file.type.startsWith('image/') ? 'image' : 'pdf',
+      fileName: file.name,
+      fileSize: file.size
+    }
+  }
+
   const handleSave = async () => {
     setSaving(true)
     try {
+      // Upload new files
+      let filesToAdd: any[] = []
+      if (newFiles.length > 0) {
+        setUploading(true)
+        filesToAdd = await Promise.all(newFiles.map(f => uploadFile(f.file)))
+        setUploading(false)
+      }
+
       const res = await fetch(`/api/events/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -52,18 +84,22 @@ export default function EventViewPage() {
           eventType: formType,
           description: formDescription,
           eventDate: formDate,
+          filesToDelete,
+          filesToAdd,
         }),
       })
       if (res.ok) {
         await fetchEvent()
         setIsEditing(false)
       } else {
-        alert('שגיאה בשמירה')
+        const data = await res.json()
+        alert(data.error || 'שגיאה בשמירה')
       }
     } catch (error) {
       alert('שגיאה בשמירה')
     } finally {
       setSaving(false)
+      setUploading(false)
     }
   }
 
@@ -85,6 +121,59 @@ export default function EventViewPage() {
   }
 
   const formatDate = (date: string) => new Date(date).toLocaleDateString('he-IL')
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFiles = Array.from(e.target.files || [])
+    const remainingFiles = existingFiles.filter(f => !filesToDelete.includes(f.id)).length
+    const totalAfter = remainingFiles + newFiles.length + selectedFiles.length
+    if (totalAfter > 5) {
+      alert('ניתן להעלות עד 5 קבצים')
+      return
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
+    const validFiles = selectedFiles.filter(file => {
+      if (!allowedTypes.includes(file.type)) {
+        alert(`סוג קובץ לא נתמך: ${file.name}`)
+        return false
+      }
+      return true
+    })
+
+    const newFileObjects = validFiles.map(file => ({
+      file,
+      preview: file.type.startsWith('image/') ? URL.createObjectURL(file) : undefined
+    }))
+    setNewFiles(prev => [...prev, ...newFileObjects])
+  }
+
+  const removeNewFile = (index: number) => {
+    setNewFiles(prev => {
+      const updated = [...prev]
+      if (updated[index].preview) URL.revokeObjectURL(updated[index].preview!)
+      updated.splice(index, 1)
+      return updated
+    })
+  }
+
+  const markFileForDeletion = (fileId: string) => {
+    setFilesToDelete(prev => [...prev, fileId])
+  }
+
+  const unmarkFileForDeletion = (fileId: string) => {
+    setFilesToDelete(prev => prev.filter(id => id !== fileId))
+  }
+
+  const cancelEditing = () => {
+    setIsEditing(false)
+    setFormType(event.eventType)
+    setFormDescription(event.description)
+    setFormDate(event.eventDate?.split('T')[0] || '')
+    setExistingFiles(event.files || [])
+    setFilesToDelete([])
+    newFiles.forEach(f => { if (f.preview) URL.revokeObjectURL(f.preview) })
+    setNewFiles([])
+  }
 
   if (loading) {
     return (
@@ -114,7 +203,7 @@ export default function EventViewPage() {
         <div className="flex items-center gap-2">
           {isEditing ? (
             <>
-              <button onClick={() => setIsEditing(false)} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
+              <button onClick={cancelEditing} className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50">
                 ביטול
               </button>
               <button onClick={handleSave} disabled={saving} className="flex items-center gap-2 px-4 py-2 bg-[#0a3161] text-white rounded-lg hover:bg-[#0a3161]/90 disabled:opacity-50">
@@ -152,6 +241,90 @@ export default function EventViewPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">תיאור</label>
               <textarea value={formDescription} onChange={(e) => setFormDescription(e.target.value)} rows={5} className="w-full p-2 border border-gray-300 rounded-lg" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                קבצים
+                <span className="text-gray-400 font-normal"> (עד 5)</span>
+              </label>
+              <div className="border-2 border-dashed border-gray-200 rounded-lg p-4">
+                {/* Existing files */}
+                {existingFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    {existingFiles.map((file: any) => {
+                      const isMarkedForDeletion = filesToDelete.includes(file.id)
+                      const fileUrl = '/api/file?url=' + encodeURIComponent(file.fileUrl)
+                      return (
+                        <div key={file.id} className={`relative ${isMarkedForDeletion ? 'opacity-40' : ''}`}>
+                          {file.fileType === 'image' ? (
+                            <img src={fileUrl} alt={file.fileName} className="h-20 w-20 object-cover rounded" />
+                          ) : (
+                            <div className="h-20 w-20 bg-gray-100 rounded flex items-center justify-center">
+                              <FileText size={24} className="text-gray-400" />
+                            </div>
+                          )}
+                          {isMarkedForDeletion ? (
+                            <button
+                              type="button"
+                              onClick={() => unmarkFileForDeletion(file.id)}
+                              className="absolute -top-2 -right-2 bg-gray-500 text-white rounded-full p-1"
+                              title="בטל מחיקה"
+                            >
+                              <X size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => markFileForDeletion(file.id)}
+                              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                              title="סמן למחיקה"
+                            >
+                              <X size={14} />
+                            </button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                {/* New files to upload */}
+                {newFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-3 mb-3">
+                    {newFiles.map((f, i) => (
+                      <div key={i} className="relative">
+                        {f.preview ? (
+                          <img src={f.preview} alt="" className="h-20 w-20 object-cover rounded border-2 border-green-400" />
+                        ) : (
+                          <div className="h-20 w-20 bg-green-50 rounded flex items-center justify-center border-2 border-green-400">
+                            <FileText size={24} className="text-green-500" />
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeNewFile(i)}
+                          className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {/* Upload button */}
+                {(existingFiles.filter(f => !filesToDelete.includes(f.id)).length + newFiles.length) < 5 && (
+                  <label className="flex flex-col items-center justify-center cursor-pointer gap-2 py-4">
+                    <Upload size={24} className="text-gray-400" />
+                    <span className="text-sm text-gray-500">לחץ להעלאה</span>
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,.pdf"
+                      multiple
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
+                )}
+              </div>
             </div>
           </>
         ) : (

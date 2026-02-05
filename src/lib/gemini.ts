@@ -101,7 +101,7 @@ export const agentFunctions: any[] = [
   },
   {
     name: 'getProjectEvents',
-    description: 'אירועים של פרויקט',
+    description: 'אירועים של פרויקט, כולל תוכן קבצים מצורפים (extractedText). לשאלות על סיכומי פגישות או תוכן מסמכים של פרויקט.',
     parameters: {
       type: 'OBJECT',
       properties: {
@@ -724,6 +724,7 @@ export function getGeminiModel() {
 
 ### אירועים:
 - searchEvents, getRecentEvents, searchFileContents, getFileSummary
+- **getProjectEvents** - כולל תוכן קבצים מצורפים (extractedText). כששואלים "סכם את הפגישה מתאריך X" או "מה היה בסיכום הפגישה?" - השתמש ב-extractedText מהקבצים המצורפים.
 
 ### אנשי קשר:
 - getContacts, getContactById, getContactsByDiscipline, countContacts
@@ -791,7 +792,11 @@ export function getGeminiModel() {
 - ענה: "צפייה בקבצים ותמונות מתבצעת דרך המודול הייעודי במערכת."
 - לא מחזירים URLs לקבצים
 - לא מציגים תמונות
-- החריג: חילוץ תוכן טקסטואלי מאירועי פרויקט (searchFileContents)
+
+**חריגים - תוכן טקסטואלי מקבצים:**
+- **getProjectEvents** - מחזיר extractedText מקבצים מצורפים לאירועים (PDF). השתמש בזה לענות על שאלות כמו "סכם את הפגישה" או "מה נדון בפגישה מתאריך X".
+- **searchFileContents** - חיפוש בתוכן קבצים לפי מילות מפתח.
+- **getFileSummary** - קבלת תוכן מלא של קובץ ספציפי.
 
 ## שדות רגישים - לעולם לא להציג:
 - idNumber (תעודת זהות)

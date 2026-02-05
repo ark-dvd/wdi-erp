@@ -40,9 +40,7 @@ function NewEventContent() {
       return
     }
 
-    const allowedTypes = form.eventType === 'סיכום פגישה'
-      ? ['application/pdf']
-      : ['image/jpeg', 'image/png', 'image/gif', 'image/webp']
+    const allowedTypes = ['image/jpeg', 'image/png', 'application/pdf']
 
     const validFiles = selectedFiles.filter(file => {
       if (!allowedTypes.includes(file.type)) {
@@ -98,14 +96,6 @@ function NewEventContent() {
       alert('נא להזין תיאור')
       return
     }
-    if ((form.eventType === 'תיעוד' || form.eventType === 'בטיחות') && files.length === 0) {
-      alert('אירוע מסוג זה חייב לכלול לפחות תמונה אחת')
-      return
-    }
-    if (form.eventType === 'סיכום פגישה' && files.length === 0) {
-      alert('סיכום פגישה חייב לכלול קובץ PDF')
-      return
-    }
 
     setLoading(true)
     try {
@@ -140,8 +130,7 @@ function NewEventContent() {
     }
   }
 
-  const acceptedFileTypes = form.eventType === 'סיכום פגישה' ? '.pdf' : 'image/*'
-  const requiresFile = ['תיעוד', 'בטיחות', 'סיכום פגישה'].includes(form.eventType)
+  const acceptedFileTypes = 'image/jpeg,image/png,.pdf'
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -205,8 +194,7 @@ function NewEventContent() {
         {form.eventType && (
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              {form.eventType === 'סיכום פגישה' ? 'קובץ PDF' : 'תמונות'}
-              {requiresFile && ' *'}
+              קבצים
               <span className="text-gray-400 font-normal"> (עד 5)</span>
             </label>
             <div className="border-2 border-dashed border-gray-200 rounded-lg p-4">
@@ -217,7 +205,7 @@ function NewEventContent() {
                   <input
                     type="file"
                     accept={acceptedFileTypes}
-                    multiple={form.eventType !== 'סיכום פגישה'}
+                    multiple
                     onChange={handleFileSelect}
                     className="hidden"
                   />

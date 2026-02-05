@@ -531,7 +531,7 @@ export async function getProjectEvents(params: {
         select: { name: true, projectNumber: true },
       },
       files: {
-        select: { fileName: true, fileType: true },
+        select: { id: true, fileName: true, fileType: true, extractedText: true },
       },
     },
     orderBy: { eventDate: 'desc' },
@@ -546,6 +546,12 @@ export async function getProjectEvents(params: {
     description: e.description,
     eventDate: e.eventDate,
     filesCount: e.files.length,
+    files: e.files.map(f => ({
+      id: f.id,
+      fileName: f.fileName,
+      fileType: f.fileType,
+      extractedText: f.extractedText,
+    })),
   }));
 }
 
