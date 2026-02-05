@@ -487,4 +487,5 @@ input:focus, select:focus, textarea:focus {
 .event-meeting { background-color: #e0e7ff; color: #4338ca; }
 .event-admin { background-color: #ccfbf1; color: #0f766e; }
 .event-billing { background-color: #fce7f3; color: #be185d; }
+.event-lessons { background-color: #fef3c7; color: #92400e; }
 .event-other { background-color: var(--wdi-background); color: var(--wdi-dark); }

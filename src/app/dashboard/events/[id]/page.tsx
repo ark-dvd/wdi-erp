@@ -5,7 +5,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowRight, Save, Trash2, Loader2, FileText, Image as ImageIcon } from 'lucide-react'
 
-const EVENT_TYPES = ['אתגר', 'תיעוד', 'החלטה', 'לקוח', 'בטיחות', 'סיכום פגישה', 'אדמיניסטרציה', 'גבייה', 'אחר']
+const EVENT_TYPES = ['אדמיניסטרציה', 'אתגר', 'בטיחות', 'גבייה', 'החלטה', 'לקוח', 'לקחים', 'סיכום פגישה', 'תיעוד', 'אחר']
 
 export default function EventViewPage() {
   const params = useParams()
@@ -163,6 +163,7 @@ export default function EventViewPage() {
                 event.eventType === 'החלטה' ? 'bg-blue-100 text-blue-800' :
                 event.eventType === 'לקוח' ? 'bg-purple-100 text-purple-800' :
                 event.eventType === 'בטיחות' ? 'bg-orange-100 text-orange-800' :
+                event.eventType === 'לקחים' ? 'bg-amber-100 text-amber-800' :
                 'bg-gray-100 text-gray-800'
               }`}>{event.eventType}</span>
               <span className="text-gray-500">{formatDate(event.eventDate)}</span>

@@ -22,14 +22,15 @@ import {
 // ==========================================
 
 const EVENT_TYPE_COLORS: Record<string, string> = {
+  'אדמיניסטרציה': 'event-admin',
   'אתגר': 'event-challenge',
-  'תיעוד': 'event-documentation',
+  'בטיחות': 'event-safety',
+  'גבייה': 'event-billing',
   'החלטה': 'event-decision',
   'לקוח': 'event-client',
-  'בטיחות': 'event-safety',
+  'לקחים': 'event-lessons',
   'סיכום פגישה': 'event-meeting',
-  'אדמיניסטרציה': 'event-admin',
-  'גבייה': 'event-billing',
+  'תיעוד': 'event-documentation',
   'אחר': 'event-other',
 }
 

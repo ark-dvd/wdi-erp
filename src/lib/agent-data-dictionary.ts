@@ -276,7 +276,7 @@ export const schemaCatalog: Record<string, EntityInfo> = {
         type: 'String',
         description: 'סוג אירוע',
         hebrewName: 'סוג',
-        enumValues: ['אתגר', 'תיעוד', 'החלטה', 'לקוח', 'בטיחות', 'סיכום פגישה', 'אדמיניסטרציה', 'גבייה', 'אחר'],
+        enumValues: ['אדמיניסטרציה', 'אתגר', 'בטיחות', 'גבייה', 'החלטה', 'לקוח', 'לקחים', 'סיכום פגישה', 'תיעוד', 'אחר'],
       },
       eventDate: { name: 'eventDate', type: 'DateTime', description: 'תאריך האירוע', hebrewName: 'תאריך' },
       description: { name: 'description', type: 'String', description: 'תיאור', hebrewName: 'תיאור' },

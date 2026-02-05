@@ -7,14 +7,15 @@ import { ArrowRight, Upload, X, FileText } from 'lucide-react'
 import ProjectSelector from '@/components/ProjectSelector'
 
 const EVENT_TYPES = [
+  { value: 'אדמיניסטרציה', label: 'אדמיניסטרציה' },
   { value: 'אתגר', label: 'אתגר' },
-  { value: 'תיעוד', label: 'תיעוד' },
+  { value: 'בטיחות', label: 'בטיחות' },
+  { value: 'גבייה', label: 'גבייה' },
   { value: 'החלטה', label: 'החלטה' },
   { value: 'לקוח', label: 'לקוח' },
-  { value: 'בטיחות', label: 'בטיחות' },
+  { value: 'לקחים', label: 'לקחים' },
   { value: 'סיכום פגישה', label: 'סיכום פגישה' },
-  { value: 'אדמיניסטרציה', label: 'אדמיניסטרציה' },
-  { value: 'גבייה', label: 'גבייה' },
+  { value: 'תיעוד', label: 'תיעוד' },
   { value: 'אחר', label: 'אחר' },
 ]
 

@@ -509,6 +509,79 @@ export function normalizeVehicleContractType(input: string): string | undefined 
   return map[lower] || undefined;
 }
 
+/**
+ * Project event type: עברית בסכמה
+ * ערכים: אדמיניסטרציה, אתגר, בטיחות, גבייה, החלטה, לקוח, לקחים, סיכום פגישה, תיעוד, אחר
+ */
+export function normalizeProjectEventType(input: string): string | undefined {
+  if (!input) return undefined;
+
+  const lower = input.toLowerCase().trim();
+
+  const map: Record<string, string> = {
+    // עברית
+    'אדמיניסטרציה': 'אדמיניסטרציה',
+    'אדמין': 'אדמיניסטרציה',
+    'מינהל': 'אדמיניסטרציה',
+    'אתגר': 'אתגר',
+    'אתגרים': 'אתגר',
+    'בעיה': 'אתגר',
+    'בעיות': 'אתגר',
+    'בטיחות': 'בטיחות',
+    'בטיחותי': 'בטיחות',
+    'גבייה': 'גבייה',
+    'גביה': 'גבייה',
+    'תשלום': 'גבייה',
+    'תשלומים': 'גבייה',
+    'החלטה': 'החלטה',
+    'החלטות': 'החלטה',
+    'לקוח': 'לקוח',
+    'לקוחות': 'לקוח',
+    'לקחים': 'לקחים',
+    'לקח': 'לקחים',
+    'סיכום פגישה': 'סיכום פגישה',
+    'פגישה': 'סיכום פגישה',
+    'פגישות': 'סיכום פגישה',
+    'תיעוד': 'תיעוד',
+    'תיעודי': 'תיעוד',
+    'דוקומנטציה': 'תיעוד',
+    'מייל': 'מייל',
+    'אימייל': 'מייל',
+    'אחר': 'אחר',
+    // אנגלית
+    'administration': 'אדמיניסטרציה',
+    'admin': 'אדמיניסטרציה',
+    'challenge': 'אתגר',
+    'challenges': 'אתגר',
+    'issue': 'אתגר',
+    'issues': 'אתגר',
+    'safety': 'בטיחות',
+    'collection': 'גבייה',
+    'billing': 'גבייה',
+    'payment': 'גבייה',
+    'decision': 'החלטה',
+    'decisions': 'החלטה',
+    'client': 'לקוח',
+    'customer': 'לקוח',
+    'lessons': 'לקחים',
+    'lessons_learned': 'לקחים',
+    'lessons learned': 'לקחים',
+    'meeting': 'סיכום פגישה',
+    'meeting_summary': 'סיכום פגישה',
+    'documentation': 'תיעוד',
+    'doc': 'תיעוד',
+    'email': 'מייל',
+    'mail': 'מייל',
+    'other': 'אחר',
+    // כללי
+    'all': 'all',
+    'הכל': 'all',
+    'כולם': 'all',
+  };
+
+  return map[lower] || undefined;
+}
+
 // ============ GENERIC NORMALIZER ============
 
 /**
@@ -532,6 +605,7 @@ export function normalize(field: string, value: string): string | undefined {
     'vehiclePhoto.photoType': normalizeVehiclePhotoType,
     'vehiclePhoto.eventType': normalizeVehiclePhotoEventType,
     'vehicle.contractType': normalizeVehicleContractType,
+    'projectEvent.eventType': normalizeProjectEventType,
   };
   
   const normalizer = normalizers[field];
